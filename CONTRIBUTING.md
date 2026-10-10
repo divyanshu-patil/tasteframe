@@ -479,6 +479,7 @@ A layout touches a few files; tests fail loudly if any of them drift.
 | `apps/web/lib/story/pins.json` | `python3 design-refs/build_pins.py` (oEmbed links and credits only) |
 | `apps/web/public/props/*` + `props.json` | openly licensed images from Openverse, credited in the app |
 | `apps/web/public/models/selfie_segmenter.tflite` | MediaPipe selfie segmenter (Apache-2.0), vendored |
+| On-device models (not in git) | Loaded on demand by `lib/story/ml.worker.ts` from pinned Hugging Face commits and cached in the browser: MODNet (Apache-2.0, 6.3 MB) refines the person cutout after the instant selfie mask; SlimSAM-77 (Apache-2.0, 8.5 + 4.7 MB) powers Smart select. ONNX Runtime Web's plain WASM build (~3 MB compressed) comes from jsDelivr. |
 | `docs/screenshots/*` | captured from the running app with a CC0 demo photo |
 | `apps/web/app/{opengraph,twitter}-image.jpg` | the landing page captured at 1200×630 (2× then downscaled), backend dot and dev badge hidden; alt text in the `.alt.txt` files |
 

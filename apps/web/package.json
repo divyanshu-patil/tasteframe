@@ -17,6 +17,7 @@
     "@repo/ui": "workspace:*",
     "@supabase/supabase-js": "2.117.3",
     "next": "16.3.8",
+    "onnxruntime-web": "1.30.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

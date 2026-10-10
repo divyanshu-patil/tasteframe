@@ -1,15 +1,18 @@
 "use client";
 
 // Touch up the automatic (MediaPipe) cutout.
-// Smart (default): scribble over a part or circle it; smartSelect (on-device, no download) turns
-//   the rough strokes into a selection that follows the photo's colours and edges, previewed in
-//   green / red with an outline. Finish merges it into the cutout and applies.
+// Smart (default): scribble over a part or circle it; SlimSAM (13 MB, on-device, in a worker)
+//   turns the rough strokes into an object selection, snapped to the photo's edges and previewed
+//   in green / red with an outline. Without the model, smartSelect's colour-based growing stands
+//   in. Finish merges the selection into the cutout and applies.
 // Brush: paint the mask directly for pixel-level fixes.
 // Works from a blank mask too, so you can select a subject the person model didn't find.
 import { useEffect, useRef, useState } from "react";
 import type { Photo } from "../lib/story/draw";
 import { maskCanvas } from "../lib/story/segment";
-import { type Guide, type Pixels, smartSelect } from "../lib/story/smartselect";
+import { prepareSelect, selectAt } from "../lib/story/ml";
+import { type Guide, type Pixels, smartSelect, snapEdges } from "../lib/story/smartselect";
+import { ModelProgress } from "./ModelProgress";
 import type { Mask } from "../lib/story/templates";
 import { Segmented, Slider, px } from "./controls";
 import s from "./maker.module.css";
@@ -50,6 +53,20 @@ export function isLoop(pts: Pt[]): boolean {
   return dist(pts[0]!, pts[pts.length - 1]!) < Math.max(28, len * 0.12) && Math.min(w, h) > 24;
 }
 
+/** `n` evenly spaced points along a stroke. */
+const spaced = (pts: Pt[], n: number) => (pts.length <= n ? pts : Array.from({ length: n }, (_, i) => pts[Math.round((i * (pts.length - 1)) / (n - 1))]!));
+const centroid = (pts: Pt[]) => ({ x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length });
+/** For a loop: its centre and points halfway to the edge ("this")… */
+const inside = (pts: Pt[]) => {
+  const c = centroid(pts);
+  return [c, ...spaced(pts, 5).slice(0, 4).map((p) => ({ x: (c.x + p.x) / 2, y: (c.y + p.y) / 2 }))];
+};
+/** …and points just outside it ("not this"). */
+const outside = (pts: Pt[]) => {
+  const c = centroid(pts);
+  return spaced(pts, 7).slice(0, 6).map((p) => ({ x: c.x + (p.x - c.x) * 1.25, y: c.y + (p.y - c.y) * 1.25 }));
+};
+
 /** ≤64 evenly spaced points: plenty for the model, cheap to send. */
 const thin = (pts: Pt[]) => (pts.length <= 64 ? pts : Array.from({ length: 64 }, (_, i) => pts[Math.round((i * (pts.length - 1)) / 63)]!));
 
@@ -81,6 +98,7 @@ export function CutoutRefiner({ photo, start, auto, title, onApply, onClose }: P
   const run = useRef(0);
   const running = useRef<Promise<void>>(Promise.resolve());
   const pixels = useRef<Pixels | null>(null);
+  const samReady = useRef<Promise<boolean>>(Promise.resolve(false));
   const [mode, setMode] = useState<Mode>("smart");
   const [tool, setTool] = useState<Tool>("add");
   const [size, setSize] = useState(36);
@@ -201,32 +219,70 @@ export function CutoutRefiner({ photo, start, auto, title, onApply, onClose }: P
   };
 
   /** Turn the rough strokes into selections: one to add, one to remove. */
+  const toAlphaCanvas = (a: Float32Array, w: number, h: number) => {
+    const c = blank(w, h);
+    const g = c.getContext("2d");
+    if (!g) return null;
+    const img = g.createImageData(w, h);
+    // Solid selection: everything clearly in is fully in, with only a 1–2 px anti-aliased edge
+    // (the edge-snapping filter alone leaves a wide, cloudy fade).
+    for (let k = 0; k < a.length; k++) img.data[k * 4 + 3] = Math.round(Math.max(0, Math.min(1, (a[k]! - 0.5) * 6 + 0.5)) * 255);
+    g.putImageData(img, 0, 0);
+    return c;
+  };
+
+  /** SlimSAM: each stroke of tool `t` is one "this"; strokes of the other tool say "not this". */
+  const samPick = async (t: Tool, list: Rough[], px: Pixels): Promise<HTMLCanvasElement | null> => {
+    const norm = (p: Pt) => ({ x: Math.min(1, Math.max(0, p.x / box.w)), y: Math.min(1, Math.max(0, p.y / box.h)) });
+    const not = list.filter((r) => r.tool !== t).flatMap((r) => spaced(r.pts, 4)).map((p) => ({ ...norm(p), label: 0 as const }));
+    const acc = blank(px.width, px.height);
+    const g = acc.getContext("2d");
+    let any = false;
+    for (const r of list.filter((x) => x.tool === t)) {
+      const prompt = r.loop
+        ? [...inside(r.pts).map((p) => ({ ...norm(p), label: 1 as const })), ...outside(r.pts).map((p) => ({ ...norm(p), label: 0 as const }))]
+        : spaced(r.pts, 6).map((p) => ({ ...norm(p), label: 1 as const }));
+      const m = await selectAt(photo, [...prompt, ...not]);
+      if (m && g) {
+        g.drawImage(m, 0, 0, acc.width, acc.height); // white + alpha: drawing again = union
+        any = true;
+      }
+    }
+    if (!any || !g) return null;
+    const data = g.getImageData(0, 0, acc.width, acc.height).data;
+    const a = new Float32Array(acc.width * acc.height);
+    for (let k = 0; k < a.length; k++) a[k] = data[k * 4 + 3]! / 255;
+    return toAlphaCanvas(snapEdges(px, a), px.width, px.height);
+  };
+
+  /** Turn the rough strokes into selections: one to add, one to remove. */
   const think = () => {
     const id = ++run.current;
     const list = rough.current.slice();
     setAi("busy");
-    running.current = new Promise<void>((done) => setTimeout(() => {
+    running.current = (async () => {
+      await new Promise((r) => setTimeout(r, 16)); // let "Finding the edges…" paint first
+      const sam = await samReady.current; // waits for the first download, if still running
       const px = pixels.current;
-      if (id === run.current && px) {
-        const guides: Guide[] = list.map((r) => ({ tool: r.tool, loop: r.loop, pts: thin(r.pts).map((p) => ({ x: p.x / box.w, y: p.y / box.h })) }));
-        const pick = (t: Tool) => {
-          if (!list.some((r) => r.tool === t)) return null;
-          const a = smartSelect(px, guides, t);
-          const c = blank(px.width, px.height);
-          const g = c.getContext("2d");
-          if (!g) return null;
-          const img = g.createImageData(px.width, px.height);
-          for (let k = 0; k < a.length; k++) img.data[k * 4 + 3] = Math.round(a[k]! * 255);
-          g.putImageData(img, 0, 0);
-          return c;
-        };
-        sel.current = { add: pick("add"), remove: pick("erase") };
-        buildOverlay();
-        setAi("ready");
-        redraw();
+      if (id !== run.current || !px) return;
+      const has = (t: Tool) => list.some((r) => r.tool === t);
+      let add: HTMLCanvasElement | null = null, remove: HTMLCanvasElement | null = null;
+      if (sam) {
+        add = has("add") ? await samPick("add", list, px) : null;
+        remove = has("erase") ? await samPick("erase", list, px) : null;
       }
-      done();
-    }, 16)); // let "Finding the edges…" paint first
+      if (!sam || (has("add") && !add) || (has("erase") && !remove)) {
+        // Fallback without the model: colour-based selection, on this device.
+        const guides: Guide[] = list.map((r) => ({ tool: r.tool, loop: r.loop, pts: thin(r.pts).map((p) => ({ x: p.x / box.w, y: p.y / box.h })) }));
+        if (has("add") && !add) add = toAlphaCanvas(smartSelect(px, guides, "add"), px.width, px.height);
+        if (has("erase") && !remove) remove = toAlphaCanvas(smartSelect(px, guides, "erase"), px.width, px.height);
+      }
+      if (id !== run.current) return;
+      sel.current = { add, remove };
+      buildOverlay();
+      setAi("ready");
+      redraw();
+    })();
   };
 
   const clearRough = () => {
@@ -241,6 +297,7 @@ export function CutoutRefiner({ photo, start, auto, title, onApply, onClose }: P
     work.current = copyOf(photo, start);
     dialog.current?.showModal();
     draw();
+    samReady.current = prepareSelect(photo); // SlimSAM: download once, then read this photo
     const k = Math.min(1, SELECT_SIDE / Math.max(photo.width, photo.height));
     const pc = blank(Math.max(1, Math.round(photo.width * k)), Math.max(1, Math.round(photo.height * k)));
     const pg = pc.getContext("2d", { willReadFrequently: true });
@@ -421,6 +478,7 @@ export function CutoutRefiner({ photo, start, auto, title, onApply, onClose }: P
             redraw();
           }}
         />
+        {mode === "smart" && <ModelProgress task="refine" label="Loading smart select" working="Reading your photo for smart select…" />}
         {status && <p className={s.small} role="status" aria-live="polite">{status}</p>}
         {mode === "brush" && (
           <>

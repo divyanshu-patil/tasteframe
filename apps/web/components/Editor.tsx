@@ -14,6 +14,7 @@ import { TEMPLATES, layoutBoxes, slotRectsFor } from "../lib/story/templates";
 import type { Align, Crop, FontRole, StoryState, TemplateId, TemplateInput, TextKey } from "../lib/story/types";
 import { CoverPanel, useCoverImage, useTrackArt } from "./CoverPanel";
 import { CutoutRefiner } from "./CutoutRefiner";
+import { ModelProgress } from "./ModelProgress";
 import { ColorField, Section, Segmented, Slider, Toggle, deg, pct, px, times } from "./controls";
 import { MusicCard } from "./Results";
 import { PinSource } from "./PinSource";
@@ -79,7 +80,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
   const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
   const [uploadedCover, setUploadedCover] = useState<Photo | null>(null);
   const coverImg = useCoverImage(story.cover?.trackId, uploadedCover);
-  const autoMasks = useMasks(photos, Boolean(tpl.needsMask));
+  const autoMasks = useMasks(photos, Boolean(tpl.needsMask), true);
   // Hand-refined cutouts per photo (CutoutRefiner); they override the automatic ones.
   const [maskEdits, setMaskEdits] = useState<ReadonlyMap<Photo, HTMLCanvasElement>>(() => new Map());
   const [refining, setRefining] = useState<number | null>(null);
@@ -287,6 +288,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
         />
         <p className={s.small}>Tap to select · drag to move · scroll or pinch to zoom · arrow keys nudge</p>
         {tpl.needsMask && !masks && <p className={s.small} role="status">Cutting you out of the photo on your device (the first time loads a small model)…</p>}
+        {tpl.needsMask && masks && <ModelProgress task="cutout" label="Sharpening your cutout" working="Sharpening your cutout on your device…" />}
         {tpl.needsMask && masks && !masks[0] && <p className={s.small} role="status">No person found to cut out, so this layout shows the whole photo. Use Refine cutout to paint one in.</p>}
         {tpl.needsMask && autoMasks && (
           <button type="button" className={s.linkBtn} onClick={() => setRefining(0)}>Cutout not quite right? Refine it</button>

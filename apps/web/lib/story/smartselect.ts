@@ -285,8 +285,15 @@ export function smartSelect(img: Pixels, strokes: Guide[], want: Guide["tool"]):
     }
   }
   if (scribbles) { const g = grow(lab, W, H, seeds, walls); for (let i = 0; i < n; i++) if (g[i]) hard[i] = 1; }
-  const gray = new Float32Array(n);
   const p = new Float32Array(n);
-  for (let i = 0; i < n; i++) { gray[i] = lab[i * 3]! / 100; p[i] = hard[i]!; }
-  return guided(gray, p, W, H, Math.max(2, Math.round(Math.max(W, H) / 120)), 1e-3);
+  for (let i = 0; i < n; i++) p[i] = hard[i]!;
+  return snapEdges(img, p, lab);
+}
+
+/** Snap a rough alpha (0..1, same size as `img`) to the photo's edges with a guided filter. */
+export function snapEdges(img: Pixels, alpha: Float32Array, lab: Lab = toLab(img)): Float32Array {
+  const { width: W, height: H } = img;
+  const gray = new Float32Array(W * H);
+  for (let i = 0; i < gray.length; i++) gray[i] = lab[i * 3]! / 100;
+  return guided(gray, alpha, W, H, Math.max(2, Math.round(Math.max(W, H) / 120)), 1e-3);
 }
