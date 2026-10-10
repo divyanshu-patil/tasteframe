@@ -138,6 +138,31 @@ export function StoryMaker() {
     setPhotos((cur) => [...cur, ...added].slice(0, MAX_PHOTOS));
   };
 
+  /** Editor: add photos to fill empty slots of a multi-photo layout (no re-analysis). */
+  const addPhotosLater = async (files: FileList | null) => {
+    const list = Array.from(files ?? []).slice(0, MAX_PHOTOS - photos.length);
+    const added: PhotoFile[] = [];
+    for (const file of list) {
+      const check = await checkFile(file);
+      if (!check.ok) throw new ApiError("INVALID_IMAGE", `${file.name}: ${check.error}`);
+      const url = URL.createObjectURL(file);
+      try {
+        added.push({ file, type: check.type, url, img: await loadImage(url) });
+      } catch {
+        URL.revokeObjectURL(url);
+        throw new ApiError("INVALID_IMAGE", `${file.name} could not be decoded.`);
+      }
+    }
+    if (!added.length) return;
+    // Upload now so "Save to my Stories" includes them (keys stay aligned with photos).
+    if (objectKeys) {
+      const keys: string[] = [];
+      for (const p of added) keys.push(await uploadPhoto(p.file, p.type, () => undefined));
+      setObjectKeys((cur) => (cur ? [...cur, ...keys] : cur));
+    }
+    setPhotos((cur) => [...cur, ...added].slice(0, MAX_PHOTOS));
+  };
+
   const removeOne = (i: number) => {
     const p = photos[i];
     if (p) URL.revokeObjectURL(p.url);
@@ -357,6 +382,7 @@ export function StoryMaker() {
       return (
         <Editor
           photos={photos.map((p) => p.img)}
+          onAddPhotos={photos.length < MAX_PHOTOS ? addPhotosLater : undefined}
           story={story}
           setStory={setStory}
           input={(id) =>

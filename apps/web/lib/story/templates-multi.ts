@@ -340,7 +340,7 @@ const grid: Template = {
     });
     if (on(s, "squiggles")) {
       squiggle(ctx, 90, 375, 260);
-      squiggle(ctx, 720, 1505, 260);
+      squiggle(ctx, 90, 1525, 260);
     }
   },
 };

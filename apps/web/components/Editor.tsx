@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Music } from "../lib/api";
 import type { Photo } from "../lib/story/draw";
 import { type EditorAction, editorReducer } from "../lib/story/editor";
@@ -29,6 +29,8 @@ interface Props {
   /** Present only when saving is configured and the photo is uploaded. */
   onSave?: () => Promise<void>;
   signedIn?: boolean;
+  /** Add photos later to fill a multi-photo layout's empty slots. */
+  onAddPhotos?: (files: FileList | null) => Promise<void>;
 }
 
 const FONTS: { id: FontRole; label: string }[] = [
@@ -55,7 +57,7 @@ function usePreviewWidth(): number {
   return w;
 }
 
-export function Editor({ photos, story, setStory, input, suggested, music, onBack, onStartOver, onSave, signedIn = false }: Props) {
+export function Editor({ photos, story, setStory, input, suggested, music, onBack, onStartOver, onSave, signedIn = false, onAddPhotos }: Props) {
   const [active, setActive] = useState<TextKey>("headline");
   const [exporting, setExporting] = useState<"idle" | "busy" | "error" | "done">("idle");
   const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
@@ -84,6 +86,20 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
   const cropOf = (i: number) => (i === 0 ? story.crop : (story.crops?.[i - 1] ?? story.crop));
   const crop = cropOf(slot);
   const order = story.order?.length ? story.order : [0, 1, 2, 3];
+  const capacity = TEMPLATES[story.templateId].capacity ?? 1;
+  const emptySlots = Math.max(0, Math.min(4, capacity) - photos.length);
+  const [adding, setAdding] = useState<{ kind: "idle" | "busy" } | { kind: "error"; msg: string }>({ kind: "idle" });
+  const addInput = useRef<HTMLInputElement>(null);
+  const addPhotos = async (files: FileList | null) => {
+    if (!onAddPhotos) return;
+    setAdding({ kind: "busy" });
+    try {
+      await onAddPhotos(files);
+      setAdding({ kind: "idle" });
+    } catch (e) {
+      setAdding({ kind: "error", msg: e instanceof Error ? e.message : "Couldn't add that photo." });
+    }
+  };
   const sticker = story.stickers.find((x) => x.id === selected) ?? null;
 
   const doExport = async () => {
@@ -157,13 +173,15 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           </div>
         </fieldset>
 
-        {photos.length > 1 && (
+        {(photos.length > 1 || capacity > 1) && (
           <fieldset className={s.group}>
             <legend>Photos</legend>
             <p className={s.small}>
               {slotCount < photos.length
                 ? `This layout shows ${slotCount} of your ${photos.length} photos — switch layouts to show all.`
-                : "Drag a photo onto another on the Story to swap them, or use the arrows."}
+                : emptySlots > 0
+                  ? `This layout has room for ${emptySlots} more photo${emptySlots > 1 ? "s" : ""} — empty slots repeat your photos until you add more.`
+                  : "Drag a photo onto another on the Story to swap them, or use the arrows."}
             </p>
             <div className={s.slotRow}>
               {Array.from({ length: slotCount }, (_, i) => (
@@ -178,7 +196,27 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
                   </div>
                 </div>
               ))}
+              {onAddPhotos && emptySlots > 0 && (
+                <div className={s.slotCard}>
+                  <button className={s.photoAddSmall} disabled={adding.kind === "busy"} onClick={() => addInput.current?.click()}>
+                    {adding.kind === "busy" ? "Adding…" : "+ Add photo"}
+                  </button>
+                </div>
+              )}
             </div>
+            <input
+              ref={addInput}
+              type="file"
+              multiple
+              accept="image/jpeg,image/jpg,image/pjpeg,image/png,image/webp,.jpg,.jpeg,.jpe,.jfif,.png,.webp"
+              className={s.srOnly}
+              aria-label="Add photos to this layout"
+              onChange={(e) => {
+                void addPhotos(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            {adding.kind === "error" && <p role="alert" className={s.error}>{adding.msg}</p>}
           </fieldset>
         )}
 
