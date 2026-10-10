@@ -20,10 +20,18 @@ const sans = Archivo({ subsets: ["latin"], weight: ["700"], variable: "--font-st
 const hand = Caveat({ subsets: ["latin"], weight: ["600"], variable: "--font-story-hand", display: "swap" });
 const mono = Space_Mono({ subsets: ["latin"], weight: ["400"], variable: "--font-story-mono", display: "swap" });
 
+const TITLE = "Tasteframe — One photo. Three Stories. Your taste.";
+const DESCRIPTION =
+  "Turn a photo into Instagram Story designs shaped by its visual mood and your cultural taste (powered by Qloo).";
+
+// Share cards use app/opengraph-image.jpg and app/twitter-image.jpg (a capture of the landing
+// page); metadataBase makes their URLs absolute.
 export const metadata: Metadata = {
-  title: "Tasteframe — One photo. Three Stories. Your taste.",
-  description:
-    "Turn a photo into Instagram Story designs shaped by its visual mood and your cultural taste (powered by Qloo).",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://tasteframe.vercel.app"),
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: { type: "website", siteName: "Tasteframe", title: TITLE, description: DESCRIPTION, url: "/" },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION },
   // Circular monogram for tabs (app/favicon.ico is generated from it for legacy requests).
   // iOS fills transparent corners with black, so the home-screen icon is the square original.
   icons: {

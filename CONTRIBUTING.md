@@ -480,6 +480,7 @@ A layout touches a few files; tests fail loudly if any of them drift.
 | `apps/web/public/props/*` + `props.json` | openly licensed images from Openverse, credited in the app |
 | `apps/web/public/models/selfie_segmenter.tflite` | MediaPipe selfie segmenter (Apache-2.0), vendored |
 | `docs/screenshots/*` | captured from the running app with a CC0 demo photo |
+| `apps/web/app/{opengraph,twitter}-image.jpg` | the landing page captured at 1200×630 (2× then downscaled), backend dot and dev badge hidden; alt text in the `.alt.txt` files |
 
 ## Pull requests
 
