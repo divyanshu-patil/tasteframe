@@ -17,12 +17,14 @@ import {
   storyPhoto,
   uploadPhoto,
 } from "../lib/api";
+import { authConfigured, signOut, useAuth } from "../lib/auth";
 import { sampleFile } from "../lib/sample";
 import { defaultState } from "../lib/story/templates";
 import { inputFor } from "../lib/story/input";
 import type { StoryState, TemplateId } from "../lib/story/types";
 import { MAX_BYTES, checkFile } from "../lib/upload";
 import { Editor } from "./Editor";
+import { LoginDialog } from "./LoginDialog";
 import { Progress } from "./Progress";
 import { Results } from "./Results";
 import { SavedStories } from "./SavedStories";
@@ -65,6 +67,12 @@ export function StoryMaker() {
   const [storyDate, setStoryDate] = useState(() => new Date());
   const [features, setFeatures] = useState<Features | null>(null);
   const [savedVersion, setSavedVersion] = useState(0); // bump to refresh the saved list
+  const { user } = useAuth();
+  const [login, setLogin] = useState<{ reason: string; resolve: (ok: boolean) => void } | null>(null);
+  const canSave = Boolean(features?.saved_stories && authConfigured);
+  /** Opens the login dialog; resolves true once signed in (false if dismissed). */
+  const requestLogin = (reason: string) =>
+    new Promise<boolean>((resolve) => setLogin({ reason, resolve }));
   const runId = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -229,8 +237,12 @@ export function StoryMaker() {
   };
 
   const save =
-    features?.saved_stories && objectKey && story
+    canSave && objectKey && story
       ? async () => {
+          // Saving to our backend needs an account: ask the guest to log in, then continue.
+          if (!user && !(await requestLogin("Log in to save this Story to your account — creating and downloading never need one."))) {
+            throw new ApiError("LOGIN_CANCELLED", "");
+          }
           const m = analysis?.music;
           await saveStory(objectKey, story, {
             qloo_used: analysis?.provenance.qloo_used ?? false,
@@ -319,6 +331,7 @@ export function StoryMaker() {
           onBack={analysis || objectKey ? () => setPhase("results") : undefined}
           onStartOver={startOver}
           onSave={save}
+          signedIn={Boolean(user)}
         />
       );
     }
@@ -329,8 +342,8 @@ export function StoryMaker() {
           Create your Stories
         </h2>
 
-        {features?.saved_stories && (
-          <SavedStories key={savedVersion} onOpen={openSaved} />
+        {canSave && user && (
+          <SavedStories key={`${user.id}:${savedVersion}`} onOpen={openSaved} />
         )}
 
         <div className={s.step}>
@@ -456,7 +469,32 @@ export function StoryMaker() {
 
   return (
     <div ref={rootRef} style={{ scrollMarginTop: 16 }}>
+      {canSave && (
+        <div className={s.accountBar}>
+          {user ? (
+            <>
+              <span className={s.muted}>Signed in as {user.email}</span>
+              <button className={s.linkBtn} onClick={() => void signOut()}>Log out</button>
+            </>
+          ) : (
+            <>
+              <span className={s.muted}>Create and download freely — log in to save Stories.</span>
+              <button className={s.linkBtn} onClick={() => void requestLogin("Log in to keep your Stories in one place.")}>
+                Log in
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {view}
+      <LoginDialog
+        open={login !== null}
+        reason={login?.reason ?? ""}
+        onDone={(ok) => {
+          login?.resolve(ok);
+          setLogin(null);
+        }}
+      />
     </div>
   );
 }

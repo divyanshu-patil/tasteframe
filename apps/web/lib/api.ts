@@ -1,5 +1,6 @@
 // Browser client for the Tasteframe API. All calls go through the Next.js `/api` rewrite;
 // no provider keys ever reach the browser. Responses are validated before use.
+import { accessToken } from "./auth";
 import type { StoryState, TemplateId } from "./story/types";
 import { TEMPLATE_IDS } from "./story/types";
 
@@ -179,9 +180,15 @@ export function sessionToken(): Promise<string> {
   return tokenPromise;
 }
 
-async function authed(path: string, init: RequestInit = {}): Promise<Response> {
+async function authed(path: string, init: RequestInit = {}, asUser = false): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("X-Session-Token", await sessionToken());
+  if (asUser) {
+    // Saved Stories belong to a Supabase account; the API verifies this token and RLS enforces it.
+    const token = await accessToken();
+    if (!token) throw new ApiError("AUTH_REQUIRED", "Log in to save Stories to your account.");
+    headers.set("Authorization", `Bearer ${token}`);
+  }
   let res: Response;
   try {
     res = await fetch(`${API}${path}`, { ...init, headers });
@@ -326,7 +333,6 @@ export interface SavedStory {
   id: string;
   config: StoryState;
   created_at: string;
-  expires_at: string | null;
   provenance: { qloo_used: boolean; music_artist: string | null; music_title: string | null };
 }
 
@@ -349,7 +355,6 @@ function parseSaved(v: unknown): SavedStory | null {
     id: v.id,
     config,
     created_at: v.created_at,
-    expires_at: isStr(v.expires_at) ? v.expires_at : null,
     provenance: {
       qloo_used: p.qloo_used === true,
       music_artist: isStr(p.music_artist) ? p.music_artist : null,
@@ -363,11 +368,15 @@ export async function saveStory(
   config: StoryState,
   provenance: SavedStory["provenance"] & { track_source: "itunes" | null },
 ): Promise<SavedStory> {
-  const res = await authed("/v1/stories", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ object_key: objectKey, config, provenance }),
-  });
+  const res = await authed(
+    "/v1/stories",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ object_key: objectKey, config, provenance }),
+    },
+    true,
+  );
   if (!res.ok) throw await errorFrom(res);
   const saved = parseSaved(await res.json());
   if (!saved) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
@@ -375,7 +384,7 @@ export async function saveStory(
 }
 
 export async function listStories(): Promise<SavedStory[]> {
-  const res = await authed("/v1/stories");
+  const res = await authed("/v1/stories", {}, true);
   if (!res.ok) throw await errorFrom(res);
   const v: unknown = await res.json();
   if (!isObj(v) || !Array.isArray(v.stories)) {
@@ -385,12 +394,12 @@ export async function listStories(): Promise<SavedStory[]> {
 }
 
 export async function storyPhoto(id: string): Promise<Blob> {
-  const res = await authed(`/v1/stories/${encodeURIComponent(id)}/photo`);
+  const res = await authed(`/v1/stories/${encodeURIComponent(id)}/photo`, {}, true);
   if (!res.ok) throw await errorFrom(res);
   return res.blob();
 }
 
 export async function deleteStory(id: string): Promise<void> {
-  const res = await authed(`/v1/stories/${encodeURIComponent(id)}`, { method: "DELETE" });
+  const res = await authed(`/v1/stories/${encodeURIComponent(id)}`, { method: "DELETE" }, true);
   if (!res.ok) throw await errorFrom(res);
 }

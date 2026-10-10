@@ -36,10 +36,12 @@ with psycopg.connect(**parse(env["DATABASE_URL"]), connect_timeout=15) as conn:
     with conn.transaction():
         conn.execute((ROOT / "supabase/schema.sql").read_text())
         conn.execute("notify pgrst, 'reload schema'")
-    fns = [r[0] for r in conn.execute(
-        "select proname from pg_proc where proname like 'tf\\_%' order by 1").fetchall()]
-    anon_table, anon_fn = conn.execute(
-        "select has_table_privilege('anon','public.stories','select'),"
-        " has_function_privilege('anon','public.tf_list_stories(text)','execute')").fetchone()
-print("functions:", fns)
-print("anon direct table access:", anon_table, "| anon can call tf_*:", anon_fn)
+    policies = [r[0] for r in conn.execute(
+        "select policyname from pg_policies where tablename = 'stories' order by 1").fetchall()]
+    rls, anon_sel, auth_sel, auth_upd = conn.execute(
+        "select relrowsecurity, has_table_privilege('anon','public.stories','select'),"
+        " has_table_privilege('authenticated','public.stories','select'),"
+        " has_table_privilege('authenticated','public.stories','update')"
+        " from pg_class where oid = 'public.stories'::regclass").fetchone()
+print("rls:", rls, "| policies:", policies)
+print("anon select:", anon_sel, "| authenticated select:", auth_sel, "| authenticated update:", auth_upd)

@@ -13,7 +13,7 @@ type State =
 const fmt = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
-/** Stories this browser saved (guest session). Only shown when persistence is configured. */
+/** The signed-in user's saved Stories (any device). Rendered only when logged in. */
 export function SavedStories({ onOpen }: { onOpen: (story: SavedStory) => Promise<void> }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,7 +60,6 @@ export function SavedStories({ onOpen }: { onOpen: (story: SavedStory) => Promis
                 <strong>{st.config.headline.text || "Untitled"}</strong>
                 <span className={s.muted}>
                   {TEMPLATES[st.config.templateId].name} · saved {fmt(st.created_at)}
-                  {st.expires_at && ` · deleted after ${fmt(st.expires_at)}`}
                 </span>
               </span>
               <span className={s.row}>

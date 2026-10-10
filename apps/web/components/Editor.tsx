@@ -23,6 +23,7 @@ interface Props {
   onStartOver: () => void;
   /** Present only when saving is configured and the photo is uploaded. */
   onSave?: () => Promise<void>;
+  signedIn?: boolean;
 }
 
 const FONTS: { id: FontRole; label: string }[] = [
@@ -49,7 +50,7 @@ function usePreviewWidth(): number {
   return w;
 }
 
-export function Editor({ photo, story, setStory, input, suggested, music, onBack, onStartOver, onSave }: Props) {
+export function Editor({ photo, story, setStory, input, suggested, music, onBack, onStartOver, onSave, signedIn = false }: Props) {
   const [active, setActive] = useState<TextKey>("headline");
   const [exporting, setExporting] = useState<"idle" | "busy" | "error" | "done">("idle");
   const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
@@ -62,6 +63,7 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
       await onSave();
       setSaving({ kind: "done" });
     } catch (e) {
+      if ((e as { code?: string }).code === "LOGIN_CANCELLED") return setSaving({ kind: "idle" });
       setSaving({ kind: "error", msg: e instanceof Error && e.message ? e.message : "Saving failed." });
     }
   };
@@ -232,7 +234,7 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
           </button>
           {onSave && (
             <button className={s.secondary} onClick={doSave} disabled={saving.kind === "busy" || saving.kind === "done"}>
-              {saving.kind === "busy" ? "Saving…" : saving.kind === "done" ? "Saved ✓" : "Save to my Stories"}
+              {saving.kind === "busy" ? "Saving…" : saving.kind === "done" ? "Saved ✓" : signedIn ? "Save to my Stories" : "Log in to save"}
             </button>
           )}
           <button className={s.secondary} onClick={() => dispatch({ type: "reset", input: input(story.templateId) })}>
@@ -246,7 +248,7 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
             </p>
           )}
           {saving.kind === "done" && (
-            <p className={s.small}>Saved to this browser&apos;s Stories. The photo copy is kept privately and deleted automatically after a week.</p>
+            <p className={s.small}>Saved to your account. Find it under &ldquo;Your saved Stories&rdquo; on any device; the photo copy is stored privately.</p>
           )}
         </div>
         <div aria-live="polite">

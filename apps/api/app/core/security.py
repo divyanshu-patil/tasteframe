@@ -47,15 +47,9 @@ def new_object_key(session_id: str, ext: str) -> str:
     return f"tmp/{session_id}/{secrets.token_urlsafe(16)}.{ext}"
 
 
-def saved_object_key(session_id: str, ext: str) -> str:
-    """Saved Stories keep their photo under a separate prefix with its own lifecycle rule."""
-    return f"saved/{session_id}/{secrets.token_urlsafe(16)}.{ext}"
-
-
-def session_hash(settings: Settings, session_id: str) -> str:
-    """Stored instead of the raw session id, so DB rows alone can't be replayed as tokens."""
-    secret = settings.session_secret.get_secret_value()
-    return hashlib.sha256(f"{secret}:{session_id}".encode()).hexdigest()
+def saved_object_key(user_id: str, ext: str) -> str:
+    """Saved photos live under saved/<user_id>/ — the DB CHECK constraint requires this prefix."""
+    return f"saved/{user_id}/{secrets.token_urlsafe(16)}.{ext}"
 
 
 def assert_owns_key(object_key: str, session_id: str) -> None:

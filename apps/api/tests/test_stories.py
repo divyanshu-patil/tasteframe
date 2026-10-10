@@ -1,4 +1,4 @@
-"""Saved Stories: Supabase (PostgREST) persistence + photo copy, ownership and failure paths."""
+"""Saved Stories (login required): Supabase Auth token check + PostgREST with RLS, photo copy."""
 
 import json
 import uuid
@@ -38,55 +38,50 @@ CONFIG = {
     "palette": ["#202020"],
     "stamp": "'26 10 10",
 }
+ALICE = ("token-alice", "11111111-1111-4111-8111-111111111111")
+BOB = ("token-bob", "22222222-2222-4222-8222-222222222222")
 
 
-class FakePostgrest:
-    """Emulates the tf_* RPC functions from supabase/schema.sql (limit lowered to 2)."""
+class FakeSupabase:
+    """Auth (/auth/v1/user) + the `stories` table with RLS-by-token and the 20→2 limit trigger."""
 
     LIMIT = 2
 
     def __init__(self):
+        self.users = dict([ALICE, BOB])
         self.rows: list[dict] = []
         self.fail = False
-        self.headers: list[httpx.Headers] = []
-
-    @staticmethod
-    def _public(r: dict) -> dict:
-        return {k: v for k, v in r.items() if k != "guest_session_hash"}
+        self.requests: list[httpx.Request] = []
 
     def handler(self, req: httpx.Request) -> httpx.Response:
-        self.headers.append(req.headers)
+        self.requests.append(req)
+        assert req.headers["apikey"] == "sb_publishable_test"
+        token = req.headers.get("authorization", "").removeprefix("Bearer ")
+        uid = self.users.get(token)
+        if req.url.path == "/auth/v1/user":
+            return httpx.Response(200, json={"id": uid}) if uid else httpx.Response(401)
+        assert req.url.path == "/rest/v1/stories"
         if self.fail:
             return httpx.Response(500, json={"message": "boom internal detail"})
-        fn = req.url.path.removeprefix("/rest/v1/rpc/")
-        a = json.loads(req.content)
-        owner = a["p_owner"]
-        assert len(owner) == 64 and all(c in "0123456789abcdef" for c in owner)
-        mine = [r for r in self.rows if r["guest_session_hash"] == owner]
-        if fn == "tf_save_story":
+        if not uid:
+            return httpx.Response(401, json={"message": "JWT expired"})
+        mine = [r for r in self.rows if r["user_id"] == uid]  # RLS
+        params = dict(req.url.params)
+        if req.method == "POST":
+            body = json.loads(req.content)
+            if body["user_id"] != uid or not body["s3_object_key"].startswith(f"saved/{uid}/"):
+                return httpx.Response(403, json={"message": "violates row-level security"})
             if len(mine) >= self.LIMIT:
                 return httpx.Response(400, json={"code": "P0001", "message": "STORY_LIMIT"})
-            row = {
-                "id": str(uuid.uuid4()),
-                "guest_session_hash": owner,
-                "s3_object_key": a["p_key"],
-                "template_id": a["p_template"],
-                "layout_config": a["p_config"],
-                "recommendation_provenance": a["p_provenance"],
-                "created_at": datetime.now(UTC).isoformat(),
-                "expires_at": "2099-01-01T00:00:00+00:00",
-            }
+            row = {**body, "id": str(uuid.uuid4()), "created_at": datetime.now(UTC).isoformat()}
             self.rows.append(row)
-            return httpx.Response(200, json=[self._public(row)])
-        if fn == "tf_list_stories":
-            return httpx.Response(200, json=[self._public(r) for r in reversed(mine)])
-        hit = [r for r in mine if r["id"] == a["p_id"]]
-        if fn == "tf_get_story":
-            return httpx.Response(200, json=[self._public(r) for r in hit])
-        if fn == "tf_delete_story":
-            self.rows = [r for r in self.rows if r not in hit]
-            return httpx.Response(200, json=[{"s3_object_key": r["s3_object_key"]} for r in hit])
-        return httpx.Response(404, json={"message": "function not found"})
+            return httpx.Response(201, json=[row])
+        hits = [
+            r for r in mine if "id" not in params or r["id"] == params["id"].removeprefix("eq.")
+        ]
+        if req.method == "DELETE":
+            self.rows = [r for r in self.rows if r not in hits]
+        return httpx.Response(200, json=hits)
 
 
 @pytest.fixture
@@ -94,16 +89,24 @@ def setup(client_with, monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
     monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test")
     from app.api.routes.stories import get_repo
+    from app.core import auth
     from app.core.config import get_settings
     from app.services.stories.supabase import SupabaseStories
 
     get_settings.cache_clear()
-    fake = FakePostgrest()
+    fake = FakeSupabase()
+    transport = httpx.MockTransport(fake.handler)
+    monkeypatch.setattr(auth, "auth_transport", transport)
     client, _ = client_with()
-    client.app.dependency_overrides[get_repo] = lambda: SupabaseStories(
-        get_settings(), httpx.MockTransport(fake.handler)
-    )
+    client.app.dependency_overrides[get_repo] = lambda: SupabaseStories(get_settings(), transport)
     return client, fake
+
+
+def headers(client, user=ALICE):
+    h = new_session(client)
+    if user:
+        h["Authorization"] = f"Bearer {user[0]}"
+    return h
 
 
 def save(client, h, key, config=CONFIG):
@@ -119,33 +122,47 @@ def save(client, h, key, config=CONFIG):
 
 
 def test_features_and_not_configured(client):
-    f = client.get("/v1/features").json()
-    assert f == {"qloo": True, "saved_stories": False, "storage": "local"}
-    h = new_session(client)
-    r = client.get("/v1/stories", headers=h)
+    assert client.get("/v1/features").json() == {
+        "qloo": True,
+        "saved_stories": False,
+        "storage": "local",
+    }
+    r = client.get("/v1/stories", headers=new_session(client))
     assert r.status_code == 503 and r.json()["error"]["code"] == "PERSISTENCE_NOT_CONFIGURED"
+
+
+def test_guest_must_log_in_to_save(setup):
+    client, fake = setup
+    h = headers(client, user=None)
+    key = upload(client, h, make_image())
+    r = save(client, h, key)
+    assert r.status_code == 401 and r.json()["error"]["code"] == "AUTH_REQUIRED"
+    assert "Log in" in r.json()["error"]["message"]
+    h["Authorization"] = "Bearer forged-token"
+    assert save(client, h, key).status_code == 401
+    assert client.get("/v1/stories", headers=h).status_code == 401
+    assert fake.rows == []
 
 
 def test_save_list_photo_delete_roundtrip(setup, tmp_path):
     client, fake = setup
-    h = new_session(client)
+    h = headers(client)
     key = upload(client, h, make_image())
     r = save(client, h, key)
     assert r.status_code == 201, r.text
     story = r.json()
     assert story["config"] == CONFIG and story["template_id"] == "editorial"
     row = fake.rows[0]
-    assert row["s3_object_key"].startswith("saved/") and "guest_session_hash" in row
-    assert h["X-Session-Token"].split(".")[0] not in row["guest_session_hash"]  # hashed, not raw
-    assert fake.headers[0]["apikey"] == "sb_publishable_test"
-    assert "authorization" not in fake.headers[0]  # new keys go in `apikey` only
+    assert row["user_id"] == ALICE[1] and row["s3_object_key"].startswith(f"saved/{ALICE[1]}/")
+    table_req = [q for q in fake.requests if q.url.path == "/rest/v1/stories"][0]
+    assert table_req.headers["authorization"] == "Bearer token-alice"  # RLS runs as the user
     assert "sb_publishable_test" not in r.text
 
-    listed = client.get("/v1/stories", headers=h).json()["stories"]
-    assert [s["id"] for s in listed] == [story["id"]]
+    assert [s["id"] for s in client.get("/v1/stories", headers=h).json()["stories"]] == [
+        story["id"]
+    ]
     photo = client.get(f"/v1/stories/{story['id']}/photo", headers=h)
-    assert photo.status_code == 200 and photo.headers["content-type"] == "image/jpeg"
-    assert photo.content[:3] == b"\xff\xd8\xff"
+    assert photo.status_code == 200 and photo.content[:3] == b"\xff\xd8\xff"
 
     saved_file = tmp_path / "uploads" / row["s3_object_key"]
     assert saved_file.exists()
@@ -155,41 +172,46 @@ def test_save_list_photo_delete_roundtrip(setup, tmp_path):
     assert client.get(f"/v1/stories/{story['id']}/photo", headers=h).status_code == 404
 
 
-def test_other_session_cannot_read_or_delete(setup):
+def test_story_follows_the_account_not_the_browser(setup):
+    client, _ = setup
+    laptop = headers(client)
+    sid = save(client, laptop, upload(client, laptop, make_image())).json()["id"]
+    phone = headers(client)  # new browser session, same account
+    assert [s["id"] for s in client.get("/v1/stories", headers=phone).json()["stories"]] == [sid]
+
+
+def test_other_user_cannot_read_or_delete(setup):
     client, fake = setup
-    owner, other = new_session(client), new_session(client)
-    key = upload(client, owner, make_image())
-    sid = save(client, owner, key).json()["id"]
-    assert client.get("/v1/stories", headers=other).json()["stories"] == []
-    assert client.get(f"/v1/stories/{sid}/photo", headers=other).status_code == 404
-    client.delete(f"/v1/stories/{sid}", headers=other)
-    assert len(fake.rows) == 1  # untouched
-    assert save(client, other, key).status_code == 404  # can't save someone else's upload
+    alice, bob = headers(client), headers(client, BOB)
+    key = upload(client, alice, make_image())
+    sid = save(client, alice, key).json()["id"]
+    assert client.get("/v1/stories", headers=bob).json()["stories"] == []
+    assert client.get(f"/v1/stories/{sid}/photo", headers=bob).status_code == 404
+    client.delete(f"/v1/stories/{sid}", headers=bob)
+    assert len(fake.rows) == 1
+    assert save(client, bob, key).status_code == 404  # Bob's browser doesn't own Alice's upload
 
 
 def test_rejects_invalid_config(setup):
     client, _ = setup
-    h = new_session(client)
+    h = headers(client)
     key = upload(client, h, make_image())
-    bad_color = {**CONFIG, "accent": "red; background:url(x)"}
-    extra = {**CONFIG, "html": "<script>"}
-    assert save(client, h, key, bad_color).status_code == 422
-    assert save(client, h, key, extra).status_code == 422
+    assert save(client, h, key, {**CONFIG, "accent": "red; background:url(x)"}).status_code == 422
+    assert save(client, h, key, {**CONFIG, "html": "<script>"}).status_code == 422
     assert client.get("/v1/stories/not-a-uuid/photo", headers=h).status_code == 422
 
 
 def test_limit_enforced_by_database_rolls_back_photo(setup, tmp_path):
     client, _ = setup
-    h = new_session(client)
+    h = headers(client)
     key = upload(client, h, make_image())
-    codes = [save(client, h, key).status_code for _ in range(3)]
-    assert codes == [201, 201, 409]
-    assert len(list((tmp_path / "uploads").glob("saved/**/*.jpg"))) == 2  # 3rd copy removed
+    assert [save(client, h, key).status_code for _ in range(3)] == [201, 201, 409]
+    assert len(list((tmp_path / "uploads").glob("saved/**/*.jpg"))) == 2
 
 
 def test_supabase_outage_cleans_up_photo_copy(setup, tmp_path):
     client, fake = setup
-    h = new_session(client)
+    h = headers(client)
     key = upload(client, h, make_image())
     fake.fail = True
     r = save(client, h, key)
@@ -200,7 +222,7 @@ def test_supabase_outage_cleans_up_photo_copy(setup, tmp_path):
 
 def test_expired_upload_cannot_be_saved(setup):
     client, _ = setup
-    h = new_session(client)
+    h = headers(client)
     key = upload(client, h, make_image())
     client.delete(f"/v1/uploads/{key}", headers=h)
     r = save(client, h, key)

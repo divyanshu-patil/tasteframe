@@ -32,7 +32,7 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE"],
-        allow_headers=["Content-Type", "X-Session-Token"],
+        allow_headers=["Content-Type", "X-Session-Token", "Authorization"],
         expose_headers=["X-Request-ID"],
     )
     errors.install(app)

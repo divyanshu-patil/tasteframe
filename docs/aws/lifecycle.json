@@ -6,12 +6,6 @@
       "Status": "Enabled",
       "Expiration": { "Days": 1 },
       "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
-    },
-    {
-      "ID": "expire-saved-story-photos",
-      "Filter": { "Prefix": "saved/" },
-      "Status": "Enabled",
-      "Expiration": { "Days": 8 }
     }
   ]
 }

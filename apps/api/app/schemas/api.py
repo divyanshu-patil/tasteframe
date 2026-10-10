@@ -214,7 +214,6 @@ class StoryOut(BaseModel):
     config: StoryConfig
     provenance: StoryProvenance
     created_at: str
-    expires_at: str | None
 
 
 class StoryListOut(BaseModel):

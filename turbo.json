@@ -17,7 +17,9 @@
       ],
       "env": [
         "API_BASE_URL",
-        "NEXT_PUBLIC_UPLOAD_MAX_MB"
+        "NEXT_PUBLIC_UPLOAD_MAX_MB",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
       ]
     },
     "lint": {
@@ -38,7 +40,9 @@
         "API_HOST",
         "API_PORT",
         "API_BASE_URL",
-        "NEXT_PUBLIC_UPLOAD_MAX_MB"
+        "NEXT_PUBLIC_UPLOAD_MAX_MB",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
       ],
       "passThroughEnv": [
         "ENVIRONMENT",

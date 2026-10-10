@@ -13,7 +13,7 @@
   border-bottom: 1px solid var(--color-ink-black);
   font-size: 15px;
 }
-.masthead span:last-child {
+.masthead > :last-child {
   text-align: right;
 }
 .brand {
@@ -57,6 +57,8 @@
 }
 
 .banner {
+  display: block;
+  text-decoration: none;
   background: var(--color-ink-black);
   color: var(--color-parchment);
   font-family: var(--font-display);
@@ -71,8 +73,67 @@
   margin: 0 calc(-1 * var(--spacing-22));
 }
 
-.main {
-  padding-top: var(--spacing-43);
+.appMain {
+  padding-top: var(--spacing-28);
+}
+
+.homeLink {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-22);
+  margin-top: var(--spacing-28);
+}
+.cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 var(--spacing-28);
+  background: var(--color-ink-black);
+  color: var(--color-parchment);
+  border-radius: var(--radius-sm);
+  font-size: 19px;
+  text-decoration: none;
+  transition: transform 120ms ease, background 120ms ease;
+}
+.cta:hover {
+  background: var(--color-pure-black);
+  transform: translateY(-1px);
+}
+.ctaNote {
+  color: var(--color-charcoal);
+  font-size: 15px;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-43);
+  padding: var(--spacing-43) 0 0;
+}
+.steps article {
+  border-top: 1px solid var(--color-ink-black);
+  padding-top: var(--spacing-14);
+  display: grid;
+  gap: var(--spacing-10);
+  font-size: 17px;
+}
+.stepNo {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-ember-orange);
+}
+.stepTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 43px;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
 }
 
 .footer {
@@ -94,9 +155,12 @@
     grid-template-columns: 1fr;
     text-align: center;
   }
-  .masthead span:first-child,
-  .masthead span:last-child {
+  /* Hide decorative labels on small screens; navigation links stay visible. */
+  .masthead > span:not(.brand) {
     display: none;
+  }
+  .masthead > :last-child {
+    text-align: center;
   }
   .hero {
     grid-template-columns: 1fr;
@@ -109,5 +173,9 @@
   .footer {
     grid-template-columns: 1fr;
     gap: var(--spacing-14);
+  }
+  .steps {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-28);
   }
 }
