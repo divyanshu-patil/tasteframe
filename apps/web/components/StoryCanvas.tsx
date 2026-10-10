@@ -32,6 +32,8 @@ interface Props {
   onDragSticker?: (id: string, dx: number, dy: number) => void;
   onSelectSticker?: (id: string | null) => void;
   onDragCover?: (dx: number, dy: number) => void;
+  /** Drag the colour window (StoryState.spot). */
+  onDragSpot?: (dx: number, dy: number) => void;
   selectedSticker?: string | null;
   /** Wheel / pinch zoom of the photo crop (positive = zoom in). */
   onZoom?: (delta: number) => void;
@@ -41,6 +43,7 @@ type Target =
   | { kind: "text"; key: TextKey }
   | { kind: "sticker"; id: string }
   | { kind: "cover" }
+  | { kind: "spot" }
   | { kind: "photo"; slot: number; start: Crop };
 
 const inside = (p: { x: number; y: number }, r: Rect) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
@@ -117,6 +120,8 @@ export function StoryCanvas(props: Props) {
       if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return { kind: "sticker", id: s.id };
     }
     if (state.cover?.show && props.onDragCover && inside(p, coverBounds(state.cover))) return { kind: "cover" };
+    const sp = state.spot;
+    if (sp && props.onDragSpot && inside(p, { x: sp.x * STORY_W, y: sp.y * STORY_H, w: sp.w * STORY_W, h: sp.h * STORY_H })) return { kind: "spot" };
     const pad = 40;
     for (const key of ["headline", "caption"] as const) {
       const b = hits.current?.[key];
@@ -191,6 +196,7 @@ export function StoryCanvas(props: Props) {
               }
               else if (d.target.kind === "text") cb.current.onDragText?.(d.target.key, dx, dy);
               else if (d.target.kind === "cover") cb.current.onDragCover?.(dx, dy);
+              else if (d.target.kind === "spot") cb.current.onDragSpot?.(dx, dy);
               else cb.current.onDragSticker?.(d.target.id, dx, dy);
             }
           : undefined

@@ -19,6 +19,7 @@ import {
 import { type FilterId, filteredPhoto } from "./filters";
 import { type Slots, type Template, decos, fmtDate, on, pad, stamp, subjectHigh, subjectLow, t, tape, tornRect } from "./kit";
 import { AESTHETIC_TEMPLATES } from "./layouts-aesthetic";
+import { REF_TEMPLATES } from "./templates-refs";
 import { DEFAULT_COVER, drawCover } from "./cover";
 import { drawSticker } from "./stickers";
 import { MORE_TEMPLATES } from "./templates-more";
@@ -477,6 +478,7 @@ export const TEMPLATES: Record<TemplateId, Template> = {
   cinematic, stills, editorial, journal, scrapbook, filmstrip, vintage, minimal,
   ...MORE_TEMPLATES,
   ...MULTI_TEMPLATES,
+  ...REF_TEMPLATES,
   ...AESTHETIC_TEMPLATES,
 } as Record<TemplateId, Template>;
 
@@ -523,6 +525,8 @@ export function defaultState(id: TemplateId, input: TemplateInput): StoryState {
     filter: input.filter ?? filter ?? ("none" satisfies FilterId),
     stickers: [],
     cover: coverFor(id, input),
+    focus: { x: clamp01((input.focuses?.[0] ?? input.focus)?.x ?? 0.5), y: clamp01((input.focuses?.[0] ?? input.focus)?.y ?? 0.42) },
+    ...(TEMPLATES[id].spot ? { spot: TEMPLATES[id].spot!(input) } : {}),
     tags: (input.scene ?? []).slice(0, 5),
     ...rest,
   };
@@ -574,6 +578,7 @@ export function renderStory(ctx: Ctx, photos: Photo | Photo[], s: StoryState, as
   ctx.clearRect(0, 0, W, H);
   tpl.draw(ctx, slots.photo(0), s, slots);
   const headline = drawText(ctx, s.headline, tpl.text?.headline);
+  tpl.front?.(ctx, s, slots);
   const caption = drawText(ctx, s.caption, tpl.text?.caption);
   tpl.after?.(ctx, s);
   drawCover(ctx, s, assets.cover ?? null, slots.photo(0));

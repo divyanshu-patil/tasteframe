@@ -47,6 +47,24 @@ LayoutId = Literal[
     "grid",
     "mosaic",
     "polaroids",
+    "playlist",
+    "playercut",
+    "triptych",
+    "cctv",
+    "colorbox",
+    "tornstrip",
+    "cutout",
+    "focus",
+    "viewfinder",
+    "camcorder",
+    "sepiabooth",
+    "desktop",
+    "chat",
+    "kissmark",
+    "xerox",
+    "yearbook",
+    "coversepia",
+    "covercorner",
     "weekday",
     "daysplit",
     "halfword",
@@ -87,7 +105,18 @@ LayoutId = Literal[
     "notesdark",
 ]
 FilterId = Literal[
-    "none", "film", "warm", "golden", "cool", "faded", "vivid", "sepia", "bw", "noir", "8mm"
+    "none",
+    "film",
+    "warm",
+    "golden",
+    "cool",
+    "faded",
+    "vivid",
+    "sepia",
+    "bw",
+    "noir",
+    "8mm",
+    "xerox",
 ]
 StickerKind = Literal[
     "tape",
@@ -346,6 +375,18 @@ class OverlayConfig(BaseModel):
     color: str = Field(pattern=HEX)
 
 
+class Point01(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+
+
+class Rect01(Point01):
+    w: float = Field(gt=0, le=1)
+    h: float = Field(gt=0, le=1)
+
+
 class CoverConfig(BaseModel):
     """Square song cover placed on the Story; the image is refetched by track id."""
 
@@ -381,6 +422,8 @@ class StoryConfig(BaseModel):
     palette: list[Annotated[str, Field(pattern=HEX)]] = Field(max_length=6)
     stamp: str = Field(max_length=16)
     cover: CoverConfig | None = None
+    focus: Point01 | None = None
+    spot: Rect01 | None = None
     tags: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=5)
 
 

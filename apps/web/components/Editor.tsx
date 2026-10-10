@@ -134,6 +134,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           state={story}
           cover={coverImg}
           masks={masks}
+          onDragSpot={(dx, dy) => story.spot && dispatch({ type: "spot", x: story.spot.x + dx, y: story.spot.y + dy })}
           onDragCover={(dx, dy) => story.cover && dispatch({ type: "cover", patch: { x: story.cover.x + dx, y: story.cover.y + dy } })}
           width={width}
           label={`Editable ${tpl.name} Story. Drag text to move it, drag elsewhere to reposition the photo.`}
@@ -156,6 +157,15 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           onZoom={(d) => dispatch({ type: "crop", slot, patch: { zoom: crop.zoom * (1 + d) } })}
         />
         <p className={s.small}>Drag text, stickers or the photo · scroll/pinch to zoom · exports at 1080 × 1920</p>
+        {story.spot && (
+          <p className={s.small}>Drag the {story.templateId === "colorbox" ? "colour box" : "strip"} on the Story to move it.</p>
+        )}
+        {tpl.needsMask && !masks && (
+          <p className={s.small} role="status">Cutting you out of the photo… (runs on your device; first time loads a small model)</p>
+        )}
+        {tpl.needsMask && masks && !masks[0] && (
+          <p className={s.small} role="status">Couldn&apos;t find a person to cut out, so this layout shows the whole photo.</p>
+        )}
       </div>
 
       <div className={s.panel}>

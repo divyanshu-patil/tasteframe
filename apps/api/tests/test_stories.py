@@ -172,7 +172,7 @@ def test_save_list_photo_delete_roundtrip(setup, tmp_path):
     assert r.status_code == 201, r.text
     story = r.json()
     assert (
-        story["config"] == {**CONFIG, "cover": None, "tags": []}
+        story["config"] == {**CONFIG, "cover": None, "tags": [], "focus": None, "spot": None}
         and story["template_id"] == "editorial"
     )
     row = fake.rows[0]

@@ -24,7 +24,7 @@ export interface Template {
   decorations: { key: string; label: string; on: boolean }[];
   defaults(input: TemplateInput): Omit<
     StoryState,
-    "templateId" | "crop" | "palette" | "stamp" | "accent" | "filter" | "stickers" | "order" | "crops" | "cover" | "tags"
+    "templateId" | "crop" | "palette" | "stamp" | "accent" | "filter" | "stickers" | "order" | "crops" | "cover" | "tags" | "focus" | "spot"
   > & { filter?: FilterId };
   /** Song-cover layouts: where the cover sits by default (shown when `show`). */
   cover?: Partial<CoverState>;
@@ -36,6 +36,10 @@ export interface Template {
   /** Distinct photos the layout shows. */
   capacity?: number;
   after?(ctx: Ctx, s: StoryState): void;
+  /** Drawn after the headline, before the caption — e.g. a person cutout in front of big words. */
+  front?(ctx: Ctx, s: StoryState, slots: Slots): void;
+  /** Default colour-window rect (0..1) for layouts that use StoryState.spot. */
+  spot?: (i: TemplateInput) => Rect;
   text?: Partial<Record<TextKey, TextOpts>>;
 }
 

@@ -17,6 +17,7 @@ export type EditorAction =
   | { type: "sticker"; id: string; patch: Partial<Omit<Sticker, "id" | "kind">> }
   | { type: "sticker-remove"; id: string }
   | { type: "cover"; patch: Partial<CoverState> }
+  | { type: "spot"; x: number; y: number }
   | { type: "template"; id: TemplateId; input: TemplateInput }
   | { type: "reset"; input: TemplateInput };
 
@@ -75,6 +76,10 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
       const c = { ...s.cover, ...a.patch };
       return { ...s, cover: { ...c, x: clamp(c.x, 0, 1), y: clamp(c.y, 0, 1), scale: clamp(c.scale, 0.3, 4), rotate: clamp(c.rotate, -180, 180) } };
     }
+    case "spot": {
+      if (!s.spot) return s;
+      return { ...s, spot: { ...s.spot, x: clamp(a.x, 0, 1 - s.spot.w), y: clamp(a.y, 0, 1 - s.spot.h) } };
+    }
     case "decoration":
       return { ...s, decorations: { ...s.decorations, [a.key]: a.on } };
     case "template": {
@@ -84,6 +89,7 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
       return {
         ...fresh,
         crop: s.crop,
+        focus: s.focus ?? fresh.focus,
         order: s.order,
         crops: s.crops,
         stickers: s.stickers ?? [],

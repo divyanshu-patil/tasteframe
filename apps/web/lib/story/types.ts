@@ -35,6 +35,25 @@ export const TEMPLATE_IDS = [
   "grid",
   "mosaic",
   "polaroids",
+  // From the owner's reference set (templates-refs.ts).
+  "playlist",
+  "playercut",
+  "triptych",
+  "cctv",
+  "colorbox",
+  "tornstrip",
+  "cutout",
+  "focus",
+  "viewfinder",
+  "camcorder",
+  "sepiabooth",
+  "desktop",
+  "chat",
+  "kissmark",
+  "xerox",
+  "yearbook",
+  "coversepia",
+  "covercorner",
   // Declarative aesthetic + song-cover layouts (layouts-aesthetic.ts).
   "weekday",
   "daysplit",
@@ -116,6 +135,10 @@ export interface StoryState {
   stamp: string; // date/edge text, deterministic per story
   /** Square song cover (album art) placed on the Story. */
   cover?: CoverState;
+  /** Main subject point in photo 1 (0..1 of the photo), for face-anchored decorations. */
+  focus?: { x: number; y: number };
+  /** Draggable window (0..1 of the Story), e.g. the colour box over a B&W photo. */
+  spot?: Rect;
   /** Short words from the photo (image reasoning elements) for checklist/receipt layouts. */
   tags?: string[];
 }

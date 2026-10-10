@@ -4,8 +4,8 @@ Recreated from scratch with Pillow, after the looks in design-refs/pinterest/use
 is cut out of reference photos. Run: apps/api/.venv/bin/python apps/api/scripts/make_elements.py
 """
 
-import math
 import random
+import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter
@@ -23,60 +23,23 @@ def save(im: Image.Image, name: str, size: tuple[int, int]) -> None:
     im.resize(size, Image.LANCZOS).save(OUT / f"{name}.png", optimize=True)
 
 
-def lips(d: ImageDraw.ImageDraw, w: int, h: int, color: tuple[int, int, int, int]) -> None:
-    """Upper lip with a cupid's bow + fuller lower lip, as polygons (supersampled units)."""
-    cx, cy = w / 2, h / 2
-    pts_up, pts_low = [], []
-    for i in range(61):
-        t = i / 60
-        x = cx + (t - 0.5) * w * 0.92
-        edge = math.sin(t * math.pi) ** 0.8
-        bow = 0.16 * math.exp(-(((t - 0.5) / 0.07) ** 2))  # dip in the middle
-        peaks = 0.08 * (
-            math.exp(-(((t - 0.38) / 0.08) ** 2)) + math.exp(-(((t - 0.62) / 0.08) ** 2))
-        )
-        pts_up.append((x, cy - h * (0.36 * edge + peaks - bow)))
-        pts_low.append((x, cy + h * 0.44 * edge))
-    seam = [
-        (cx + (t / 60 - 0.5) * w * 0.92, cy + h * 0.03 * math.sin(t / 60 * math.pi * 2))
-        for t in range(61)
-    ]
-    d.polygon(pts_up + seam[::-1], fill=color)
-    d.polygon(seam + pts_low[::-1], fill=color)
-
-
 def kiss_print() -> None:
-    w, h = 520, 300
-    im, d = canvas(w, h)
-    lips(d, w * SS, h * SS, (196, 22, 48, 235))
-    # Lip-print creases: thin transparent strokes, seeded so the file is reproducible.
-    rnd = random.Random(7)  # noqa: S311 — deterministic art, not security
-    mask = Image.new("L", im.size, 255)
-    md = ImageDraw.Draw(mask)
-    for _ in range(46):
-        x = rnd.uniform(0.12, 0.88) * w * SS
-        y0 = rnd.uniform(0.2, 0.45) * h * SS
-        md.line(
-            [(x, y0), (x + rnd.uniform(-20, 20), y0 + rnd.uniform(40, 110))], fill=60, width=SS * 2
-        )
-        y1 = rnd.uniform(0.55, 0.8) * h * SS
-        md.line(
-            [(x, y1), (x + rnd.uniform(-20, 20), y1 - rnd.uniform(40, 110))], fill=60, width=SS * 2
-        )
-    alpha = Image.composite(im.getchannel("A"), Image.new("L", im.size, 0), mask)
-    im.putalpha(alpha.filter(ImageFilter.GaussianBlur(SS * 0.6)))
-    save(im, "kiss-print", (w, h))
+    """The kiss print is the owner-supplied PNG (trimmed + resized); pass its path to refresh."""
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else OUT / "kiss-print.png"
+    im = Image.open(src).convert("RGBA")
+    im = im.crop(im.getchannel("A").getbbox())
+    im.thumbnail((900, 900), Image.LANCZOS)
+    im.save(OUT / "kiss-print.png", optimize=True)
 
 
 def kiss_blur() -> None:
-    """The out-of-focus lipstick mark on a lens/mirror, in front of the face (u17)."""
-    w, h = 900, 620
-    im, d = canvas(w, h)
-    pad = 0.12
-    lips(d, int(w * SS * (1 - pad * 2)), int(h * SS * (1 - pad * 2)), (232, 74, 84, 210))
-    im = im.transform(im.size, Image.AFFINE, (1, 0, -w * SS * pad, 0, 1, -h * SS * pad))
-    im = im.filter(ImageFilter.GaussianBlur(SS * 18))
-    save(im, "kiss-blur", (w, h))
+    """The out-of-focus lipstick mark on a lens/mirror (u17): the print, softened."""
+    im = Image.open(OUT / "kiss-print.png").convert("RGBA")
+    pad = 120
+    big = Image.new("RGBA", (im.width + pad * 2, im.height + pad * 2), (0, 0, 0, 0))
+    big.alpha_composite(im, (pad, pad))
+    big = big.filter(ImageFilter.GaussianBlur(26))
+    big.save(OUT / "kiss-blur.png", optimize=True)
 
 
 def folder() -> None:

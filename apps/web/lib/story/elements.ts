@@ -3,8 +3,8 @@
 import type { Ctx } from "./draw";
 
 export const ELEMENT_FILES = {
-  kiss: { file: "kiss-print", w: 520, h: 300 },
-  kissblur: { file: "kiss-blur", w: 900, h: 620 },
+  kiss: { file: "kiss-print", w: 900, h: 545 },
+  kissblur: { file: "kiss-blur", w: 1140, h: 785 },
   folder: { file: "folder", w: 256, h: 224 },
   cursor: { file: "cursor", w: 168, h: 238 },
   warning: { file: "warning", w: 260, h: 260 },

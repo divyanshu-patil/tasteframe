@@ -15,6 +15,7 @@ export const FILTERS = [
   { id: "bw", name: "B&W" },
   { id: "noir", name: "Noir" },
   { id: "8mm", name: "8mm" },
+  { id: "xerox", name: "Xerox" }, // photocopy: crushed tones + toner speckle
 ] as const;
 export type FilterId = (typeof FILTERS)[number]["id"];
 export const FILTER_IDS = FILTERS.map((f) => f.id) as FilterId[];
@@ -64,6 +65,10 @@ export function applyFilterPixel(id: FilterId, px: Px): Px {
     case "8mm":
       [r, g, b] = sat([r, g, b], 0.75);
       return [lift(contrast(r, 0.9) + 12, 24, 240), lift(contrast(g, 0.9) + 4, 22, 232), lift(contrast(b, 0.9) - 10, 26, 214)];
+    case "xerox": {
+      const l = contrast(lum(r, g, b), 2.1) + 18;
+      return [l, l, l];
+    }
   }
 }
 
@@ -105,6 +110,17 @@ export function filteredPhoto(photo: Photo, id: FilterId = "none"): Photo {
         d[i + 1] = (d[i + 1] as number) * k;
         d[i + 2] = (d[i + 2] as number) * k;
       }
+    }
+  }
+  if (id === "xerox") {
+    // Toner speckle: seeded, so preview and export match.
+    let seed = 1234567;
+    for (let i = 0; i < d.length; i += 4) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      const n = seed / 0x7fffffff;
+      const v = d[i] as number;
+      const out = n < 0.06 ? v * 0.35 : n > 0.97 ? v + (255 - v) * 0.7 : v;
+      d[i] = d[i + 1] = d[i + 2] = out;
     }
   }
   ctx.putImageData(img, 0, 0);

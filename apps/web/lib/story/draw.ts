@@ -158,6 +158,7 @@ export interface TextOpts {
   lineHeight?: number;
   tracking?: number; // em
   rotate?: number; // radians around the block anchor
+  outline?: number; // stroke width: outlined letters instead of filled
 }
 
 /** Draw a text layer; returns its bounding box (for hit-testing / dragging in the editor). */
@@ -191,7 +192,11 @@ export function drawText(ctx: Ctx, layer: TextLayer, opts: TextOpts = {}): Rect 
   }
   let widest = 0;
   lines.forEach((l, i) => {
-    ctx.fillText(l, ax, ay + i * lh);
+    if (opts.outline) {
+      ctx.strokeStyle = layer.color;
+      ctx.lineWidth = opts.outline;
+      ctx.strokeText(l, ax, ay + i * lh);
+    } else ctx.fillText(l, ax, ay + i * lh);
     widest = Math.max(widest, ctx.measureText(l).width);
   });
   ctx.restore();

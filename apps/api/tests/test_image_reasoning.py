@@ -224,3 +224,29 @@ def test_topic_steers_ranking():
     )
     assert pet[0].id in TOPIC_LAYOUTS["pet"][:3] and music[0].id in TOPIC_LAYOUTS["music"][:3]
     assert "Made for pet photos" in pet[0].reason
+
+
+def test_expressions_use_controlled_vocabulary():
+    reply = json.dumps(
+        {
+            "summary": "a close selfie",
+            "moods": ["playful"],
+            "expressions": ["Pout", "WINK", "face-closeup", "angry stare", 7, "pout"],
+        }
+    )
+    r = parse_reply(reply, "m")
+    assert r and r.expressions == ["pout", "wink", "face closeup"]
+
+
+def test_expressions_steer_ranking_to_portrait_layouts():
+    from app.services.recommendations.layouts import rank_layouts
+    from tests.test_services import profile
+
+    kiss = rank_layouts(
+        profile(mood=["playful", "dreamy"]),
+        [],
+        None,
+        scene=["mirror selfie", "kiss face", "pout"],
+        subject=("person", 0.5, 0.4),
+    )
+    assert "kissmark" in [x.id for x in kiss[:6]]

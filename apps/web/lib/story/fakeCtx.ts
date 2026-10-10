@@ -18,7 +18,7 @@ export function fakeCtx(): { ctx: CanvasRenderingContext2D; calls: string[]; tex
       if (prop === "createPattern") return () => null;
       return (...args: unknown[]) => {
         calls.push(String(prop));
-        if (prop === "fillText") texts.push(String(args[0]));
+        if (prop === "fillText" || prop === "strokeText") texts.push(String(args[0]));
       };
     },
     set(target, prop, value) {

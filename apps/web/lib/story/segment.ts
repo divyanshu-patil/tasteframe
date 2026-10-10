@@ -22,7 +22,8 @@ function load(): Promise<Segmenter | null> {
         outputConfidenceMasks: true,
         outputCategoryMask: false,
       });
-    } catch {
+    } catch (e) {
+      console.warn("Person segmentation unavailable:", e instanceof Error ? e.message : e);
       segmenter = null; // let a later attempt retry
       return null;
     }
