@@ -22,6 +22,8 @@ export const metadata: Metadata = {
   title: "Tasteframe — One photo. Three Stories. Your taste.",
   description:
     "Turn a photo into Instagram Story designs shaped by its visual mood and your cultural taste (powered by Qloo).",
+  // Brand monogram in public/favicon.png; app/favicon.ico is generated from it for legacy requests.
+  icons: { icon: [{ url: "/favicon.png", type: "image/png", sizes: "500x500" }], apple: "/favicon.png" },
 };
 
 export const viewport: Viewport = { themeColor: "#e2dedb", width: "device-width", initialScale: 1 };
