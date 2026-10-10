@@ -135,6 +135,39 @@ and expire after `S3_PRESIGNED_URL_TTL_SECONDS` (default 300 s). Keys are
 `tmp/<session-id>/<random>.<ext>`, never derived from filenames. The API verifies the session
 prefix on every read and delete.
 
+## Layouts, filters, stickers
+
+- **19 layouts** (`apps/web/lib/story/templates.ts` + `templates-more.ts`), each modelled on a
+  category in `design-refs/pinterest`: Cinematic, Vintage, Magazine, Film Stills, Film Strip,
+  Photo Dump, Editorial, Newspaper, Journal, Paper Note, Soft Focus, Scrapbook, Mood Board, Torn
+  Reveal, Minimal, Y2K Chrome, Now Playing, Vinyl, Ticket. All are vector-drawn; there are no
+  copied images, logos or brand names.
+- **Shuffle**: the API ranks every layout for the photo. The results page shows three at a time,
+  and each set of three comes from distinct layout families.
+- **Filters**: Original, Film, Warm, Golden hour, Cool, Faded, Vivid, Sepia, B&W, Noir, 8mm. These
+  are deterministic per-pixel looks on a cached copy, so preview equals export. Each layout gets a
+  mood-based filter suggestion, or its signature look (e.g. Newspaper → B&W).
+- **Stickers & paper**: washi tape, star, sparkle, heart, flower, daisy, bow, paperclip, push
+  pin, stamp, doodle arrow, swirl, torn note (editable text) and mini player (shows the suggested
+  song). Drag them on the Story; size, rotation and colour are editable.
+- **Crop**: Fill frame or Fit whole photo, zoom up to 4×, drag to pan, scroll or pinch to zoom,
+  reset.
+
+### How layouts are ranked
+
+`score = 0.30 visual + 0.30 AI pick + 0.25 cultural + 0.15 readability` (with image reasoning),
+otherwise `0.45 visual + 0.35 cultural + 0.20 readability`.
+- **Visual** combines moods (yours, then the vision model's, then measured), the vision model's
+  scene cues ("airport", "birthday"…), the main subject and orientation.
+- **AI pick** is Gemma ranking the whole catalogue for this photo.
+- **Readability** penalises text over busy photos. Off-photo text is neutral rather than a free
+  win; the old 0.95 made paper layouts win every time.
+- A tiny photo-specific tie-breaker separates near-equal scores.
+
+On real photos (2026-10-10) the top sets were: birthday → Scrapbook, Photo Dump, Y2K; dog at
+home → Paper Note, Scrapbook, Photo Dump; airport → Ticket, Journal, Film Strip; street collage →
+Newspaper first. Previously all of these got Editorial/Minimal/Journal.
+
 ## Image reasoning (optional, Ollama)
 
 With `OLLAMA_API_KEY` set, the "mood" stage also sends a downscaled (≤768px), EXIF-stripped JPEG

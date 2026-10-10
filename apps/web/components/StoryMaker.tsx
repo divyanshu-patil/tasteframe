@@ -297,6 +297,7 @@ export function StoryMaker() {
           accent: "#c03f13",
           focus_x: 0.5,
           focus_y: 0.5,
+          filter: "none",
         }));
       return (
         <Results

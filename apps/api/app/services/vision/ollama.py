@@ -23,9 +23,13 @@ from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.schemas.api import ImageReasoning, Mood
+from app.services.recommendations.layouts import CATALOGUE
 
 log = logging.getLogger("tasteframe.vision")
 MOODS: tuple[str, ...] = get_args(Mood)
+
+LAYOUT_MENU = "\n".join(f"- {t.id}: {t.blurb}" for t in CATALOGUE)
+LAYOUT_IDS = {t.id for t in CATALOGUE}
 
 PROMPT = f"""You are an art director reading a photo for an Instagram Story design.
 Describe only broad visual aesthetics: light, colour, composition, setting and atmosphere.
@@ -38,9 +42,13 @@ Reply with ONLY a JSON object, no prose, no code fences:
   "headline_ideas": [3 short lowercase Story headlines, max 32 chars, no hashtags/emoji],
   "subject": one of "person", "people", "object", "scene" (the photo's main subject),
   "subject_x": 0.0-1.0 horizontal centre of the main subject (0 = left edge),
-  "subject_y": 0.0-1.0 vertical centre of the main subject (0 = top edge)}}
+  "subject_y": 0.0-1.0 vertical centre of the main subject (0 = top edge),
+  "best_layouts": [the 5 layout ids below that best suit THIS photo's mood, subject and
+                   setting, best first — be specific to this photo, don't default to the same few]}}
 For a selfie or portrait, subject is "person" and subject_x/subject_y mark the centre of their
-face area. Positions are for framing only — say nothing about who anyone is."""
+face area. Positions are for framing only — say nothing about who anyone is.
+Layouts:
+{LAYOUT_MENU}"""
 
 
 def model_name(configured: str) -> str:
@@ -96,6 +104,13 @@ def parse_reply(content: str, model: str) -> ImageReasoning | None:
             subject=subject,
             subject_x=unit(raw.get("subject_x")),
             subject_y=unit(raw.get("subject_y")),
+            layout_picks=list(
+                dict.fromkeys(
+                    v
+                    for v in (raw.get("best_layouts") or [])
+                    if isinstance(v, str) and v in LAYOUT_IDS
+                )
+            )[:5],
             summary=summary,
             moods=list(dict.fromkeys(w.lower() for w in moods))[:3],
             scene=list(dict.fromkeys(scene))[:4],
@@ -105,10 +120,24 @@ def parse_reply(content: str, model: str) -> ImageReasoning | None:
         return None
 
 
+RETRYABLE = {"VISION_UNAVAILABLE", "VISION_BAD_RESPONSE"}
+
+
 async def reason_about_image(
     im: Image.Image, settings: Settings, transport: httpx.AsyncBaseTransport | None = None
 ) -> tuple[ImageReasoning | None, str | None]:
-    """Returns (reasoning, error_code). Never raises: the pipeline continues without it."""
+    """Returns (reasoning, error_code). Never raises: the pipeline continues without it.
+    One retry for transient failures (5xx, transport, unparseable reply); not for timeouts."""
+    result, err = await _reason_once(im, settings, transport)
+    if err in RETRYABLE:
+        log.info("ollama retry after %s", err)
+        result, err = await _reason_once(im, settings, transport)
+    return result, err
+
+
+async def _reason_once(
+    im: Image.Image, settings: Settings, transport: httpx.AsyncBaseTransport | None
+) -> tuple[ImageReasoning | None, str | None]:
     if not settings.ollama_enabled:
         return None, None
     model = model_name(settings.ollama_model)

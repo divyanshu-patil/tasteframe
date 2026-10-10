@@ -16,42 +16,14 @@ import {
   roundRect,
   star,
 } from "./draw";
-import type { Rect, StoryState, TemplateId, TemplateInput, TextKey, TextLayer } from "./types";
+import { type FilterId, filteredPhoto } from "./filters";
+import { type Template, decos, fmtDate, on, pad, stamp, subjectHigh, subjectLow, t, tape, tornRect } from "./kit";
+import { drawSticker } from "./stickers";
+import { MORE_TEMPLATES } from "./templates-more";
+import type { Rect, StoryState, TemplateId, TemplateInput } from "./types";
 import { STORY_H as H, STORY_W as W } from "./types";
 
-export interface Template {
-  id: TemplateId;
-  name: string;
-  blurb: string;
-  overlayLabel: string;
-  decorations: { key: string; label: string; on: boolean }[];
-  defaults(input: TemplateInput): Omit<StoryState, "templateId" | "crop" | "palette" | "stamp" | "accent">;
-  draw(ctx: Ctx, photo: Photo, s: StoryState): void;
-  after?(ctx: Ctx, s: StoryState): void;
-  text?: Partial<Record<TextKey, TextOpts>>;
-}
-
-const t = (p: Partial<TextLayer> & Pick<TextLayer, "text">): TextLayer => ({
-  size: 48,
-  color: "#1d1d1b",
-  align: "left",
-  x: 0.08,
-  y: 0.5,
-  width: 0.84,
-  font: "serif",
-  ...p,
-});
-const decos = (list: [string, string, boolean][]) =>
-  list.map(([key, label, on]) => ({ key, label, on }));
-const on = (s: StoryState, key: string) => s.decorations[key] !== false;
-
-// Text drawn over the photo goes to the half away from the main subject (e.g. a face in a selfie).
-const subjectLow = (i: TemplateInput) => (i.focus?.y ?? 0.5) > 0.55;
-const subjectHigh = (i: TemplateInput) => (i.focus?.y ?? 0.5) < 0.5 && i.focus !== undefined;
-
-const fmtDate = (d: Date) =>
-  d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }).toLowerCase();
-const pad = (n: number) => String(n).padStart(2, "0");
+export type { Template } from "./kit";
 
 const cinematic: Template = {
   id: "cinematic",
@@ -249,50 +221,6 @@ const journal: Template = {
   },
   text: { headline: { lineHeight: 0.95 }, caption: { lineHeight: 1.35 } },
 };
-
-function tornRect(ctx: Ctx, r: Rect, seed: number) {
-  const rand = rng(seed);
-  ctx.beginPath();
-  ctx.moveTo(r.x, r.y);
-  for (let x = r.x; x <= r.x + r.w; x += 18) ctx.lineTo(x, r.y + rand() * 10);
-  for (let y = r.y; y <= r.y + r.h; y += 18) ctx.lineTo(r.x + r.w - rand() * 8, y);
-  for (let x = r.x + r.w; x >= r.x; x -= 18) ctx.lineTo(x, r.y + r.h - rand() * 10);
-  for (let y = r.y + r.h; y >= r.y; y -= 18) ctx.lineTo(r.x + rand() * 8, y);
-  ctx.closePath();
-}
-
-function tape(ctx: Ctx, cx: number, cy: number, angle: number, color: string) {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(angle);
-  ctx.fillStyle = rgba(color, 0.78);
-  ctx.fillRect(-110, -32, 220, 64);
-  ctx.fillStyle = "rgba(255,255,255,0.28)";
-  for (let x = -100; x < 110; x += 36) ctx.fillRect(x, -32, 14, 64);
-  ctx.restore();
-}
-
-/** Perforated postage stamp with an ember sunburst (DESIGN.md "Stamp Seal"). */
-function stamp(ctx: Ctx, x: number, y: number, s: StoryState) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(0.08);
-  ctx.fillStyle = "#f6f1e7";
-  roundRect(ctx, { x: 0, y: 0, w: 170, h: 210 }, 12);
-  ctx.fill();
-  ctx.fillStyle = "#efe6d8";
-  for (let i = 10; i < 170; i += 20) {
-    for (const yy of [0, 210]) { ctx.beginPath(); ctx.arc(i, yy, 6, 0, Math.PI * 2); ctx.fill(); }
-  }
-  ctx.fillStyle = "#c03f13";
-  star(ctx, 85, 90, 56, 16, 0.55);
-  ctx.fill();
-  ctx.fillStyle = "#1d1d1b";
-  ctx.font = fontString("mono", 14);
-  ctx.textBaseline = "top";
-  ctx.fillText(`NO. ${s.stamp.replace(/\D/g, "")}`, 20, 170);
-  ctx.restore();
-}
 
 const scrapbook: Template = {
   id: "scrapbook",
@@ -529,6 +457,7 @@ const minimal: Template = {
 
 export const TEMPLATES: Record<TemplateId, Template> = {
   cinematic, stills, editorial, journal, scrapbook, filmstrip, vintage, minimal,
+  ...MORE_TEMPLATES,
 };
 
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
@@ -538,15 +467,18 @@ export function stampFor(date: Date): string {
 }
 
 export function defaultState(id: TemplateId, input: TemplateInput): StoryState {
-  const tpl = TEMPLATES[id];
+  const { filter, ...rest } = TEMPLATES[id].defaults(input);
   return {
     templateId: id,
     // Cover-crop alignment = subject position keeps that point inside the visible frame.
-    crop: { zoom: 1, x: clamp01(input.focus?.x ?? 0.5), y: clamp01(input.focus?.y ?? 0.5) },
+    crop: { zoom: 1, x: clamp01(input.focus?.x ?? 0.5), y: clamp01(input.focus?.y ?? 0.5), fit: "cover" },
     accent: input.accent,
     palette: input.palette.length ? input.palette : [input.accent],
     stamp: stampFor(input.date),
-    ...tpl.defaults(input),
+    // API mood suggestion wins; otherwise the template's signature look.
+    filter: input.filter ?? filter ?? ("none" satisfies FilterId),
+    stickers: [],
+    ...rest,
   };
 }
 
@@ -560,10 +492,11 @@ export function renderStory(ctx: Ctx, photo: Photo, s: StoryState): HitBoxes {
   const tpl = TEMPLATES[s.templateId];
   ctx.save();
   ctx.clearRect(0, 0, W, H);
-  tpl.draw(ctx, photo, s);
+  tpl.draw(ctx, filteredPhoto(photo, s.filter ?? "none"), s);
   const headline = drawText(ctx, s.headline, tpl.text?.headline);
   const caption = drawText(ctx, s.caption, tpl.text?.caption);
   tpl.after?.(ctx, s);
+  for (const st of s.stickers ?? []) drawSticker(ctx, st);
   ctx.restore();
   return { headline, caption };
 }

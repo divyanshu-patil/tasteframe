@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Analysis, LayoutSuggestion, Music } from "../lib/api";
 import type { Photo } from "../lib/story/draw";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
@@ -53,12 +53,16 @@ function Bar({ label, value }: { label: string; value: number }) {
 }
 
 export function Results({ photo, analysis, suggestions, date, onEdit, onStartOver, onRetry }: Props) {
+  // `suggestions` is the full ranked list (best first, families interleaved); show 3 at a time.
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(suggestions.length / 3));
+  const shown = suggestions.slice((page % pages) * 3, (page % pages) * 3 + 3);
   const previews = useMemo(
-    () =>
-      suggestions.map((l) => ({ layout: l, state: defaultState(l.id, inputFor(l, analysis, date)) })),
-    [suggestions, analysis, date],
+    () => shown.map((l) => ({ layout: l, state: defaultState(l.id, inputFor(l, analysis, date)) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `shown` is derived from these
+    [suggestions, analysis, date, page],
   );
-  const others = TEMPLATE_IDS.filter((id) => !suggestions.some((l) => l.id === id));
+  const others = TEMPLATE_IDS.filter((id) => !shown.some((l) => l.id === id));
   const vp = analysis?.visual_profile;
   const prov = analysis?.provenance;
 
@@ -67,6 +71,11 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
       <div className={s.resultsHead}>
         <h2 className={s.sectionTitle}>Three Stories for this photo</h2>
         <div className={s.row}>
+          {pages > 1 && (
+            <button className={s.secondary} onClick={() => setPage((p) => (p + 1) % pages)} aria-label="Shuffle: show three different layouts">
+              ↻ Shuffle layouts <span className={s.mono}>&nbsp;{(page % pages) + 1}/{pages}</span>
+            </button>
+          )}
           {onRetry && <button className={s.secondary} onClick={onRetry}>Retry personalisation</button>}
           <button className={s.linkBtn} onClick={onStartOver}>Start over &amp; delete upload</button>
         </div>
@@ -91,7 +100,7 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
             <button className={s.optionPreview} onClick={() => onEdit(layout.id)} aria-label={`Edit the ${layout.name} layout`}>
               <StoryCanvas photo={photo} state={state} width={240} label={`${layout.name} Story preview`} />
             </button>
-            <p className={s.optionNo}>No. {i + 1}</p>
+            <p className={s.optionNo}>No. {(page % pages) * 3 + i + 1}{page % pages === 0 && i === 0 ? " · best match" : ""}</p>
             <h3 className={s.optionName}>{layout.name}</h3>
             <p className={s.small}>{layout.reason}</p>
             {analysis && (

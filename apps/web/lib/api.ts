@@ -1,6 +1,7 @@
 // Browser client for the Tasteframe API. All calls go through the Next.js `/api` rewrite;
 // no provider keys ever reach the browser. Responses are validated before use.
 import { accessToken } from "./auth";
+import { FILTER_IDS, type FilterId } from "./story/filters";
 import type { StoryState, TemplateId } from "./story/types";
 import { TEMPLATE_IDS } from "./story/types";
 
@@ -41,6 +42,8 @@ export interface LayoutSuggestion {
   accent: string;
   focus_x: number;
   focus_y: number;
+  /** Suggested photo filter for this layout (mood rules). */
+  filter: FilterId;
 }
 export interface CulturalRecommendation {
   provider: "qloo";
@@ -129,6 +132,7 @@ export function parseAnalysis(v: unknown): Analysis {
   for (const l of layouts) {
     l.focus_x = unit(l.focus_x);
     l.focus_y = unit(l.focus_y);
+    l.filter = (FILTER_IDS as readonly unknown[]).includes(l.filter) ? l.filter : "none";
   }
   const m = v.music;
   if (!["track", "artist", "none"].includes(m.kind as string) || !isStr(m.explanation)) throw bad();

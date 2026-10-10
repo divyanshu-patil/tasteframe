@@ -31,7 +31,20 @@ CONFIG = {
         "width": 0.31,
         "font": "serif",
     },
-    "crop": {"zoom": 1, "x": 0.5, "y": 0.5},
+    "crop": {"zoom": 1, "x": 0.5, "y": 0.5, "fit": "cover"},
+    "filter": "film",
+    "stickers": [
+        {
+            "id": "star-1",
+            "kind": "star",
+            "x": 0.2,
+            "y": 0.3,
+            "scale": 1.2,
+            "rotate": 10,
+            "color": "#d9a62e",
+            "text": None,
+        }
+    ],
     "overlay": {"strength": 0.5, "color": "#efede7"},
     "decorations": {"grid": True},
     "accent": "#c03f13",

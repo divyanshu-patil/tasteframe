@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { Photo } from "../lib/story/draw";
 import { fontsReady } from "../lib/story/export";
+import { stickerBounds } from "../lib/story/stickers";
 import { type HitBoxes, renderStory } from "../lib/story/templates";
 import type { StoryState, TextKey } from "../lib/story/types";
 import { STORY_H, STORY_W } from "../lib/story/types";
@@ -13,17 +14,30 @@ interface Props {
   width: number; // CSS pixels
   label: string;
   className?: string;
-  /** Editor mode: drag text layers or pan the photo. Deltas are in 0..1 story units. */
+  /** Editor mode. Deltas are in 0..1 story units. */
   onDragText?: (key: TextKey, dx: number, dy: number) => void;
   onDragPhoto?: (dx: number, dy: number) => void;
   onSelectText?: (key: TextKey) => void;
+  onDragSticker?: (id: string, dx: number, dy: number) => void;
+  onSelectSticker?: (id: string | null) => void;
+  selectedSticker?: string | null;
+  /** Wheel / pinch zoom of the photo crop (positive = zoom in). */
+  onZoom?: (delta: number) => void;
 }
 
-export function StoryCanvas({ photo, state, width, label, className, onDragText, onDragPhoto, onSelectText }: Props) {
+type Target = { kind: "text"; key: TextKey } | { kind: "sticker"; id: string } | { kind: "photo" };
+
+export function StoryCanvas(props: Props) {
+  const { photo, state, width, label, className, selectedSticker } = props;
   const ref = useRef<HTMLCanvasElement>(null);
   const hits = useRef<HitBoxes | null>(null);
-  const drag = useRef<{ target: TextKey | "photo"; x: number; y: number } | null>(null);
+  const drag = useRef<{ target: Target; x: number; y: number } | null>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<number | null>(null);
+  const cb = useRef(props);
+  cb.current = props;
   const height = (width * STORY_H) / STORY_W;
+  const interactive = Boolean(props.onDragText || props.onDragPhoto);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -38,6 +52,17 @@ export function StoryCanvas({ photo, state, width, label, className, onDragText,
       if (cancelled) return;
       ctx.setTransform(canvas.width / STORY_W, 0, 0, canvas.height / STORY_H, 0, 0);
       hits.current = renderStory(ctx, photo, state);
+      const sel = state.stickers?.find((s) => s.id === selectedSticker);
+      if (sel) {
+        // Editor-only selection outline (never part of the export).
+        const b = stickerBounds(sel);
+        ctx.save();
+        ctx.setLineDash([14, 10]);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "#c03f13";
+        ctx.strokeRect(b.x, b.y, b.w, b.h);
+        ctx.restore();
+      }
     };
     const raf = requestAnimationFrame(draw);
     // Canvas text doesn't trigger web-font loads; request story fonts explicitly, then redraw.
@@ -46,12 +71,40 @@ export function StoryCanvas({ photo, state, width, label, className, onDragText,
       cancelled = true;
       cancelAnimationFrame(raf);
     };
-  }, [photo, state, width, height]);
+  }, [photo, state, width, height, selectedSticker]);
 
-  const interactive = Boolean(onDragText || onDragPhoto);
+  // Wheel zoom needs a non-passive listener to stop the page from scrolling.
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas || !props.onZoom) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      cb.current.onZoom?.(-e.deltaY * 0.0015);
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, [props.onZoom]);
+
   const toStory = (e: React.PointerEvent) => {
     const r = e.currentTarget.getBoundingClientRect();
     return { x: ((e.clientX - r.left) / r.width) * STORY_W, y: ((e.clientY - r.top) / r.height) * STORY_H };
+  };
+
+  const hitTest = (p: { x: number; y: number }): Target => {
+    const stickers = state.stickers ?? [];
+    for (let i = stickers.length - 1; i >= 0; i--) {
+      const s = stickers[i]!;
+      const b = stickerBounds(s);
+      if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return { kind: "sticker", id: s.id };
+    }
+    const pad = 40;
+    for (const key of ["headline", "caption"] as const) {
+      const b = hits.current?.[key];
+      if (b && p.x >= b.x - pad && p.x <= b.x + b.w + pad && p.y >= b.y - pad && p.y <= b.y + b.h + pad) {
+        return { kind: "text", key };
+      }
+    }
+    return { kind: "photo" };
   };
 
   return (
@@ -65,34 +118,62 @@ export function StoryCanvas({ photo, state, width, label, className, onDragText,
         interactive
           ? (e) => {
               const p = toStory(e);
-              const pad = 40;
-              const inside = (k: TextKey) => {
-                const b = hits.current?.[k];
-                return b && p.x >= b.x - pad && p.x <= b.x + b.w + pad && p.y >= b.y - pad && p.y <= b.y + b.h + pad;
-              };
-              const target: TextKey | "photo" = inside("headline") ? "headline" : inside("caption") ? "caption" : "photo";
-              if (target !== "photo") onSelectText?.(target);
-              drag.current = { target, x: p.x, y: p.y };
+              pointers.current.set(e.pointerId, p);
               e.currentTarget.setPointerCapture(e.pointerId);
+              if (pointers.current.size === 2) {
+                const [a, b] = [...pointers.current.values()] as [typeof p, typeof p];
+                pinch.current = Math.hypot(a.x - b.x, a.y - b.y);
+                drag.current = null;
+                return;
+              }
+              const target = hitTest(p);
+              if (target.kind === "text") cb.current.onSelectText?.(target.key);
+              cb.current.onSelectSticker?.(target.kind === "sticker" ? target.id : null);
+              drag.current = { target, x: p.x, y: p.y };
             }
           : undefined
       }
       onPointerMove={
         interactive
           ? (e) => {
+              const p = toStory(e);
+              if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, p);
+              if (pinch.current !== null && pointers.current.size === 2) {
+                const [a, b] = [...pointers.current.values()] as [typeof p, typeof p];
+                const dist = Math.hypot(a.x - b.x, a.y - b.y);
+                cb.current.onZoom?.((dist - pinch.current) / 400);
+                pinch.current = dist;
+                return;
+              }
               const d = drag.current;
               if (!d) return;
-              const p = toStory(e);
               const dx = (p.x - d.x) / STORY_W;
               const dy = (p.y - d.y) / STORY_H;
               drag.current = { ...d, x: p.x, y: p.y };
-              if (d.target === "photo") onDragPhoto?.(dx, dy);
-              else onDragText?.(d.target, dx, dy);
+              if (d.target.kind === "photo") cb.current.onDragPhoto?.(dx, dy);
+              else if (d.target.kind === "text") cb.current.onDragText?.(d.target.key, dx, dy);
+              else cb.current.onDragSticker?.(d.target.id, dx, dy);
             }
           : undefined
       }
-      onPointerUp={interactive ? () => (drag.current = null) : undefined}
-      onPointerCancel={interactive ? () => (drag.current = null) : undefined}
+      onPointerUp={
+        interactive
+          ? (e) => {
+              pointers.current.delete(e.pointerId);
+              if (pointers.current.size < 2) pinch.current = null;
+              drag.current = null;
+            }
+          : undefined
+      }
+      onPointerCancel={
+        interactive
+          ? (e) => {
+              pointers.current.delete(e.pointerId);
+              pinch.current = null;
+              drag.current = null;
+            }
+          : undefined
+      }
     />
   );
 }

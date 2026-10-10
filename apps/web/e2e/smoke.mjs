@@ -15,7 +15,11 @@ const CHROME =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : "/usr/bin/google-chrome");
 const OUT = process.env.E2E_OUT ?? "e2e/.output";
-const TEMPLATES = ["Film Stills", "Journal", "Scrapbook", "Film Strip", "Vintage", "Minimal", "Editorial", "Cinematic"];
+const TEMPLATES = [
+  "Film Stills", "Journal", "Scrapbook", "Film Strip", "Vintage", "Minimal", "Editorial", "Cinematic",
+  "Photo Dump", "Magazine", "Now Playing", "Vinyl", "Mood Board", "Ticket", "Y2K Chrome", "Torn Reveal",
+  "Paper Note", "Newspaper", "Soft Focus",
+];
 mkdirSync(OUT, { recursive: true });
 
 const pngSize = (path) => {
@@ -39,10 +43,15 @@ async function run(name, contextOptions) {
     await page.getByRole("button", { name: "Create my Stories" }).click();
     await page.getByText("Three Stories for this photo").waitFor({ timeout: 20_000 });
     await page.screenshot({ path: `${OUT}/${name}-results.png`, fullPage: true });
+    // Shuffle shows three different layouts.
+    const firstSet = (await page.locator("ol h3").allInnerTexts()).join();
+    await page.getByRole("button", { name: /Shuffle/ }).click();
+    if ((await page.locator("ol h3").allInnerTexts()).join() === firstSet) throw new Error("shuffle didn't change layouts");
     await page.getByRole("button", { name: "Edit this Story" }).first().click();
     await page.getByLabel("Words").fill("still so young.");
+    await page.getByRole("button", { name: "Gold star" }).click(); // a sticker rides along every export
     for (const tpl of TEMPLATES) {
-      await page.getByRole("button", { name: tpl }).filter({ hasText: tpl }).first().click();
+      await page.locator("fieldset", { hasText: "Layout" }).getByRole("button", { name: tpl }).first().click();
       const [dl] = await Promise.all([
         page.waitForEvent("download"),
         page.getByRole("button", { name: "Download PNG" }).click(),

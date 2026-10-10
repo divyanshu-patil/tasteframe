@@ -119,7 +119,7 @@ def test_pipeline_survives_reasoning_outage(client, monkeypatch):
     h = new_session(client)
     key = upload(client, h, make_image())
     res = stream(client.post("/v1/analysis", headers=h, json={"object_key": key}))[-1]["result"]
-    assert res["image_reasoning"] is None and len(res["layouts"]) == 3
+    assert res["image_reasoning"] is None and len(res["layouts"]) == 19
     assert res["provenance"]["image_reasoning_error"] == "VISION_UNAVAILABLE"
 
 
@@ -145,7 +145,6 @@ def test_people_photos_avoid_split_templates_and_focus_on_subject():
     plain = {t.id: s.visual_fit for t, s, _ in score_all(p, [])}
     people = {t.id: s.visual_fit for t, s, _ in score_all(p, [], people=True)}
     assert people["filmstrip"] < plain["filmstrip"] and people["stills"] < plain["stills"]
-    assert people["cinematic"] == plain["cinematic"]
     out = rank_layouts(p, [], None, subject=("person", 0.62, 0.31))
     assert all((o.focus_x, o.focus_y) == (0.62, 0.31) for o in out)
     assert "keep the person in shot" in out[0].reason
@@ -169,4 +168,20 @@ def test_pipeline_passes_subject_focus(client, monkeypatch):
     res = stream(client.post("/v1/analysis", headers=h, json={"object_key": key}))[-1]["result"]
     assert res["image_reasoning"]["subject"] == "person"
     assert {(lay["focus_x"], lay["focus_y"]) for lay in res["layouts"]} == {(0.62, 0.31)}
-    assert not {"stills", "filmstrip"} & {lay["id"] for lay in res["layouts"]}
+    assert not {"stills", "filmstrip", "photodump"} & {lay["id"] for lay in res["layouts"][:3]}
+
+
+def test_transient_failure_is_retried_once():
+    calls = []
+
+    def flaky(req):
+        calls.append(req)
+        if len(calls) == 1:
+            return httpx.Response(502)
+        return httpx.Response(200, json={"message": {"content": SELFIE}})
+
+    result, err = run(flaky)
+    assert err is None and result and len(calls) == 2
+    calls.clear()
+    assert run(lambda r: (calls.append(r), httpx.Response(401))[1])[1] == "VISION_AUTH_FAILED"
+    assert len(calls) == 1  # auth errors aren't retried

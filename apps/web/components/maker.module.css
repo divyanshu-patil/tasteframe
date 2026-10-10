@@ -265,3 +265,11 @@ textarea.input { width: 100%; resize: vertical; }
 .dialogBody .primary { justify-self: start; }
 .dialogBody .row { justify-content: space-between; }
 .dialogTitle { font-family: var(--font-display); font-weight: 600; font-size: 43px; line-height: 0.95; letter-spacing: -0.04em; }
+
+/* ---- filter & sticker trays ---- */
+.swatchGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: var(--spacing-10); }
+.swatchBtn { display: grid; justify-items: center; gap: 4px; padding: 6px 4px; background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; line-height: 1.15; text-align: center; }
+.swatchBtn canvas { border-radius: var(--radius-sm); }
+.swatchBtn:hover { border-color: var(--color-bone-cream); background: var(--color-paper); }
+.swatchOn { border-color: var(--color-ink-black) !important; background: var(--color-paper); }
+.stickerPanel { display: grid; gap: var(--spacing-10); padding: var(--spacing-14); background: var(--color-paper); border-radius: var(--radius-sm); }

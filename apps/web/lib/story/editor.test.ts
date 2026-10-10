@@ -23,7 +23,8 @@ describe("editor reducer", () => {
     const s = editorReducer(s0, { type: "move", key: "caption", x: -1, y: 4 });
     expect(s.caption).toMatchObject({ x: 0, y: 0.97 });
     const c = editorReducer(s0, { type: "crop", patch: { zoom: 10, x: 2, y: -1 } });
-    expect(c.crop).toEqual({ zoom: 3, x: 1, y: 0 });
+    expect(c.crop).toEqual({ zoom: 4, x: 1, y: 0, fit: "cover" });
+    expect(editorReducer(s0, { type: "crop", patch: { fit: "contain" } }).crop.fit).toBe("contain");
   });
 
   it("toggles decorations and overlay", () => {
@@ -51,5 +52,26 @@ describe("editor reducer", () => {
     expect([STORY_W, STORY_H]).toEqual([1080, 1920]);
     expect(exportFilename(s0, new Date("2026-10-10T12:00:00Z"))).toBe("tasteframe-editorial-2026-10-10.png");
     expect(exportFilename(s0)).toMatch(/^[a-z0-9-]+\.png$/);
+  });
+});
+
+describe("filters & stickers in the editor", () => {
+  const s0 = defaultState("scrapbook", input);
+
+  it("sets a filter and keeps it serializable", () => {
+    const s = editorReducer(s0, { type: "filter", id: "bw" });
+    expect(s.filter).toBe("bw");
+    expect(JSON.parse(JSON.stringify(s))).toEqual(s);
+  });
+
+  it("adds, moves (clamped), rescales, and removes stickers", () => {
+    const sticker = { id: "a", kind: "star" as const, x: 0.5, y: 0.5, scale: 1, rotate: 0, color: "#d9a62e" };
+    let s = editorReducer(s0, { type: "sticker-add", sticker });
+    s = editorReducer(s, { type: "sticker", id: "a", patch: { x: 5, scale: 9, rotate: -30 } });
+    expect(s.stickers[0]).toMatchObject({ x: 1, scale: 3, rotate: 330 });
+    // Switching layout keeps stickers; reset clears them.
+    expect(editorReducer(s, { type: "template", id: "vinyl", input }).stickers).toHaveLength(1);
+    expect(editorReducer(s, { type: "reset", input }).stickers).toHaveLength(0);
+    expect(editorReducer(s, { type: "sticker-remove", id: "a" }).stickers).toHaveLength(0);
   });
 });

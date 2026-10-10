@@ -8,6 +8,9 @@ import { exportFilename, exportPng } from "../lib/story/export";
 import { TEMPLATES } from "../lib/story/templates";
 import type { Align, FontRole, StoryState, TemplateId, TemplateInput, TextKey } from "../lib/story/types";
 import { TEMPLATE_IDS } from "../lib/story/types";
+import { FILTERS } from "../lib/story/filters";
+import { STICKER_KINDS, newSticker } from "../lib/story/stickers";
+import { FilterSwatch, StickerSwatch } from "./Swatches";
 import { MusicCard } from "./Results";
 import { StoryCanvas } from "./StoryCanvas";
 import s from "./maker.module.css";
@@ -71,6 +74,8 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
   const dispatch = (a: EditorAction) => setStory((cur) => (cur ? editorReducer(cur, a) : cur));
   const tpl = TEMPLATES[story.templateId];
   const layer = story[active];
+  const [selected, setSelected] = useState<string | null>(null);
+  const sticker = story.stickers.find((x) => x.id === selected) ?? null;
 
   const doExport = async () => {
     setExporting("busy");
@@ -104,8 +109,15 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
           onDragPhoto={(dx, dy) =>
             dispatch({ type: "crop", patch: { x: story.crop.x - dx * 1.5, y: story.crop.y - dy * 1.5 } })
           }
+          onDragSticker={(id, dx, dy) => {
+            const st = story.stickers.find((x) => x.id === id);
+            if (st) dispatch({ type: "sticker", id, patch: { x: st.x + dx, y: st.y + dy } });
+          }}
+          onSelectSticker={setSelected}
+          selectedSticker={selected}
+          onZoom={(d) => dispatch({ type: "crop", patch: { zoom: story.crop.zoom * (1 + d) } })}
         />
-        <p className={s.small}>Drag text to move it · drag the photo to reframe · exports at 1080 × 1920</p>
+        <p className={s.small}>Drag text, stickers or the photo · scroll/pinch to zoom · exports at 1080 × 1920</p>
       </div>
 
       <div className={s.panel}>
@@ -126,6 +138,47 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
               >
                 {TEMPLATES[id].name}
                 {suggested.includes(id) && <span className={s.dot} aria-label="suggested" />}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className={s.group}>
+          <legend>Crop</legend>
+          <div className={s.segment} role="group" aria-label="Photo fit">
+            {(["cover", "contain"] as const).map((fit) => (
+              <button key={fit} aria-pressed={story.crop.fit === fit} className={story.crop.fit === fit ? s.segOn : ""} onClick={() => dispatch({ type: "crop", patch: { fit } })}>
+                {fit === "cover" ? "Fill frame" : "Fit whole photo"}
+              </button>
+            ))}
+          </div>
+          <label className={s.field}>
+            <span>Zoom · {story.crop.zoom.toFixed(2)}×</span>
+            <input type="range" min={1} max={4} step={0.01} value={story.crop.zoom} onChange={(e) => dispatch({ type: "crop", patch: { zoom: Number(e.target.value) } })} />
+          </label>
+          <div className={s.grid2}>
+            <label className={s.field}>
+              <span>Left ↔ right</span>
+              <input type="range" min={0} max={1} step={0.01} value={story.crop.x} onChange={(e) => dispatch({ type: "crop", patch: { x: Number(e.target.value) } })} />
+            </label>
+            <label className={s.field}>
+              <span>Top ↕ bottom</span>
+              <input type="range" min={0} max={1} step={0.01} value={story.crop.y} onChange={(e) => dispatch({ type: "crop", patch: { y: Number(e.target.value) } })} />
+            </label>
+          </div>
+          <p className={s.small}>
+            Drag the photo to reframe · scroll or pinch to zoom ·{" "}
+            <button className={s.linkBtn} onClick={() => dispatch({ type: "crop", patch: { zoom: 1, x: 0.5, y: 0.5, fit: "cover" } })}>Reset crop</button>
+          </p>
+        </fieldset>
+
+        <fieldset className={s.group}>
+          <legend>Filter</legend>
+          <div className={s.swatchGrid} role="group" aria-label="Photo filter">
+            {FILTERS.map((f) => (
+              <button key={f.id} className={`${s.swatchBtn} ${story.filter === f.id ? s.swatchOn : ""}`} aria-pressed={story.filter === f.id} onClick={() => dispatch({ type: "filter", id: f.id })}>
+                <FilterSwatch photo={photo} filter={f.id} />
+                <span>{f.name}</span>
               </button>
             ))}
           </div>
@@ -186,22 +239,56 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
         </fieldset>
 
         <fieldset className={s.group}>
-          <legend>Photo</legend>
-          <label className={s.field}>
-            <span>Zoom · {story.crop.zoom.toFixed(2)}×</span>
-            <input type="range" min={1} max={3} step={0.01} value={story.crop.zoom} onChange={(e) => dispatch({ type: "crop", patch: { zoom: Number(e.target.value) } })} />
-          </label>
-          <div className={s.grid2}>
-            <label className={s.field}>
-              <span>Focus left ↔ right</span>
-              <input type="range" min={0} max={1} step={0.01} value={story.crop.x} onChange={(e) => dispatch({ type: "crop", patch: { x: Number(e.target.value) } })} />
-            </label>
-            <label className={s.field}>
-              <span>Focus top ↕ bottom</span>
-              <input type="range" min={0} max={1} step={0.01} value={story.crop.y} onChange={(e) => dispatch({ type: "crop", patch: { y: Number(e.target.value) } })} />
-            </label>
+          <legend>Stickers &amp; paper</legend>
+          <div className={s.swatchGrid} role="group" aria-label="Add a sticker">
+            {STICKER_KINDS.map((k) => (
+              <button
+                key={k.kind}
+                className={s.swatchBtn}
+                onClick={() => {
+                  const st = newSticker(k.kind, k.kind === "player" ? (music?.title ?? music?.artist ?? undefined) : undefined);
+                  dispatch({ type: "sticker-add", sticker: st });
+                  setSelected(st.id);
+                }}
+              >
+                <StickerSwatch kind={k.kind} color={k.color} />
+                <span>{k.label}</span>
+              </button>
+            ))}
           </div>
-          <button className={s.linkBtn} onClick={() => dispatch({ type: "crop", patch: { zoom: 1, x: 0.5, y: 0.5 } })}>Reset crop</button>
+          {sticker ? (
+            <div className={s.stickerPanel}>
+              <p className={s.kicker}>Selected: {STICKER_KINDS.find((k) => k.kind === sticker.kind)?.label} · drag it on the Story</p>
+              <div className={s.grid2}>
+                <label className={s.field}>
+                  <span>Size · {sticker.scale.toFixed(1)}×</span>
+                  <input type="range" min={0.3} max={3} step={0.05} value={sticker.scale} onChange={(e) => dispatch({ type: "sticker", id: sticker.id, patch: { scale: Number(e.target.value) } })} />
+                </label>
+                <label className={s.field}>
+                  <span>Rotate · {Math.round(sticker.rotate)}°</span>
+                  <input type="range" min={0} max={359} step={1} value={sticker.rotate} onChange={(e) => dispatch({ type: "sticker", id: sticker.id, patch: { rotate: Number(e.target.value) } })} />
+                </label>
+              </div>
+              <div className={s.grid2}>
+                <label className={s.field}>
+                  <span>Colour</span>
+                  <input type="color" className={s.color} value={sticker.color} onChange={(e) => dispatch({ type: "sticker", id: sticker.id, patch: { color: e.target.value } })} />
+                </label>
+                {(sticker.kind === "note" || sticker.kind === "player") && (
+                  <label className={s.field}>
+                    <span>Words</span>
+                    <input className={s.input} maxLength={28} value={sticker.text ?? ""} onChange={(e) => dispatch({ type: "sticker", id: sticker.id, patch: { text: e.target.value } })} />
+                  </label>
+                )}
+              </div>
+              <div className={s.row}>
+                <button className={s.secondary} onClick={() => { dispatch({ type: "sticker-remove", id: sticker.id }); setSelected(null); }}>Remove sticker</button>
+                <button className={s.linkBtn} onClick={() => setSelected(null)}>Done</button>
+              </div>
+            </div>
+          ) : (
+            (story.stickers ?? []).length > 0 && <p className={s.small}>Tap a sticker on the Story to resize, rotate, recolour or remove it.</p>
+          )}
         </fieldset>
 
         <fieldset className={s.group}>

@@ -33,7 +33,7 @@ describe("template catalogue", () => {
     const hits = renderStory(a.ctx, photo, s);
     renderStory(b.ctx, photo, s);
     expect(a.calls).toEqual(b.calls);
-    expect(a.texts.join(" ")).toContain("golden");
+    expect(a.texts.join(" ").toLowerCase()).toContain("golden");
     expect(hits.headline.w).toBeGreaterThan(0);
     expect(hits.headline.x).toBeGreaterThanOrEqual(0);
     expect(hits.headline.x + hits.headline.w).toBeLessThanOrEqual(STORY_W);
@@ -77,8 +77,8 @@ describe("subject-aware framing (selfies/portraits)", () => {
 
   it("aims the default crop at the subject", () => {
     const s = defaultState("minimal", { ...base, focus: { x: 0.7, y: 0.25 } });
-    expect(s.crop).toEqual({ zoom: 1, x: 0.7, y: 0.25 });
-    expect(defaultState("minimal", base).crop).toEqual({ zoom: 1, x: 0.5, y: 0.5 });
+    expect(s.crop).toEqual({ zoom: 1, x: 0.7, y: 0.25, fit: "cover" });
+    expect(defaultState("minimal", base).crop).toEqual({ zoom: 1, x: 0.5, y: 0.5, fit: "cover" });
   });
 
   it("moves text that sits on the photo away from the subject", () => {
@@ -100,5 +100,34 @@ describe("subject-aware framing (selfies/portraits)", () => {
         }
       }
     }
+  });
+});
+
+describe("filters, stickers, contain-fit", () => {
+  it("filters are pure pixel functions with distinct looks", async () => {
+    const { FILTER_IDS, applyFilterPixel } = await import("./filters");
+    const px: [number, number, number] = [200, 120, 60];
+    const outs = FILTER_IDS.map((id) => applyFilterPixel(id, px).map((v) => Math.round(v)).join(","));
+    expect(new Set(outs).size).toBe(FILTER_IDS.length);
+    const [r, g, b] = applyFilterPixel("bw", px);
+    expect(r).toBe(g);
+    expect(g).toBe(b);
+    expect(applyFilterPixel("none", px)).toEqual(px);
+  });
+
+  it("renders stickers on top of every template and supports contain-fit", async () => {
+    const { STICKER_KINDS } = await import("./stickers");
+    const base = defaultState("cinematic", input);
+    const stickers = STICKER_KINDS.map((k, i) => ({ id: String(i), kind: k.kind, x: 0.5, y: 0.5, scale: 1, rotate: 15, color: k.color, text: "hi" }));
+    for (const id of TEMPLATE_IDS) {
+      const f = fakeCtx();
+      expect(() => renderStory(f.ctx, photo, { ...defaultState(id, input), stickers, crop: { ...base.crop, fit: "contain" } })).not.toThrow();
+    }
+  });
+
+  it("uses the suggested filter, else the template's signature look", () => {
+    expect(defaultState("newspaper", input).filter).toBe("bw");
+    expect(defaultState("newspaper", { ...input, filter: "warm" }).filter).toBe("warm");
+    expect(defaultState("cinematic", input).filter).toBe("none");
   });
 });

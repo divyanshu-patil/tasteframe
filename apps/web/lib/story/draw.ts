@@ -60,6 +60,20 @@ export function drawPhoto(
   crop: StoryState["crop"],
   focalShiftY = 0,
 ): void {
+  if (crop.fit === "contain") {
+    // Whole photo visible: blurred fill behind, photo letterboxed on top (zoom still applies).
+    drawBlurred(ctx, photo, r, { ...crop, fit: "cover", zoom: 1 });
+    const scale = Math.min(r.w / photo.width, r.h / photo.height) * Math.max(1, crop.zoom);
+    const w = photo.width * scale;
+    const h = photo.height * scale;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(r.x, r.y, r.w, r.h);
+    ctx.clip();
+    ctx.drawImage(photo, r.x + (r.w - w) * crop.x, r.y + (r.h - h) * Math.min(1, Math.max(0, crop.y + focalShiftY)), w, h);
+    ctx.restore();
+    return;
+  }
   const scale = Math.max(r.w / photo.width, r.h / photo.height) * Math.max(1, crop.zoom);
   const w = photo.width * scale;
   const h = photo.height * scale;
@@ -76,13 +90,13 @@ export function drawPhoto(
 
 /** Cheap, cross-browser blur: downscale then upscale with smoothing (no ctx.filter needed). */
 export function drawBlurred(ctx: Ctx, photo: Photo, r: Rect, crop: StoryState["crop"]): void {
-  if (typeof document === "undefined") return drawPhoto(ctx, photo, r, crop);
+  if (typeof document === "undefined") return drawPhoto(ctx, photo, r, { ...crop, fit: "cover" });
   const small = document.createElement("canvas");
   small.width = 36;
   small.height = 64;
   const s = small.getContext("2d");
-  if (!s) return drawPhoto(ctx, photo, r, crop);
-  drawPhoto(s, photo, { x: 0, y: 0, w: 36, h: 64 }, crop);
+  if (!s) return drawPhoto(ctx, photo, r, { ...crop, fit: "cover" });
+  drawPhoto(s, photo, { x: 0, y: 0, w: 36, h: 64 }, { ...crop, fit: "cover" });
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";

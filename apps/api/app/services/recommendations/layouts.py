@@ -1,27 +1,45 @@
-"""Local layout ranking. Combines vision measurements and *provider-returned* Qloo tags.
+"""Layout ranking: decides which Story templates fit a photo, using the photo's own read.
 
-score = 0.45 * visual_fit + 0.35 * cultural_style_fit + 0.20 * readability_fit
-An initial engineering heuristic — tune by human review; it is not a validated model.
-Rendering of each template lives in the web app (apps/web/lib/templates); ids must match.
+Signals (all per-photo):
+  visual_fit   — moods (user > vision LLM > pixel rules), scene cues, main subject, orientation
+  ai_pick      — the vision LLM's own ranking of the catalogue for this photo (when available)
+  cultural_fit — Qloo-returned tags matched to each template's style keywords
+  readability  — text over busy photos is penalised; off-photo text is neutral (not a free win)
+
+score = 0.30 visual + 0.30 ai_pick + 0.25 cultural + 0.15 readability   (with image reasoning)
+score = 0.45 visual + 0.35 cultural + 0.20 readability                   (without)
+An engineering heuristic — tune by human review; not a validated model.
+
+All templates are returned, best first, with families interleaved so every group of three the
+UI shows (initial set + each Shuffle) is compositionally distinct. Rendering lives in
+apps/web/lib/story/templates*.ts; ids must match (a web test checks this).
 """
 
-from dataclasses import dataclass
+import hashlib
+from dataclasses import dataclass, field
 
 from app.schemas.api import LayoutId, LayoutScore, LayoutSuggestion, Mood, VisualProfile
 
 W_VISUAL, W_CULTURAL, W_READ = 0.45, 0.35, 0.20
+W_AI = {"visual": 0.30, "ai": 0.30, "cultural": 0.25, "read": 0.15}
+AI_RANK_FIT = (1.0, 0.86, 0.74, 0.63, 0.54)
+AI_UNPICKED = 0.22
 
 
 @dataclass(frozen=True)
 class Template:
     id: LayoutId
     name: str
-    family: str  # templates in one family look alike; we suggest at most one per family
+    family: str  # at most one per family in each set of three
     style_tags: tuple[str, ...]
+    blurb: str  # shown to the vision model when it picks layouts
     moods: dict[Mood, float]
-    compositions: tuple[str, ...]  # source orientations that crop well
-    text_on_photo: bool
-    keywords: tuple[str, ...]  # matched against Qloo tag names (lower-case substring)
+    scenes: tuple[str, ...]  # substrings matched against the vision model's scene cues
+    subjects: dict[str, float] = field(default_factory=dict)  # person/people/object/scene → fit
+    compositions: tuple[str, ...] = ("portrait", "square", "landscape")
+    text_on_photo: bool = False
+    keywords: tuple[str, ...] = ()  # matched against Qloo tag names
+    filter: str | None = None  # signature look, overrides the mood filter
 
 
 CATALOGUE: tuple[Template, ...] = (
@@ -30,82 +48,274 @@ CATALOGUE: tuple[Template, ...] = (
         "Cinematic",
         "fullbleed",
         ("full-bleed", "gradient", "serif"),
+        "full-bleed photo, dark gradient, one serif line; dramatic scenes, golden hour, film looks",
         {"cinematic": 1, "moody": 0.9, "warm": 0.6, "bold": 0.6, "nostalgic": 0.5},
-        ("portrait", "square", "landscape"),
-        True,
-        ("drama", "thriller", "noir", "film", "soundtrack", "ambient", "indie", "cinema"),
-    ),
-    Template(
-        "stills",
-        "Film Stills",
-        "split",
-        ("subtitles", "three crops", "letterbox"),
-        {"cinematic": 0.9, "nostalgic": 0.8, "dreamy": 0.7, "moody": 0.6, "cool": 0.5},
-        ("landscape", "square"),
-        True,
-        ("indie", "coming of age", "romance", "alternative", "lo-fi", "bedroom", "drama"),
-    ),
-    Template(
-        "editorial",
-        "Editorial",
-        "paper",
-        ("grid paper", "asymmetric", "bold type"),
-        {"editorial": 1, "minimal": 0.8, "bold": 0.7, "natural": 0.5, "bright": 0.5},
-        ("landscape", "square", "portrait"),
-        False,
-        ("fashion", "luxury", "design", "art", "jazz", "electronic", "architecture", "magazine"),
-    ),
-    Template(
-        "journal",
-        "Journal",
-        "card",
-        ("blurred backdrop", "paper card", "date line"),
-        {"natural": 0.9, "dreamy": 0.7, "minimal": 0.6, "bright": 0.6, "cool": 0.5},
-        ("landscape", "square"),
-        False,
-        ("folk", "acoustic", "poetry", "literary", "singer-songwriter", "travel", "book"),
-    ),
-    Template(
-        "scrapbook",
-        "Scrapbook",
-        "collage",
-        ("polaroid", "washi tape", "stickers"),
-        {"playful": 1, "bright": 0.8, "warm": 0.6, "nostalgic": 0.6, "dreamy": 0.5},
-        ("portrait", "square"),
-        False,
-        ("pop", "k-pop", "romance", "comedy", "teen", "dance", "cute", "animation"),
-    ),
-    Template(
-        "filmstrip",
-        "Film Strip",
-        "split",
-        ("35mm strip", "sprockets", "edge codes"),
-        {"nostalgic": 1, "moody": 0.6, "cinematic": 0.6, "bold": 0.5, "warm": 0.5},
-        ("landscape", "square"),
-        False,
-        ("rock", "punk", "grunge", "retro", "vintage", "hip hop", "90s", "80s"),
+        (
+            "sunset",
+            "golden hour",
+            "night",
+            "street",
+            "city",
+            "road",
+            "sea",
+            "landscape",
+            "silhouette",
+        ),
+        {"person": 0.8, "scene": 1.0, "people": 0.6, "object": 0.5},
+        text_on_photo=True,
+        keywords=("drama", "thriller", "noir", "film", "soundtrack", "ambient", "indie", "cinema"),
     ),
     Template(
         "vintage",
         "Vintage",
         "fullbleed",
         ("grain", "light leak", "date stamp"),
-        {"warm": 1, "nostalgic": 0.9, "dreamy": 0.6, "moody": 0.5, "natural": 0.4},
-        ("portrait", "square", "landscape"),
+        "warm film grade, light leaks, dust, orange date stamp; nostalgic, analog, summer",
+        {"warm": 1, "nostalgic": 0.95, "dreamy": 0.6, "moody": 0.5, "natural": 0.4},
+        ("golden hour", "summer", "beach", "garden", "home", "street", "car", "retro"),
+        {"person": 0.9, "people": 0.85, "scene": 0.8, "object": 0.6},
+        text_on_photo=True,
+        keywords=("soul", "funk", "disco", "70s", "classic", "oldies", "r&b", "motown"),
+        filter="film",
+    ),
+    Template(
+        "magazine",
+        "Magazine",
+        "fullbleed",
+        ("cover", "masthead", "barcode"),
+        "magazine cover: huge masthead over a full-bleed portrait, cover lines, barcode; "
+        "fashion, outfits, confident portraits",
+        {"editorial": 1, "bold": 0.95, "cinematic": 0.6, "minimal": 0.5, "bright": 0.5},
+        ("portrait", "outfit", "fashion", "studio", "mirror", "street style", "selfie"),
+        {"person": 1.0, "people": 0.5, "object": 0.4, "scene": 0.3},
+        ("portrait", "square"),
         True,
-        ("soul", "funk", "disco", "70s", "classic", "oldies", "r&b", "motown"),
+        ("fashion", "luxury", "design", "pop", "hip hop", "style"),
+    ),
+    Template(
+        "stills",
+        "Film Stills",
+        "split",
+        ("subtitles", "three crops", "letterbox"),
+        "three stacked film stills with subtitles; quiet scenes, landscapes, travel, water",
+        {"cinematic": 0.9, "nostalgic": 0.8, "dreamy": 0.7, "moody": 0.6, "cool": 0.5},
+        ("sea", "water", "beach", "landscape", "train", "window", "road", "sky"),
+        {"scene": 1.0, "object": 0.6, "person": 0.45, "people": 0.4},
+        ("landscape", "square"),
+        True,
+        ("indie", "coming of age", "romance", "alternative", "lo-fi", "bedroom", "drama"),
+    ),
+    Template(
+        "filmstrip",
+        "Film Strip",
+        "split",
+        ("35mm strip", "sprockets", "edge codes"),
+        "vertical 35mm film strip with sprockets and a tape label; analog, retro, trips",
+        {"nostalgic": 1, "moody": 0.6, "cinematic": 0.6, "bold": 0.5, "warm": 0.5},
+        ("trip", "street", "retro", "concert", "night", "friends"),
+        {"scene": 0.9, "object": 0.7, "people": 0.6, "person": 0.5},
+        ("landscape", "square"),
+        keywords=("rock", "punk", "grunge", "retro", "vintage", "hip hop", "90s", "80s"),
+    ),
+    Template(
+        "photodump",
+        "Photo Dump",
+        "split",
+        ("tiles", "doodles", "handwriting"),
+        "photo-dump grid of rounded tiles with doodle arrows and handwritten labels; "
+        "food, friends, parties, everyday fun",
+        {"playful": 1, "bright": 0.7, "warm": 0.6, "natural": 0.5, "nostalgic": 0.5},
+        (
+            "food",
+            "cafe",
+            "restaurant",
+            "party",
+            "friends",
+            "celebration",
+            "festival",
+            "birthday",
+            "dinner",
+        ),
+        {"people": 1.0, "object": 0.8, "person": 0.7, "scene": 0.6},
+        keywords=("pop", "k-pop", "comedy", "dance", "indie pop"),
+        filter="film",
+    ),
+    Template(
+        "editorial",
+        "Editorial",
+        "paper",
+        ("grid paper", "asymmetric", "bold type"),
+        "grid paper with a photo band and big lowercase type; architecture, interiors, design",
+        {"editorial": 1, "minimal": 0.8, "bold": 0.6, "natural": 0.4, "bright": 0.4},
+        ("architecture", "building", "interior", "office", "desk", "museum", "city"),
+        {"scene": 0.9, "object": 0.8, "person": 0.5, "people": 0.4},
+        ("landscape", "square"),
+        keywords=("design", "art", "jazz", "electronic", "architecture", "magazine"),
+    ),
+    Template(
+        "newspaper",
+        "Newspaper",
+        "paper",
+        ("masthead", "columns", "pull quote"),
+        "newspaper front page: masthead, columns, pull quote, tall photo; city, events, "
+        "black and white",
+        {"editorial": 0.9, "nostalgic": 0.7, "minimal": 0.6, "moody": 0.5, "bold": 0.5},
+        ("city", "street", "architecture", "event", "crowd", "news", "old"),
+        {"person": 0.8, "scene": 0.8, "people": 0.7, "object": 0.6},
+        ("portrait", "square"),
+        keywords=("news", "politics", "history", "documentary", "jazz"),
+        filter="bw",
+    ),
+    Template(
+        "journal",
+        "Journal",
+        "card",
+        ("blurred backdrop", "paper card", "date line"),
+        "paper card over the blurred photo with a date and a few lines; reflective, travel, nature",
+        {"natural": 0.9, "dreamy": 0.7, "minimal": 0.6, "bright": 0.5, "cool": 0.5},
+        ("nature", "travel", "trail", "mountain", "lake", "park", "forest", "garden"),
+        {"scene": 1.0, "object": 0.7, "person": 0.5, "people": 0.5},
+        ("landscape", "square"),
+        keywords=("folk", "acoustic", "poetry", "literary", "singer-songwriter", "travel", "book"),
+    ),
+    Template(
+        "note",
+        "Paper Note",
+        "card",
+        ("torn note", "push pin", "handwriting"),
+        "a handwritten torn paper note pinned over the photo; personal notes, cosy moments, pets",
+        {"dreamy": 0.8, "warm": 0.8, "natural": 0.7, "nostalgic": 0.6, "minimal": 0.5},
+        ("home", "bedroom", "cafe", "books", "window", "coffee", "pet", "dog", "cat"),
+        {"object": 0.9, "scene": 0.8, "person": 0.7, "people": 0.6},
+        keywords=("singer-songwriter", "acoustic", "poetry", "romance"),
+    ),
+    Template(
+        "softfocus",
+        "Soft Focus",
+        "card",
+        ("blur backdrop", "fine frame", "haze"),
+        "dreamy blurred backdrop with the sharp photo inset in a fine frame; plants, flowers, "
+        "soft light",
+        {"dreamy": 1, "natural": 0.8, "bright": 0.6, "minimal": 0.6, "cool": 0.5},
+        ("flower", "plant", "garden", "window", "sky", "leaves", "bokeh"),
+        {"object": 0.9, "scene": 0.9, "person": 0.7, "people": 0.5},
+        keywords=("ambient", "dream pop", "shoegaze", "indie"),
+        filter="faded",
+    ),
+    Template(
+        "scrapbook",
+        "Scrapbook",
+        "collage",
+        ("polaroid", "washi tape", "stickers"),
+        "tilted polaroid with washi tape, stars, a torn note and a stamp; celebrations, "
+        "friends, pets",
+        {"playful": 1, "bright": 0.8, "warm": 0.6, "nostalgic": 0.6, "dreamy": 0.5},
+        ("birthday", "party", "friends", "pet", "dog", "cat", "celebration", "gift", "cake"),
+        {"person": 0.9, "people": 0.9, "object": 0.8, "scene": 0.5},
+        ("portrait", "square"),
+        keywords=("pop", "k-pop", "romance", "comedy", "teen", "dance", "cute", "animation"),
+    ),
+    Template(
+        "moodboard",
+        "Mood Board",
+        "collage",
+        ("photo grid", "palette chips", "hex codes"),
+        "mood board: grid of crops plus the photo's colour palette as labelled chips; "
+        "aesthetics, outfits, food, decor",
+        {"minimal": 0.8, "editorial": 0.8, "natural": 0.7, "dreamy": 0.6, "bright": 0.6},
+        ("interior", "food", "outfit", "decor", "flower", "texture", "fabric"),
+        {"object": 1.0, "scene": 0.8, "person": 0.6, "people": 0.5},
+        keywords=("design", "fashion", "art", "aesthetic"),
+    ),
+    Template(
+        "torn",
+        "Torn Reveal",
+        "collage",
+        ("torn paper", "label tapes", "daisy"),
+        "photo revealed through a torn paper strip with typewriter label tapes; poetic, flowers, "
+        "close-ups",
+        {"nostalgic": 0.9, "dreamy": 0.8, "moody": 0.6, "natural": 0.6, "warm": 0.5},
+        ("flower", "close-up", "face", "eyes", "field", "garden"),
+        {"person": 0.9, "object": 0.8, "scene": 0.7, "people": 0.5},
+        ("landscape", "square"),
+        keywords=("indie", "alternative", "poetry", "folk"),
+        filter="film",
     ),
     Template(
         "minimal",
         "Minimal",
         "frame",
         ("framed photo", "quiet type", "dark matte"),
+        "one framed photo on a dark matte with quiet type; understated, gallery, monochrome",
         {"minimal": 1, "moody": 0.7, "cool": 0.7, "editorial": 0.5, "cinematic": 0.4},
-        ("portrait", "square", "landscape"),
-        False,
-        ("ambient", "classical", "minimal", "techno", "documentary", "experimental"),
+        ("museum", "gallery", "architecture", "shadow", "night", "street"),
+        {"scene": 0.8, "object": 0.8, "person": 0.7, "people": 0.6},
+        keywords=("ambient", "classical", "minimal", "techno", "documentary", "experimental"),
+    ),
+    Template(
+        "y2k",
+        "Y2K Chrome",
+        "frame",
+        ("chrome", "sparkles", "glitter"),
+        "dark chrome frame with four-point sparkles and glitter; nightlife, parties, neon, "
+        "bold selfies",
+        {"bold": 1, "playful": 0.8, "moody": 0.6, "cool": 0.6, "cinematic": 0.5},
+        ("night", "party", "club", "neon", "concert", "mirror", "selfie", "lights"),
+        {"person": 1.0, "people": 0.8, "object": 0.5, "scene": 0.4},
+        ("portrait", "square"),
+        keywords=("pop", "hip hop", "electronic", "edm", "hyperpop", "k-pop"),
+        filter="vivid",
+    ),
+    Template(
+        "nowplaying",
+        "Now Playing",
+        "music",
+        ("music player", "album art", "frosted card"),
+        "frosted music player with the photo as album art and the suggested song; drives, "
+        "nights, concerts",
+        {"moody": 0.8, "dreamy": 0.8, "cool": 0.7, "cinematic": 0.6, "bold": 0.5},
+        ("car", "drive", "night", "concert", "headphones", "city lights", "sunset"),
+        {"scene": 0.8, "person": 0.8, "object": 0.7, "people": 0.6},
+        keywords=("indie", "r&b", "pop", "hip hop", "lo-fi", "electronic"),
+    ),
+    Template(
+        "vinyl",
+        "Vinyl",
+        "music",
+        ("record", "label", "tonearm"),
+        "a vinyl record on paper with the photo as its label and a tonearm; retro, warm, music",
+        {"nostalgic": 0.9, "warm": 0.8, "minimal": 0.6, "editorial": 0.5, "natural": 0.4},
+        ("record", "music", "retro", "home", "cafe", "portrait"),
+        {"person": 0.8, "object": 0.8, "scene": 0.6, "people": 0.5},
+        ("square", "portrait"),
+        keywords=("jazz", "soul", "classic", "rock", "vinyl", "funk"),
+    ),
+    Template(
+        "ticket",
+        "Ticket",
+        "travel",
+        ("boarding pass", "perforation", "barcode"),
+        "photo above a boarding-pass stub with seat and barcode; travel, airports, holidays",
+        {"bright": 0.7, "natural": 0.7, "playful": 0.6, "cool": 0.6, "nostalgic": 0.5},
+        (
+            "airport",
+            "plane",
+            "travel",
+            "beach",
+            "mountain",
+            "train",
+            "road trip",
+            "holiday",
+            "luggage",
+            "sky",
+        ),
+        {"scene": 0.9, "person": 0.8, "object": 0.8, "people": 0.7},
+        keywords=("travel", "world", "reggae", "latin", "afrobeats"),
     ),
 )
+
+TEMPLATES_BY_ID = {t.id: t for t in CATALOGUE}
+SPLITS_PHOTO = {"stills", "filmstrip", "photodump"}  # shifted crops of one photo can slice a face
 
 HEADLINES: dict[str, str] = {
     "cinematic": "the art of observing.",
@@ -122,12 +332,29 @@ HEADLINES: dict[str, str] = {
     "natural": "the silence that heals.",
 }
 
+MOOD_WEIGHTS = (1.0, 0.8, 0.6, 0.45, 0.35)
 
-def _visual_fit(t: Template, p: VisualProfile) -> float:
-    weights = [t.moods.get(m, 0.15) for m in p.mood] or [0.3]
-    # Strongest mood counts double: it is what the photo reads as first.
-    fit = (2 * weights[0] + sum(weights[1:])) / (len(weights) + 1)
-    fit = 0.85 * fit + (0.15 if p.composition in t.compositions else 0.0)
+
+def _mood_fit(t: Template, p: VisualProfile) -> float:
+    if not p.mood:
+        return 0.3
+    weights = MOOD_WEIGHTS[: len(p.mood)]
+    total = sum(w * t.moods.get(m, 0.1) for w, m in zip(weights, p.mood, strict=False))
+    return total / sum(weights)
+
+
+def _scene_fit(t: Template, scene: list[str]) -> float:
+    if not scene:
+        return 0.5  # no evidence either way
+    cues = " | ".join(scene).lower()
+    hits = sum(1 for k in t.scenes if k in cues)
+    return 0.3 + 0.7 * min(1.0, hits / 2)
+
+
+def _visual_fit(t: Template, p: VisualProfile, scene: list[str], subject: str | None) -> float:
+    comp = 1.0 if p.composition in t.compositions else 0.4
+    subj = t.subjects.get(subject, 0.6) if subject else 0.6
+    fit = 0.55 * _mood_fit(t, p) + 0.2 * _scene_fit(t, scene) + 0.15 * subj + 0.10 * comp
     return round(min(fit, 1.0), 3)
 
 
@@ -141,10 +368,89 @@ def _cultural_fit(t: Template, tags: list[str]) -> tuple[float, list[str]]:
 
 def _readability(t: Template, p: VisualProfile) -> float:
     if not t.text_on_photo:
-        return 0.95
+        return 0.75  # text sits on paper/cards: fine, but not an automatic win
     # Text over busy, mid-tone photos is hardest to read; overlays help but don't fix it fully.
     busy = p.contrast * 0.6 + (1 - abs(p.brightness - 0.5) * 2) * 0.4
     return round(max(0.3, 1 - 0.55 * busy), 3)
+
+
+def _ai_fit(t: Template, picks: list[str]) -> float:
+    if t.id in picks:
+        i = picks.index(t.id)
+        return AI_RANK_FIT[min(i, len(AI_RANK_FIT) - 1)]
+    return AI_UNPICKED
+
+
+def _jitter(p: VisualProfile, template_id: str) -> float:
+    """Tiny, deterministic, photo-specific tie-breaker (≤0.012) derived from the image read."""
+    sig = f"{p.palette}|{p.brightness}|{p.contrast}|{p.saturation}|{template_id}"
+    return int(hashlib.sha256(sig.encode()).hexdigest()[:6], 16) / 0xFFFFFF * 0.012
+
+
+def mood_filter(p: VisualProfile) -> str:
+    """Photo filter suggested by the photo's moods/measurements (template looks may override)."""
+    moods = p.mood[:2]
+    if "minimal" in moods and p.saturation < 0.2 and p.contrast > 0.5:
+        return "noir"
+    if "warm" in moods and p.brightness > 0.55:
+        return "golden"
+    if "warm" in moods or "nostalgic" in moods:
+        return "film"
+    if "cool" in moods:
+        return "cool"
+    if "dreamy" in moods or "minimal" in moods:
+        return "faded"
+    if "playful" in moods or "bold" in moods:
+        return "vivid"
+    return "none"
+
+
+def score_all(
+    p: VisualProfile,
+    qloo_tags: list[str],
+    people: bool = False,
+    scene: list[str] | None = None,
+    subject: str | None = None,
+    ai_picks: list[str] | None = None,
+) -> list[tuple[Template, LayoutScore, list[str]]]:
+    """Every template scored, best first (photo-specific tie-breaks)."""
+    scene = scene or []
+    if people and subject is None:
+        subject = "person"
+    scored = []
+    for t in CATALOGUE:
+        v = _visual_fit(t, p, scene, subject)
+        if people and t.id in SPLITS_PHOTO:
+            v = round(v * 0.7, 3)  # selfies/portraits: keep the person in one intact frame
+        c, hits = _cultural_fit(t, qloo_tags)
+        r = _readability(t, p)
+        a = _ai_fit(t, ai_picks) if ai_picks is not None else None
+        if a is not None:
+            total = W_AI["visual"] * v + W_AI["ai"] * a + W_AI["cultural"] * c + W_AI["read"] * r
+        else:
+            total = W_VISUAL * v + W_CULTURAL * c + W_READ * r
+        total = round(total + _jitter(p, t.id), 3)
+        score = LayoutScore(
+            visual_fit=v, cultural_style_fit=c, readability_fit=r, total=total, ai_pick=a
+        )
+        scored.append((t, score, hits))
+    return sorted(scored, key=lambda s: (-s[1].total, s[0].id))
+
+
+def _interleave(scored: list[tuple[Template, LayoutScore, list[str]]]):
+    """Order so each consecutive group of 3 has distinct families (best-first within that rule)."""
+    remaining = list(scored)
+    ordered = []
+    while remaining:
+        families: set[str] = set()
+        for _ in range(3):
+            if not remaining:
+                break
+            pick = next((x for x in remaining if x[0].family not in families), remaining[0])
+            remaining.remove(pick)
+            families.add(pick[0].family)
+            ordered.append(pick)
+    return ordered
 
 
 def _accent(p: VisualProfile) -> str:
@@ -157,57 +463,44 @@ def _accent(p: VisualProfile) -> str:
     return best if sat(best) > 0.25 else "#c03f13"
 
 
-SPLITS_PHOTO = {"stills", "filmstrip"}  # repeat shifted crops of one photo → can slice a face
-
-
-def score_all(
-    p: VisualProfile, qloo_tags: list[str], people: bool = False
-) -> list[tuple[Template, LayoutScore, list[str]]]:
-    """Every template scored, best first (ties broken by id for determinism)."""
-    scored = []
-    for t in CATALOGUE:
-        v = _visual_fit(t, p)
-        if people and t.id in SPLITS_PHOTO:
-            v = round(v * 0.7, 3)  # selfies/portraits: keep the person in one intact frame
-        c, hits = _cultural_fit(t, qloo_tags)
-        r = _readability(t, p)
-        total = round(W_VISUAL * v + W_CULTURAL * c + W_READ * r, 3)
-        score = LayoutScore(visual_fit=v, cultural_style_fit=c, readability_fit=r, total=total)
-        scored.append((t, score, hits))
-    return sorted(scored, key=lambda s: (-s[1].total, s[0].id))
-
-
 def rank_layouts(
     p: VisualProfile,
     qloo_tags: list[str],
     music_line: str | None,
-    k: int = 3,
+    k: int | None = None,
     headlines: list[str] | None = None,
     subject: tuple[str, float, float] | None = None,
+    scene: list[str] | None = None,
+    ai_picks: list[str] | None = None,
 ) -> list[LayoutSuggestion]:
-    """`headlines`: optional ideas from image reasoning; spread across the suggestions.
-    `subject`: (kind, x, y) of the main subject from image reasoning — crop focus + ranking."""
+    """All templates ranked for this photo (or the top `k`), families interleaved per 3.
+
+    `headlines`: optional ideas from image reasoning; spread across the suggestions.
+    `subject`: (kind, x, y) of the main subject from image reasoning — crop focus + ranking.
+    `ai_picks`: the vision model's ranked template ids for this photo."""
     people = bool(subject and subject[0] in ("person", "people"))
     focus = (subject[1], subject[2]) if subject and subject[0] != "scene" else (0.5, 0.5)
-    picked, families = [], set()
-    for t, score, hits in score_all(p, qloo_tags, people):
-        if t.family in families:
-            continue
-        families.add(t.family)
-        picked.append((t, score, hits))
-        if len(picked) == k:
-            break
+    kind = subject[0] if subject else None
+    ordered = _interleave(score_all(p, qloo_tags, people, scene, kind, ai_picks))
+    if k is not None:
+        ordered = ordered[:k]
 
     top_mood = p.mood[0] if p.mood else "natural"
     accent = _accent(p)
-    out = []
-    for t, score, hits in picked:
+    base_filter = mood_filter(p)
+    out: list[LayoutSuggestion] = []
+    for t, score, hits in ordered:
         matched = [m for m in p.mood if t.moods.get(m, 0) >= 0.6]
+        cues = [c for c in (scene or []) if any(k in c.lower() for k in t.scenes)]
         reason = (
             f"Your photo reads as {', '.join(matched[:2])}, which {t.name} is built for."
             if matched
-            else f"Adds contrast to the set: a {t.style_tags[0]} take."
+            else f"A {t.style_tags[0]} take for contrast."
         )
+        if cues:
+            reason += f" Fits the scene: {cues[0]}."
+        if ai_picks and t.id in ai_picks[:3]:
+            reason += " The image model picked it for this photo."
         if hits:
             reason += f" Qloo results tagged “{hits[0]}” point to this style."
         if t.text_on_photo and score.readability_fit < 0.6:
@@ -230,6 +523,7 @@ def rank_layouts(
                 accent=accent,
                 focus_x=round(focus[0], 3),
                 focus_y=round(focus[1], 3),
+                filter=t.filter or base_filter,
             )
         )
     return out

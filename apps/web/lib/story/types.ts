@@ -1,4 +1,6 @@
 // Serializable story model. Rendering is a pure function of (photo, StoryState).
+import type { FilterId } from "./filters";
+import type { Sticker } from "./stickers";
 
 export const STORY_W = 1080;
 export const STORY_H = 1920;
@@ -14,6 +16,17 @@ export const TEMPLATE_IDS = [
   "filmstrip",
   "vintage",
   "minimal",
+  "photodump",
+  "magazine",
+  "nowplaying",
+  "vinyl",
+  "moodboard",
+  "ticket",
+  "y2k",
+  "torn",
+  "note",
+  "newspaper",
+  "softfocus",
 ] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -33,9 +46,12 @@ export interface TextLayer {
 
 export interface StoryState {
   templateId: TemplateId;
+  filter: FilterId;
+  stickers: Sticker[];
   headline: TextLayer;
   caption: TextLayer;
-  crop: { zoom: number; x: number; y: number }; // zoom ≥ 1; x,y = focal point 0..1
+  /** zoom ≥ 1; x,y = cover alignment 0..1; fit "contain" shows the whole photo. */
+  crop: { zoom: number; x: number; y: number; fit: "cover" | "contain" };
   overlay: { strength: number; color: string };
   decorations: Record<string, boolean>;
   accent: string;
@@ -51,6 +67,12 @@ export interface TemplateInput {
   date: Date;
   /** Main subject position (0..1) from image reasoning: default crop focus + text placement. */
   focus?: { x: number; y: number };
+  /** Suggested photo filter for this layout (from the API's mood rules). */
+  filter?: FilterId;
+  /** Recommended music, for the Now Playing / Vinyl layouts. */
+  music?: { title: string | null; artist: string | null };
+  /** Scene cues from image reasoning (Mood Board tags). */
+  scene?: string[];
 }
 
 export type TextKey = "headline" | "caption";

@@ -10,5 +10,8 @@ export function inputFor(layout: LayoutSuggestion | null, a: Analysis | null, da
     palette: a?.visual_profile.palette ?? [],
     date,
     focus: layout && (layout.focus_x !== 0.5 || layout.focus_y !== 0.5) ? { x: layout.focus_x, y: layout.focus_y } : undefined,
+    filter: layout?.filter && layout.filter !== "none" ? layout.filter : undefined,
+    music: a && a.music.kind !== "none" ? { title: a.music.title, artist: a.music.artist } : undefined,
+    scene: a?.image_reasoning?.scene,
   };
 }

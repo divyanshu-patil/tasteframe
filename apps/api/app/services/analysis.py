@@ -145,6 +145,8 @@ async def run_analysis(
             subject=(reasoning.subject, reasoning.subject_x, reasoning.subject_y)
             if reasoning
             else None,
+            scene=reasoning.scene if reasoning else None,
+            ai_picks=reasoning.layout_picks if reasoning else None,
         )
 
         result = AnalysisOut(

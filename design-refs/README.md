@@ -24,3 +24,11 @@ Re-fetch locally: the images can be re-downloaded from the pin URLs in `SOURCES.
 
 Collage pins informed the multi-crop compositions (`stills`, `filmstrip`, `minimal` offset frame);
 the app uses one photo per Story, so true multi-photo collages are out of scope.
+
+## Second wave (2026-10-10)
+
+Added categories: photodump, magazine, nowplaying, moodboard, ticket, y2k, tornpaper, notes,
+newspaper, filters, stickers, blurframe. Each became a layout (`templates-more.ts`), the filter
+set (`filters.ts`) or the sticker tray (`stickers.ts`). Brand marks seen in pins (magazine
+mastheads, streaming-app UIs) are deliberately not reproduced: the masthead uses your headline
+and the player is generic.

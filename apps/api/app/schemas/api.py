@@ -21,7 +21,44 @@ Mood = Literal[
     "natural",
 ]
 LayoutId = Literal[
-    "cinematic", "stills", "editorial", "journal", "scrapbook", "filmstrip", "vintage", "minimal"
+    "cinematic",
+    "stills",
+    "editorial",
+    "journal",
+    "scrapbook",
+    "filmstrip",
+    "vintage",
+    "minimal",
+    "photodump",
+    "magazine",
+    "nowplaying",
+    "vinyl",
+    "moodboard",
+    "ticket",
+    "y2k",
+    "torn",
+    "note",
+    "newspaper",
+    "softfocus",
+]
+FilterId = Literal[
+    "none", "film", "warm", "golden", "cool", "faded", "vivid", "sepia", "bw", "noir", "8mm"
+]
+StickerKind = Literal[
+    "tape",
+    "star",
+    "sparkle",
+    "heart",
+    "flower",
+    "daisy",
+    "bow",
+    "paperclip",
+    "pin",
+    "stamp",
+    "arrow",
+    "swirl",
+    "note",
+    "player",
 ]
 UUID_PATTERN = r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
 
@@ -104,6 +141,7 @@ class LayoutScore(BaseModel):
     cultural_style_fit: float
     readability_fit: float
     total: float
+    ai_pick: float | None = None  # the vision model's own pick for this photo (when available)
 
 
 class LayoutSuggestion(BaseModel):
@@ -118,6 +156,7 @@ class LayoutSuggestion(BaseModel):
     # Default crop focus (0..1) keeping the main subject in frame; 0.5/0.5 when unknown.
     focus_x: float = 0.5
     focus_y: float = 0.5
+    filter: FilterId = "none"  # suggested photo filter (mood rules / template look)
 
 
 class MusicSuggestion(BaseModel):
@@ -143,6 +182,7 @@ class ImageReasoning(BaseModel):
     subject: Literal["person", "people", "object", "scene"] = "scene"
     subject_x: float = Field(0.5, ge=0, le=1)
     subject_y: float = Field(0.5, ge=0, le=1)
+    layout_picks: list[LayoutId] = Field(default_factory=list, max_length=5)
 
 
 class Provenance(BaseModel):
@@ -189,9 +229,23 @@ class TextLayerConfig(BaseModel):
 
 
 class CropConfig(BaseModel):
-    zoom: float = Field(ge=1, le=3)
+    zoom: float = Field(ge=1, le=4)
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
+    fit: Literal["cover", "contain"] = "cover"
+
+
+class StickerConfig(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    id: str = Field(max_length=64)
+    kind: StickerKind
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    scale: float = Field(ge=0.3, le=3)
+    rotate: float = Field(ge=0, lt=360)
+    color: str = Field(pattern=HEX)
+    text: str | None = Field(None, max_length=40)
 
 
 class OverlayConfig(BaseModel):
@@ -205,6 +259,8 @@ class StoryConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
     templateId: LayoutId  # noqa: N815 — matches the browser's JSON shape
+    filter: FilterId = "none"
+    stickers: list[StickerConfig] = Field(default_factory=list, max_length=24)
     headline: TextLayerConfig
     caption: TextLayerConfig
     crop: CropConfig

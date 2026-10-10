@@ -46,14 +46,14 @@ def test_mood_rules_default_and_manual_merge():
 def test_ranking_returns_three_distinct_families_and_formula():
     out = rank_layouts(profile(mood=["cinematic", "moody"]), [], None)
     fams = {t.id: t.family for t in CATALOGUE}
-    assert len(out) == 3 and len({fams[o.id] for o in out}) == 3
+    assert len(out) == len(CATALOGUE) and len({fams[o.id] for o in out[:3]}) == 3
     s = out[0].score
     assert (
         abs(
             s.total
             - round(0.45 * s.visual_fit + 0.35 * s.cultural_style_fit + 0.20 * s.readability_fit, 3)
         )
-        < 0.002
+        < 0.013  # + photo-specific tie-breaker (≤ 0.012)
     )
     assert s.cultural_style_fit == 0.5  # neutral without provider evidence
 
@@ -101,3 +101,60 @@ def test_itunes_failure_and_disabled():
     assert asyncio.run(find_track("A", s, transport=down)) is None
     off = Settings(music_metadata_provider="none", _env_file=None)
     assert asyncio.run(find_track("A", off)) is None
+
+
+def test_every_shuffle_set_has_distinct_families():
+    out = rank_layouts(profile(mood=["warm", "playful"]), [], None)
+    fams = {t.id: t.family for t in CATALOGUE}
+    for i in range(0, 15, 3):  # 5 full sets; the tail may repeat when families run out
+        assert len({fams[o.id] for o in out[i : i + 3]}) == 3, [o.id for o in out[i : i + 3]]
+
+
+def test_ai_picks_move_the_ranking():
+    p = profile(mood=["natural"])
+    base = [o.id for o in rank_layouts(p, [], None)][:3]
+    picked = rank_layouts(p, [], None, ai_picks=["ticket", "vinyl", "y2k"])
+    assert picked[0].id == "ticket" and picked[0].id not in base[:1]
+    assert picked[0].score.ai_pick == 1.0 and "image model picked" in picked[0].reason
+
+
+def test_different_photos_get_different_top_sets():
+    from app.services.recommendations.layouts import rank_layouts as rl
+
+    street = rl(
+        profile(mood=["editorial", "minimal"], saturation=0.15),
+        [],
+        None,
+        scene=["city street", "architecture"],
+        subject=("scene", 0.5, 0.5),
+    )
+    party = rl(
+        profile(mood=["playful", "bright"], saturation=0.6),
+        [],
+        None,
+        scene=["birthday", "party"],
+        subject=("person", 0.5, 0.4),
+    )
+    dog = rl(
+        profile(mood=["warm", "natural"]),
+        [],
+        None,
+        scene=["dog", "home", "tiled floor"],
+        subject=("object", 0.5, 0.5),
+    )
+    tops = [tuple(o.id for o in x[:3]) for x in (street, party, dog)]
+    assert len(set(tops)) == 3, tops
+    assert street[0].id in {"editorial", "newspaper", "minimal"}
+    assert party[0].id in {"scrapbook", "photodump", "y2k"}
+
+
+def test_mood_filter_rules():
+    from app.services.recommendations.layouts import mood_filter
+
+    assert mood_filter(profile(mood=["warm"], brightness=0.7)) == "golden"
+    assert mood_filter(profile(mood=["nostalgic"])) == "film"
+    assert mood_filter(profile(mood=["cool"])) == "cool"
+    assert mood_filter(profile(mood=["minimal"], saturation=0.1, contrast=0.7)) == "noir"
+    assert mood_filter(profile(mood=["natural"])) == "none"
+    out = rank_layouts(profile(mood=["natural"]), [], None)
+    assert {o.id: o.filter for o in out}["newspaper"] == "bw"  # template look overrides

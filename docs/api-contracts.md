@@ -100,7 +100,10 @@ Response: `application/x-ndjson`, one JSON object per line:
   }
 }
 ```
-`score` is an internal heuristic, never a provider score. `focus_x`/`focus_y` (0..1) is the default
+`layouts` contains **every** template, ranked for this photo; each consecutive group of three has
+distinct families (the UI shows three at a time and Shuffle moves to the next group). Each layout
+also has `filter` (suggested photo look) and `score.ai_pick` (the vision model's pick weight, or
+null without image reasoning). `score` is an internal heuristic, never a provider score. `focus_x`/`focus_y` (0..1) is the default
 crop focus: the main subject's position from image reasoning, or 0.5/0.5 when unknown. Layout `id`s are rendered by
 `apps/web/lib/story/templates.ts` (a test keeps both catalogues in sync).
 

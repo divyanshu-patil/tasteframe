@@ -77,7 +77,12 @@ def test_analysis_without_seeds_returns_three_distinct_layouts(client):
     )
     assert [e["stage"] for e in events[:-1]] == ["photo", "mood", "taste", "layouts"]
     res = events[-1]["result"]
-    assert len({lay["id"] for lay in res["layouts"]}) == 3
+    from app.services.recommendations.layouts import CATALOGUE, TEMPLATES_BY_ID
+
+    ids = [lay["id"] for lay in res["layouts"]]
+    assert sorted(ids) == sorted(t.id for t in CATALOGUE)  # every layout, ranked once
+    assert len({TEMPLATES_BY_ID[i].family for i in ids[:3]}) == 3  # first set is distinct
+    assert all(lay["filter"] for lay in res["layouts"])
     assert res["visual_profile"]["mood"][0] == "cinematic"
     assert res["visual_profile"]["source"] == "vision+manual"
     assert res["visual_profile"]["composition"] == "portrait"
@@ -178,7 +183,7 @@ def test_qloo_outage_degrades_without_breaking_layouts(client_with):
     res = stream(client.post("/v1/analysis", headers=h, json=body))[-1]["result"]
     assert res["provenance"]["qloo_error"] == "QLOO_UPSTREAM_ERROR"
     assert res["provenance"]["qloo_used"] is False
-    assert len(res["layouts"]) == 3 and res["music"]["kind"] == "none"
+    assert len(res["layouts"]) == 19 and res["music"]["kind"] == "none"
 
 
 def test_seed_must_be_provider_id_not_free_text(client):
