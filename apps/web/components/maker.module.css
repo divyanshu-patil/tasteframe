@@ -237,8 +237,11 @@ textarea.input { width: 100%; resize: vertical; }
 @media (max-width: 960px) {
   .gallery, .insights { grid-template-columns: 1fr; }
   .option { justify-items: start; }
-  .editor { grid-template-columns: 1fr; }
-  .editorStage { position: static; }
+  .editor { display: block; }
+  .panel { margin-top: var(--spacing-14); }
+  .editorStage > p { display: none; }
+  /* Keep the live preview visible while scrolling the controls on small screens. */
+  .editorStage { top: 0; z-index: 2; background: var(--color-parchment); padding: var(--spacing-7) 0; margin: 0 -16px; }
   .panel { max-width: none; }
 }
 @media (max-width: 520px) {

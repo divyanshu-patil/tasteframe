@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     # Public base URL of this API as seen by the browser (used for local-storage upload URLs).
-    public_api_url: str = "http://localhost:3000/api"
+    public_api_url: str = "http://localhost:8000"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
     # HMAC secret for guest session tokens and local upload signatures.

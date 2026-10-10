@@ -61,7 +61,7 @@
   color: var(--color-parchment);
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: clamp(64px, 14vw, 212px);
+  font-size: clamp(40px, 11.5vw, 200px);
   line-height: 0.78;
   letter-spacing: -0.06em;
   padding: var(--spacing-22) var(--spacing-22) var(--spacing-28);

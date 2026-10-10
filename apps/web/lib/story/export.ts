@@ -1,5 +1,5 @@
 // PNG export at exactly 1080×1920 — independent of on-screen preview size.
-import type { Photo } from "./draw";
+import { type Photo, fontString } from "./draw";
 import { TEMPLATES, renderStory } from "./templates";
 import type { StoryState } from "./types";
 import { STORY_H, STORY_W } from "./types";
@@ -7,11 +7,13 @@ import { STORY_H, STORY_W } from "./types";
 const FONT_ROLES = ["display", "serif", "italic", "sans", "hand", "mono"] as const;
 
 /** Wait until every story font is loaded so the export never falls back mid-render. */
-export async function fontsReady(): Promise<void> {
-  if (typeof document === "undefined" || !document.fonts) return;
-  const { fontString } = await import("./draw");
-  await Promise.all(FONT_ROLES.map((r) => document.fonts.load(fontString(r, 48)).catch(() => [])));
-  await document.fonts.ready;
+let fontsPromise: Promise<void> | null = null;
+export function fontsReady(): Promise<void> {
+  if (typeof document === "undefined" || !document.fonts) return Promise.resolve();
+  fontsPromise ??= Promise.all(
+    FONT_ROLES.map((r) => document.fonts.load(fontString(r, 48)).catch(() => [])),
+  ).then(() => document.fonts.ready.then(() => undefined));
+  return fontsPromise;
 }
 
 export function exportFilename(s: StoryState, now = new Date()): string {

@@ -135,8 +135,8 @@ const editorial: Template = {
     ["brackets", "Corner brackets", true],
   ]),
   defaults: (i) => ({
-    headline: t({ text: i.headline.toLowerCase(), size: 118, font: "sans", x: 0.07, y: 0.515, width: 0.52 }),
-    caption: t({ text: i.caption || fmtDate(i.date), size: 30, font: "serif", x: 0.6, y: 0.545, width: 0.33, color: "#2b2a28" }),
+    headline: t({ text: i.headline.toLowerCase(), size: 104, font: "sans", x: 0.07, y: 0.515, width: 0.48 }),
+    caption: t({ text: i.caption || fmtDate(i.date), size: 30, font: "serif", x: 0.62, y: 0.545, width: 0.31, color: "#2b2a28" }),
     overlay: { strength: 0.5, color: "#efede7" },
     decorations: { grid: true, swatches: true, numerals: true, brackets: true },
   }),

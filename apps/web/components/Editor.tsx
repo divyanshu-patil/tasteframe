@@ -35,7 +35,11 @@ const FONTS: { id: FontRole; label: string }[] = [
 function usePreviewWidth(): number {
   const [w, setW] = useState(360);
   useEffect(() => {
-    const fit = () => setW(Math.max(240, Math.min(420, window.innerWidth - 32, (window.innerHeight - 140) * 0.5625)));
+    const fit = () => {
+      // Stacked layout (≤960px): preview is sticky, so cap it to ~40% of the viewport height.
+      const maxH = window.innerWidth <= 960 ? window.innerHeight * 0.4 : window.innerHeight - 140;
+      setW(Math.max(150, Math.min(420, window.innerWidth - 32, maxH * 0.5625)));
+    };
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);

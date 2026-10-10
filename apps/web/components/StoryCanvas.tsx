@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { Photo } from "../lib/story/draw";
+import { fontsReady } from "../lib/story/export";
 import { type HitBoxes, renderStory } from "../lib/story/templates";
 import type { StoryState, TextKey } from "../lib/story/types";
 import { STORY_H, STORY_W } from "../lib/story/types";
@@ -39,8 +40,8 @@ export function StoryCanvas({ photo, state, width, label, className, onDragText,
       hits.current = renderStory(ctx, photo, state);
     };
     const raf = requestAnimationFrame(draw);
-    // Re-render once web fonts finish loading so previews never stay on fallback faces.
-    document.fonts?.ready.then(() => requestAnimationFrame(draw));
+    // Canvas text doesn't trigger web-font loads; request story fonts explicitly, then redraw.
+    void fontsReady().then(() => requestAnimationFrame(draw));
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
