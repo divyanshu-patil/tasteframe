@@ -127,6 +127,7 @@ def save(client, h, key, config=CONFIG):
 def test_features_and_not_configured(client):
     assert client.get("/v1/features").json() == {
         "qloo": True,
+        "image_reasoning": False,
         "saved_stories": False,
         "storage": "local",
     }

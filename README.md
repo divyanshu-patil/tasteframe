@@ -71,7 +71,8 @@ the venv's Python. Python packages are never installed through pnpm.
    - **photo**: the API decodes the real bytes (JPEG/PNG/WebP only, pixel cap) and re-encodes them
      without EXIF/GPS.
    - **mood**: Pillow measures palette, brightness, contrast, saturation, warmth and orientation.
-     Deterministic rules map these to broad mood words, merged with any manual picks.
+     Deterministic rules map these to broad mood words. Optionally, a vision model on Ollama adds
+     moods, scene cues and headline ideas (see below). Everything is merged after the user's picks.
    - **taste**: for user-confirmed Qloo entity IDs, two `GET /v2/insights` calls run, with
      `filter.type` = artist and movie.
    - **layouts**: `score = 0.45·visual + 0.35·cultural + 0.20·readability`, then the top 3 from
@@ -133,6 +134,30 @@ Presigned POST policies enforce `Content-Type` and `content-length-range` (≤ `
 and expire after `S3_PRESIGNED_URL_TTL_SECONDS` (default 300 s). Keys are
 `tmp/<session-id>/<random>.<ext>`, never derived from filenames. The API verifies the session
 prefix on every read and delete.
+
+## Image reasoning (optional, Ollama)
+
+With `OLLAMA_API_KEY` set, the "mood" stage also sends a downscaled (≤768px), EXIF-stripped JPEG
+to a vision model on Ollama Cloud (`OLLAMA_MODEL`, default `gemma4:31b`). It runs concurrently
+with the local Pillow measurements and returns:
+- a one-line aesthetic summary and up to 4 scene cues ("golden hour", "city street"),
+- up to 3 moods from the app's fixed list, which come after the user's own picks and before
+  measured moods,
+- 3 headline ideas, spread across the suggested layouts.
+
+Safeguards:
+- The prompt forbids identifying people or inferring sensitive traits.
+- Replies are parsed defensively (code fences stripped, unknown moods dropped, emoji and markup
+  removed, lengths capped).
+- Any failure (timeout, retired model, auth, junk) is skipped with a safe code in
+  `provenance.image_reasoning_error`. The rest of the analysis is unaffected.
+- The UI discloses the Ollama step before upload, and shows the result in an
+  "Image reasoning" panel.
+
+Model check (2026-10-10): `qwen3-vl:235b` returns HTTP 410 (retired 2026-06-16) under every name
+variant. `gemma4:31b` accepts images. JSON-schema `format` returns empty content on gemma4, so we
+request `format: "json"` and validate ourselves. `gemma4:31b:cloud` is accepted too (the
+`:cloud` suffix is stripped for the direct API).
 
 ## Routes
 

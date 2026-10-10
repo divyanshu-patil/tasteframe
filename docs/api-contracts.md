@@ -87,8 +87,13 @@ Response: `application/x-ndjson`, one JSON object per line:
     "kind": "track | artist | none", "artist": "…", "title": "only when kind=track", "url": "https://music.apple.com/… or null",
     "artist_source": "qloo", "track_source": "itunes | null", "explanation": "…"
   },
+  "image_reasoning": {
+    "provider": "ollama", "model": "gemma4:31b", "summary": "…", "moods": ["cinematic"],
+    "scene": ["golden hour"], "headline_ideas": ["quiet moments"]
+  },
   "provenance": {
-    "qloo_used": true, "qloo_error": null, "visual_analysis_used": true, "track_level_result": false,
+    "qloo_used": true, "qloo_error": null, "visual_analysis_used": true,
+    "image_reasoning_used": true, "image_reasoning_error": null, "track_level_result": false,
     "seeds": ["<seed name>"], "layout_rule": "local heuristic: 0.45 visual + 0.35 cultural + 0.20 readability"
   }
 }
@@ -118,7 +123,7 @@ Every response carries an `X-Request-ID` header. Codes: `INVALID_REQUEST`, `SESS
 
 ## `GET /v1/features`
 ```json
-{"qloo": true, "saved_stories": true, "storage": "s3"}
+{"qloo": true, "image_reasoning": true, "saved_stories": true, "storage": "s3"}
 ```
 Booleans only (never values). The UI hides taste search and saving when these are off.
 
@@ -157,7 +162,7 @@ Every response carries an `X-Request-ID` header. Codes: `INVALID_REQUEST`, `SESS
 
 ## `GET /v1/features`
 ```json
-{"qloo": true, "saved_stories": true, "storage": "s3"}
+{"qloo": true, "image_reasoning": true, "saved_stories": true, "storage": "s3"}
 ```
 Booleans only (never values). The UI hides taste search and saving when these are off.
 

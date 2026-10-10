@@ -82,3 +82,15 @@ describe("saved story parsing", () => {
     expect(parseStoryState(null)).toBeNull();
   });
 });
+
+describe("image reasoning parsing", () => {
+  it("keeps valid reasoning, filters unknown moods, tolerates absence", () => {
+    const withIr = parseAnalysis({
+      ...valid,
+      image_reasoning: { provider: "ollama", model: "gemma4:31b", summary: "warm dusk", moods: ["warm", "serene"], scene: ["hills"], headline_ideas: ["after the light"] },
+    });
+    expect(withIr.image_reasoning).toMatchObject({ model: "gemma4:31b", moods: ["warm"], headline_ideas: ["after the light"] });
+    expect(parseAnalysis(valid).image_reasoning).toBeNull();
+    expect(parseAnalysis({ ...valid, image_reasoning: { summary: 3 } }).image_reasoning).toBeNull();
+  });
+});

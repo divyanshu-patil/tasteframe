@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     supabase_publishable_key: SecretStr | None = None
     supabase_timeout_seconds: float = 6.0
 
+    # Optional image reasoning via Ollama Cloud (vision LLM). Off when OLLAMA_API_KEY is unset.
+    ollama_api_key: SecretStr | None = None
+    ollama_model: str = "gemma4:31b"
+    ollama_base_url: str = "https://ollama.com"
+    ollama_timeout_seconds: float = 25.0
+
     max_image_pixels: int = 40_000_000
     music_metadata_provider: Literal["itunes", "none"] = "itunes"
     music_timeout_seconds: float = 5.0
@@ -56,6 +62,10 @@ class Settings(BaseSettings):
     @property
     def qloo_enabled(self) -> bool:
         return bool(self.qloo_api_key and self.qloo_api_key.get_secret_value())
+
+    @property
+    def ollama_enabled(self) -> bool:
+        return bool(self.ollama_api_key and self.ollama_api_key.get_secret_value())
 
     @property
     def supabase_enabled(self) -> bool:

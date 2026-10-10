@@ -55,7 +55,8 @@
         "CORS_ORIGINS",
         "PUBLIC_API_URL",
         "MUSIC_METADATA_PROVIDER",
-        "RATE_LIMIT_*"
+        "RATE_LIMIT_*",
+        "OLLAMA_*"
       ]
     },
     "test": {

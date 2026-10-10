@@ -16,6 +16,7 @@ def features(settings: Settings = Depends(get_settings)) -> FeaturesOut:
     """Which optional integrations are configured (booleans only — never values)."""
     return FeaturesOut(
         qloo=settings.qloo_enabled,
+        image_reasoning=settings.ollama_enabled,
         saved_stories=settings.supabase_enabled,
         storage=settings.storage_backend,
     )

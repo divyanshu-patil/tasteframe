@@ -7,7 +7,7 @@
 | Qloo directly analyzes uploaded photos | Not assumed; photos never sent to Qloo | Current docs list no image input | — |
 | Qloo generates Story layouts | Not used; local Canvas renderer | — | `apps/web/lib/story/templates.test.ts` |
 | Qloo returns track-level suggestions | **No**: no track/song entity type documented; guide says use `urn:entity:artist` | Hackathon developer guide | Artist-level card + iTunes metadata fallback (`test_itunes_exact_artist_match_only`) |
-| Free vision processing is available | Local Pillow statistics; no third-party vision provider, no data leaves our API | — | `tests/test_services.py::test_vision_*` |
+| Free vision processing is available | Local Pillow statistics always. Optional Ollama Cloud vision LLM (`gemma4:31b`), verified live 2026-10-10. `qwen3-vl:235b` retired (410). Ollama: cloud prompts not used for training | https://docs.ollama.com/cloud | `tests/test_services.py::test_vision_*`, `tests/test_image_reasoning.py` |
 | iTunes Search API provides track metadata | Verified live with a manual request; used for title + Apple Music link only, exact artist match, no audio | https://performance-partners.apple.com/search-api | `test_itunes_*` (mocked) |
 | Supabase is free for all use | Not guaranteed; used only for optional saved Stories (small JSON rows, 7-day expiry) | https://supabase.com/pricing | `tests/test_stories.py` (mocked PostgREST); live pending project keys |
 | Real S3 bucket accepts presigned POST and enforces limits | Verified 2026-10-10 on `ap-south-1`: 204 upload, 11 MB rejected (`EntityTooLarge`), regional endpoint needed (global → 307) | — | `test_presign_uses_regional_endpoint`, manual curl, browser e2e |

@@ -127,10 +127,23 @@ class MusicSuggestion(BaseModel):
     explanation: str
 
 
+class ImageReasoning(BaseModel):
+    """Vision-LLM read of the photo (Ollama). Validated, length-capped; no people/sensitive data."""
+
+    provider: Literal["ollama"] = "ollama"
+    model: str
+    summary: str = Field(max_length=200)
+    moods: list[Mood] = Field(default_factory=list, max_length=3)
+    scene: list[str] = Field(default_factory=list, max_length=4)
+    headline_ideas: list[str] = Field(default_factory=list, max_length=3)
+
+
 class Provenance(BaseModel):
     qloo_used: bool
     qloo_error: str | None = None  # safe error code only
     visual_analysis_used: bool
+    image_reasoning_used: bool = False
+    image_reasoning_error: str | None = None  # safe error code only
     track_level_result: bool
     seeds: list[str]
     layout_rule: str = "local heuristic: 0.45 visual + 0.35 cultural + 0.20 readability"
@@ -142,6 +155,7 @@ class AnalysisOut(BaseModel):
     cultural_recommendations: list[CulturalRecommendation]
     layouts: list[LayoutSuggestion]
     music: MusicSuggestion
+    image_reasoning: ImageReasoning | None = None
     provenance: Provenance
 
 
@@ -151,6 +165,7 @@ HEX = r"^#[0-9a-fA-F]{6}$"
 
 class FeaturesOut(BaseModel):
     qloo: bool
+    image_reasoning: bool
     saved_stories: bool
     storage: Literal["s3", "local"]
 

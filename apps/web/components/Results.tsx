@@ -125,12 +125,29 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
               {vp.palette.map((c) => <span key={c} style={{ background: c }} title={c} />)}
             </div>
             <dl className={s.facts}>
-              <dt>Mood</dt><dd>{vp.mood.join(", ")}{vp.source !== "vision" && " (includes your picks)"}</dd>
+              <dt>Mood</dt><dd>{vp.mood.join(", ")}{vp.source !== "vision" && " (includes your picks)"}
+                {analysis.image_reasoning && " · informed by image reasoning"}</dd>
               <dt>Light</dt><dd>{Math.round(vp.brightness * 100)}% brightness · {Math.round(vp.contrast * 100)}% contrast</dd>
               <dt>Colour</dt><dd>{vp.warmth > 0.1 ? "warm" : vp.warmth < -0.08 ? "cool" : "neutral"} · {Math.round(vp.saturation * 100)}% saturation</dd>
               <dt>Framing</dt><dd>{vp.composition}</dd>
             </dl>
           </article>
+
+          {analysis.image_reasoning && (
+            <article>
+              <p className={s.kicker}>Image reasoning · {analysis.image_reasoning.model} via Ollama</p>
+              <p>{analysis.image_reasoning.summary}</p>
+              {analysis.image_reasoning.scene.length > 0 && (
+                <p className={s.tags}>{analysis.image_reasoning.scene.join(" · ")}</p>
+              )}
+              {analysis.image_reasoning.headline_ideas.length > 0 && (
+                <p className={s.small}>
+                  Headline ideas used above:{" "}
+                  {analysis.image_reasoning.headline_ideas.map((h) => `“${h}”`).join(", ")}
+                </p>
+              )}
+            </article>
+          )}
 
           <article>
             <p className={s.kicker}>Cultural taste · from Qloo</p>

@@ -173,8 +173,13 @@ def score_all(
 
 
 def rank_layouts(
-    p: VisualProfile, qloo_tags: list[str], music_line: str | None, k: int = 3
+    p: VisualProfile,
+    qloo_tags: list[str],
+    music_line: str | None,
+    k: int = 3,
+    headlines: list[str] | None = None,
 ) -> list[LayoutSuggestion]:
+    """`headlines`: optional ideas from image reasoning; spread across the suggestions."""
     picked, families = [], set()
     for t, score, hits in score_all(p, qloo_tags):
         if t.family in families:
@@ -205,7 +210,11 @@ def rank_layouts(
                 reason=reason,
                 style_tags=list(t.style_tags),
                 score=score,
-                headline=HEADLINES.get(top_mood, "today."),
+                headline=(
+                    headlines[len(out) % len(headlines)]
+                    if headlines
+                    else HEADLINES.get(top_mood, "today.")
+                ),
                 caption=music_line or "",
                 accent=accent,
             )

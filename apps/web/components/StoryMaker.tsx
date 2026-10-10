@@ -431,6 +431,13 @@ export function StoryMaker() {
           <p className={s.muted}>
             We read colour, light and framing from your photo. Pick up to four
             words to steer it.
+            {features?.image_reasoning && (
+              <>
+                {" "}An AI vision model (Gemma via Ollama Cloud) also looks at a
+                downscaled copy to suggest moods and headlines. It never identifies
+                people, and Ollama doesn&apos;t train on it.
+              </>
+            )}
           </p>
           <div className={s.chips} role="group" aria-label="Mood">
             {MOODS.map((m) => (

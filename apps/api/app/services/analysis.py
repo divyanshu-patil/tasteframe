@@ -20,8 +20,11 @@ from app.services.qloo.client import QlooClient, QlooEntity
 from app.services.recommendations.layouts import rank_layouts
 from app.services.storage.store import Storage
 from app.services.vision.analyzer import analyze, decode_and_sanitize, merge_manual
+from app.services.vision.ollama import reason_about_image
 
 log = logging.getLogger("tasteframe.analysis")
+# Tests swap this for an httpx.MockTransport.
+vision_transport = None
 
 
 async def cultural_signals(
@@ -68,7 +71,15 @@ async def run_analysis(
         await asyncio.to_thread(storage.put, req.object_key, clean, ctype)
 
         yield {"stage": "mood"}
-        profile: VisualProfile = merge_manual(await asyncio.to_thread(analyze, im), req.manual_mood)
+        # Local pixel statistics and (optional) vision-LLM reasoning run concurrently.
+        measured, (reasoning, reasoning_error) = await asyncio.gather(
+            asyncio.to_thread(analyze, im), reason_about_image(im, settings, vision_transport)
+        )
+        # Mood priority: the user's picks, then the model's read, then measured rules.
+        model_moods = reasoning.moods if reasoning else []
+        profile: VisualProfile = merge_manual(measured, [*req.manual_mood, *model_moods])
+        if not req.manual_mood and model_moods:
+            profile = profile.model_copy(update={"source": "vision"})
 
         yield {"stage": "taste"}
         artists: list[QlooEntity] = []
@@ -126,7 +137,12 @@ async def run_analysis(
 
         yield {"stage": "layouts"}
         tags = [t for e in [*artists, *movies] for t in e.tags]
-        layouts = rank_layouts(profile, tags, _music_line(music))
+        layouts = rank_layouts(
+            profile,
+            tags,
+            _music_line(music),
+            headlines=reasoning.headline_ideas if reasoning else None,
+        )
 
         result = AnalysisOut(
             analysis_id=secrets.token_urlsafe(12),
@@ -134,10 +150,13 @@ async def run_analysis(
             cultural_recommendations=recs,
             layouts=layouts,
             music=music,
+            image_reasoning=reasoning,
             provenance=Provenance(
                 qloo_used=bool(artists or movies),
                 qloo_error=qloo_error,
                 visual_analysis_used=True,
+                image_reasoning_used=reasoning is not None,
+                image_reasoning_error=reasoning_error,
                 track_level_result=music.kind == "track",
                 seeds=seed_names,
             ),

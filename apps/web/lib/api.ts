@@ -58,8 +58,17 @@ export interface Music {
   track_source: "itunes" | null;
   explanation: string;
 }
+export interface ImageReasoning {
+  provider: "ollama";
+  model: string;
+  summary: string;
+  moods: Mood[];
+  scene: string[];
+  headline_ideas: string[];
+}
 export interface Analysis {
   analysis_id: string;
+  image_reasoning: ImageReasoning | null;
   visual_profile: VisualProfile;
   cultural_recommendations: CulturalRecommendation[];
   layouts: LayoutSuggestion[];
@@ -68,6 +77,8 @@ export interface Analysis {
     qloo_used: boolean;
     qloo_error: string | null;
     visual_analysis_used: boolean;
+    image_reasoning_used?: boolean;
+    image_reasoning_error?: string | null;
     track_level_result: boolean;
     seeds: string[];
     layout_rule: string;
@@ -124,7 +135,19 @@ export function parseAnalysis(v: unknown): Analysis {
         (r): r is CulturalRecommendation => isObj(r) && isStr(r.name) && r.provider === "qloo",
       )
     : [];
-  return { ...(v as unknown as Analysis), layouts, music, cultural_recommendations: recs };
+  const ir = v.image_reasoning;
+  const image_reasoning: ImageReasoning | null =
+    isObj(ir) && isStr(ir.summary) && isStr(ir.model)
+      ? {
+          provider: "ollama",
+          model: ir.model,
+          summary: ir.summary,
+          moods: isStrArr(ir.moods) ? (ir.moods.filter((m) => (MOODS as readonly string[]).includes(m)) as Mood[]) : [],
+          scene: isStrArr(ir.scene) ? ir.scene : [],
+          headline_ideas: isStrArr(ir.headline_ideas) ? ir.headline_ideas : [],
+        }
+      : null;
+  return { ...(v as unknown as Analysis), layouts, music, cultural_recommendations: recs, image_reasoning };
 }
 
 export function parseCandidates(v: unknown): TasteCandidate[] {
@@ -315,6 +338,7 @@ export async function deleteUpload(objectKey: string): Promise<void> {
 // ---- features & saved Stories ------------------------------------------------------------
 export interface Features {
   qloo: boolean;
+  image_reasoning: boolean;
   saved_stories: boolean;
 }
 
@@ -322,11 +346,13 @@ export async function getFeatures(): Promise<Features> {
   try {
     const res = await fetch(`${API}/v1/features`);
     const v: unknown = await res.json();
-    if (res.ok && isObj(v)) return { qloo: v.qloo === true, saved_stories: v.saved_stories === true };
+    if (res.ok && isObj(v)) {
+      return { qloo: v.qloo === true, image_reasoning: v.image_reasoning === true, saved_stories: v.saved_stories === true };
+    }
   } catch {
     /* treat as unavailable */
   }
-  return { qloo: false, saved_stories: false };
+  return { qloo: false, image_reasoning: false, saved_stories: false };
 }
 
 export interface SavedStory {

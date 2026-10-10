@@ -193,7 +193,7 @@ Record request ID, elapsed time by stage, Qloo status class, cache hit/miss, can
 | Guest identity | `POST /v1/session` → HMAC-signed token (`X-Session-Token`); object keys `tmp/<session>/<random>.<ext>`; ownership = key prefix match (`app/core/security.py`) |
 | Upload | S3 presigned **POST** (policy enforces type + size), or signed local-disk stand-in for dev (`app/services/storage/store.py`) |
 | Image validation | Pillow decode, JPEG/PNG/WebP only, pixel cap, decompression-bomb guard, EXIF/GPS stripped and written back (`app/services/vision/analyzer.py`) |
-| Vision | Local Pillow statistics → palette, brightness, contrast, saturation, warmth, orientation → rule-based mood words; manual moods merged first |
+| Vision | Local Pillow statistics → palette, brightness, contrast, saturation, warmth, orientation → rule-based mood words; plus optional image reasoning on Ollama Cloud (`app/services/vision/ollama.py`, `gemma4:31b`) for moods, scene cues and headline ideas; merged after manual moods |
 | Qloo | `app/services/qloo/client.py`: `/search` and `/v2/insights` (artist + movie targets), timeouts, bounded retries, normalized `QlooEntity` |
 | Ranking | `app/services/recommendations/layouts.py`: 8-template catalogue, 0.45/0.35/0.20 heuristic, one suggestion per template family |
 | Music | Top Qloo artist; exact-artist iTunes Search lookup for a title + Apple Music link (`app/services/music/itunes.py`) |
