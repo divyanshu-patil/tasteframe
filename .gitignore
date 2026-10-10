@@ -37,9 +37,9 @@ yarn-error.log*
 .DS_Store
 *.pem
 
-# Env files (keep .env.example)
-.env*
-!.env.example
+# Env files with real values (.env.example templates are committed)
+.env
+.env.*.local
 
 # Python
 .venv/
