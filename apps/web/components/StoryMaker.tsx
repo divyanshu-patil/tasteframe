@@ -22,7 +22,7 @@ import { sampleFile } from "../lib/sample";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
 import { inputFor } from "../lib/story/input";
 import { track } from "../lib/analytics";
-import type { StoryState, TemplateId } from "../lib/story/types";
+import { TEMPLATE_IDS, type StoryState, type TemplateId } from "../lib/story/types";
 import { MAX_BYTES, checkFile } from "../lib/upload";
 import { Editor } from "./Editor";
 import { LoginDialog } from "./LoginDialog";
@@ -33,6 +33,17 @@ import { type Seed, TastePicker } from "./TastePicker";
 import s from "./maker.module.css";
 
 type Phase = "setup" | "working" | "results" | "edit";
+
+// Each step has its own URL so Back/Forward, reloads and shared links behave like pages:
+//   /create[?layout=preset]  →  /create?step=results  →  /create?step=edit&layout=<id>
+// Steps are client state (photos live in memory), so we use the History API, which Next's App
+// Router syncs with; a step we can't show (e.g. after a reload, no photos) falls back to setup.
+const isTemplate = (v: string | null): v is TemplateId => (TEMPLATE_IDS as readonly string[]).includes(v ?? "");
+function urlFor(phase: Phase, layout: TemplateId | null, preset?: TemplateId): string {
+  if (phase === "results" || phase === "working") return "/create?step=results";
+  if (phase === "edit" && layout) return `/create?step=edit&layout=${layout}`;
+  return preset ? `/create?layout=${preset}` : "/create";
+}
 
 export interface PhotoFile {
   file: File;
@@ -83,6 +94,47 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   const runId = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /** Point the address bar at a step: push a history entry, or replace the current one. */
+  const nav = (to: Phase, layout: TemplateId | null = null, how: "push" | "replace" = "push", extra: object = {}) => {
+    const url = urlFor(to, layout, preset);
+    if (url === location.pathname + location.search && how === "push") return;
+    if (how === "push") history.pushState({ tf: to, ...extra }, "", url);
+    else history.replaceState({ ...(history.state as object | null), tf: to }, "", url);
+  };
+
+  // Back / Forward between steps.
+  useEffect(() => {
+    const onPop = () => {
+      const q = new URLSearchParams(location.search);
+      const step = q.get("step");
+      const layout = q.get("layout");
+      if (step === "results" && photos.length) return setPhase((p) => (p === "working" ? p : "results"));
+      if (step === "edit" && photos.length && isTemplate(layout)) {
+        setStory((cur) => cur?.templateId === layout ? cur : defaultState(layout, inputFor(analysis?.layouts.find((l) => l.id === layout) ?? analysis?.layouts[0] ?? null, analysis, storyDate)));
+        return setPhase("edit");
+      }
+      abort.current?.abort(); // leaving a running analysis cancels it
+      runId.current++;
+      setPhase("setup");
+      if (step) nav("setup", null, "replace");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nav only reads preset
+  }, [photos, analysis, storyDate, preset]);
+
+  // A reload loses the in-memory photos: show setup at a URL that matches it.
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("step")) nav("setup", null, "replace");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, []);
+
+  // Switching layouts inside the editor keeps the address bar in step (no extra history).
+  useEffect(() => {
+    if (phase === "edit" && story) nav("edit", story.templateId, "replace");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, story?.templateId]);
 
   const rootRef = useRef<HTMLDivElement>(null);
   // Bring the new step into view (the landing hero sits above the workspace).
@@ -181,6 +233,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     setAnalysis(null);
     setStory(null);
     setPhase("setup");
+    nav("setup");
   };
 
   const generate = async () => {
@@ -193,6 +246,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     setRunError(null);
     setProgress({ upload: 0, stage: null });
     setPhase("working");
+    nav("results");
     try {
       let keys = objectKeys;
       if (!keys) {
@@ -234,6 +288,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
         const layout = result.layouts.find((l) => l.id === preset) ?? result.layouts[0] ?? null;
         setStory(defaultState(preset, inputFor(layout, result, date)));
         setPhase("edit");
+        nav("edit", preset, "replace");
       } else setPhase("results");
     } catch (e) {
       if (!live() || (e as Error).name === "AbortError") return;
@@ -255,6 +310,9 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     abort.current?.abort();
     runId.current++;
     setPhase("setup");
+    // Undo the "results" entry generate() pushed, so Back doesn't land on it again.
+    if ((history.state as { tf?: string } | null)?.tf === "results") history.back();
+    else nav("setup", null, "replace");
   };
 
   /** Provider/API outage must not block creating a Story: continue with local templates. */
@@ -267,6 +325,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     if (preset) {
       setStory(defaultState(preset, inputFor(null, null, date)));
       setPhase("edit");
+      nav("edit", preset, "replace");
     } else setPhase("results");
   };
 
@@ -278,6 +337,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     setStory(defaultState(id, inputFor(layout, analysis, storyDate)));
     track("layout_open", { layout: id });
     setPhase("edit");
+    nav("edit", id, "push", { from: "results" });
   };
 
   const startOver = () => {
@@ -308,6 +368,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     setPhotos(loaded);
     setStory(saved.config);
     setPhase("edit");
+    nav("edit", saved.config.templateId);
   };
 
   const save =
@@ -408,7 +469,16 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           }
           suggested={analysis?.layouts.slice(0, 3).map((l) => l.id) ?? (photos.length > 1 ? LOCAL_MULTI : LOCAL_SINGLE).slice(0, 3)}
           music={analysis?.music ?? null}
-          onBack={analysis || objectKeys ? () => setPhase("results") : undefined}
+          onBack={
+            analysis || objectKeys
+              ? () => {
+                  // Opened from the suggestions: same as the browser's Back button.
+                  if ((history.state as { from?: string } | null)?.from === "results") return history.back();
+                  setPhase("results");
+                  nav("results");
+                }
+              : undefined
+          }
           onStartOver={startOver}
           onSave={save}
           signedIn={Boolean(user)}
