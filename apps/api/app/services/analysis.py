@@ -126,6 +126,7 @@ async def run_analysis(
                     artist=top.name,
                     title=track[0],
                     url=track[1],
+                    track_id=track[2],
                     artist_source="qloo",
                     track_source="itunes",
                     explanation=explanation + " The song is a top iTunes Search result for that "

@@ -21,7 +21,7 @@ export function exportFilename(s: StoryState, now = new Date()): string {
   return `tasteframe-${s.templateId}-${day}.png`;
 }
 
-export async function exportPng(photo: Photo | Photo[], s: StoryState): Promise<Blob> {
+export async function exportPng(photo: Photo | Photo[], s: StoryState, cover: Photo | null = null): Promise<Blob> {
   if (!TEMPLATES[s.templateId]) throw new Error("Unknown template");
   await fontsReady();
   const canvas = document.createElement("canvas");
@@ -29,7 +29,7 @@ export async function exportPng(photo: Photo | Photo[], s: StoryState): Promise<
   canvas.height = STORY_H;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas is not available in this browser.");
-  renderStory(ctx, photo, s);
+  renderStory(ctx, photo, s, cover);
   return new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Export failed."))), "image/png"),
   );

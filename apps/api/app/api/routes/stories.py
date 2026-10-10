@@ -79,7 +79,7 @@ async def save_story(
             user,
             copies,
             body.config.templateId,
-            body.config.model_dump(),
+            body.config.model_dump(exclude_unset=True),
             body.provenance.model_dump(),
         )
     except AppError:

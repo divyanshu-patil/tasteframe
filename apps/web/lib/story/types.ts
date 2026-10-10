@@ -1,4 +1,5 @@
 // Serializable story model. Rendering is a pure function of (photo, StoryState).
+import type { CoverState } from "./cover";
 import type { FilterId } from "./filters";
 import type { Sticker } from "./stickers";
 
@@ -34,6 +35,72 @@ export const TEMPLATE_IDS = [
   "grid",
   "mosaic",
   "polaroids",
+  // Declarative aesthetic + song-cover layouts (layouts-aesthetic.ts).
+  "weekday",
+  "daysplit",
+  "halfword",
+  "verticalday",
+  "scripttitle",
+  "refresh",
+  "bigletters",
+  "navheader",
+  "quotemarks",
+  "spotlight",
+  "bluehour",
+  "subtitlebar",
+  "redblock",
+  "badge",
+  "stats",
+  "notesapp",
+  "handnote",
+  "sticky",
+  "checklist",
+  "calendarcard",
+  "receipt",
+  "filmborder",
+  "archwindow",
+  "circleframe",
+  "blob",
+  "pastel",
+  "doodlesun",
+  "scribbleframe",
+  "tapewall",
+  "bigpolaroid",
+  "framein",
+  "phone",
+  "letter",
+  "postcard",
+  "dategrid",
+  "circlecollage",
+  "thumbrow",
+  "boldquote",
+  "stackedcards",
+  "bwstack",
+  "overlap",
+  "wavecut",
+  "diagonal",
+  "hstrip",
+  "pillstack",
+  "ninegrid",
+  "filmburn",
+  "hearts",
+  "stickerbomb",
+  "coverface",
+  "coversingle",
+  "coverfloat",
+  "coverbubble",
+  "coverstack",
+  "coverpolaroid",
+  "archnight",
+  "circlesun",
+  "pillduo",
+  "polaroidtilt",
+  "phonedark",
+  "tapekraft",
+  "notesdark",
+  "quotepaper",
+  "filmborderdark",
+  "blobmint",
 ] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -74,6 +141,10 @@ export interface StoryState {
   accent: string;
   palette: string[];
   stamp: string; // date/edge text, deterministic per story
+  /** Square song cover (album art) placed on the Story. */
+  cover?: CoverState;
+  /** Short words from the photo (image reasoning elements) for checklist/receipt layouts. */
+  tags?: string[];
 }
 
 export interface TemplateInput {
@@ -89,7 +160,7 @@ export interface TemplateInput {
   /** Suggested photo filter for this layout (from the API's mood rules). */
   filter?: FilterId;
   /** Recommended music, for the Now Playing / Vinyl layouts. */
-  music?: { title: string | null; artist: string | null };
+  music?: { title: string | null; artist: string | null; trackId?: number | null };
   /** Scene cues from image reasoning (Mood Board tags). */
   scene?: string[];
 }

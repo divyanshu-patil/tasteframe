@@ -47,6 +47,71 @@ LayoutId = Literal[
     "grid",
     "mosaic",
     "polaroids",
+    "weekday",
+    "daysplit",
+    "halfword",
+    "verticalday",
+    "scripttitle",
+    "refresh",
+    "bigletters",
+    "navheader",
+    "quotemarks",
+    "spotlight",
+    "bluehour",
+    "subtitlebar",
+    "redblock",
+    "badge",
+    "stats",
+    "notesapp",
+    "handnote",
+    "sticky",
+    "checklist",
+    "calendarcard",
+    "receipt",
+    "filmborder",
+    "archwindow",
+    "circleframe",
+    "blob",
+    "pastel",
+    "doodlesun",
+    "scribbleframe",
+    "tapewall",
+    "bigpolaroid",
+    "framein",
+    "phone",
+    "letter",
+    "postcard",
+    "dategrid",
+    "circlecollage",
+    "thumbrow",
+    "boldquote",
+    "stackedcards",
+    "bwstack",
+    "overlap",
+    "wavecut",
+    "diagonal",
+    "hstrip",
+    "pillstack",
+    "ninegrid",
+    "filmburn",
+    "hearts",
+    "stickerbomb",
+    "coverface",
+    "coversingle",
+    "coverfloat",
+    "coverbubble",
+    "coverstack",
+    "coverpolaroid",
+    "archnight",
+    "circlesun",
+    "pillduo",
+    "polaroidtilt",
+    "phonedark",
+    "tapekraft",
+    "notesdark",
+    "quotepaper",
+    "filmborderdark",
+    "blobmint",
 ]
 FilterId = Literal[
     "none", "film", "warm", "golden", "cool", "faded", "vivid", "sepia", "bw", "noir", "8mm"
@@ -203,6 +268,7 @@ class MusicSuggestion(BaseModel):
     url: str | None = None
     artist_source: Literal["qloo"] | None = None
     track_source: Literal["itunes"] | None = None
+    track_id: int | None = None  # for the song cover (GET /v1/music/artwork/{track_id})
     explanation: str
 
 
@@ -294,6 +360,22 @@ class OverlayConfig(BaseModel):
     color: str = Field(pattern=HEX)
 
 
+class CoverConfig(BaseModel):
+    """Square song cover placed on the Story; the image is refetched by track id."""
+
+    model_config = {"extra": "forbid"}
+
+    show: bool
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    scale: float = Field(ge=0.3, le=4)
+    rotate: float = Field(ge=-180, le=180)
+    style: Literal["plain", "card", "bubble", "sticker"]
+    title: str = Field(max_length=120)
+    artist: str = Field(max_length=120)
+    trackId: int | None = Field(None, ge=1)  # noqa: N815
+
+
 class StoryConfig(BaseModel):
     """Mirror of the web app's serializable StoryState (apps/web/lib/story/types.ts)."""
 
@@ -312,6 +394,8 @@ class StoryConfig(BaseModel):
     accent: str = Field(pattern=HEX)
     palette: list[Annotated[str, Field(pattern=HEX)]] = Field(max_length=6)
     stamp: str = Field(max_length=16)
+    cover: CoverConfig | None = None
+    tags: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=5)
 
 
 class StoryProvenance(BaseModel):
@@ -353,3 +437,16 @@ class StoryOut(BaseModel):
 
 class StoryListOut(BaseModel):
     stories: list[StoryOut]
+
+
+class TrackOut(BaseModel):
+    track_id: int
+    title: str
+    artist: str
+    album: str | None = None
+    has_artwork: bool
+
+
+class TrackSearchOut(BaseModel):
+    query: str
+    tracks: list[TrackOut]

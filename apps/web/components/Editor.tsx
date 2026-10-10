@@ -12,6 +12,7 @@ import { FILTERS } from "../lib/story/filters";
 import { STICKER_KINDS, newSticker } from "../lib/story/stickers";
 import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
 import { slotRectsFor } from "../lib/story/templates";
+import { CoverPanel, useCoverImage } from "./CoverPanel";
 import { MusicCard } from "./Results";
 import { StoryCanvas } from "./StoryCanvas";
 import s from "./maker.module.css";
@@ -101,11 +102,13 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
     }
   };
   const sticker = story.stickers.find((x) => x.id === selected) ?? null;
+  const [uploadedCover, setUploadedCover] = useState<Photo | null>(null);
+  const coverImg = useCoverImage(story.cover?.trackId, uploadedCover);
 
   const doExport = async () => {
     setExporting("busy");
     try {
-      const blob = await exportPng(photos, story);
+      const blob = await exportPng(photos, story, coverImg);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -127,6 +130,8 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           className={s.editorCanvas}
           photo={photos}
           state={story}
+          cover={coverImg}
+          onDragCover={(dx, dy) => story.cover && dispatch({ type: "cover", patch: { x: story.cover.x + dx, y: story.cover.y + dy } })}
           width={width}
           label={`Editable ${tpl.name} Story. Drag text to move it, drag elsewhere to reposition the photo.`}
           onSelectText={setActive}
@@ -314,6 +319,16 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
             </label>
           </div>
         </fieldset>
+
+        {story.cover && (
+          <CoverPanel
+            cover={story.cover}
+            onChange={(patch) => dispatch({ type: "cover", patch })}
+            onUpload={setUploadedCover}
+            focus={{ x: story.crop.x, y: story.crop.y }}
+            hasImage={Boolean(coverImg)}
+          />
+        )}
 
         <fieldset className={s.group}>
           <legend>Stickers &amp; paper</legend>

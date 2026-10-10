@@ -114,6 +114,18 @@ crop focus: the main subject's position from image reasoning, or 0.5/0.5 when un
 ]}
 ```
 
+## `GET /v1/music/search?q=<2–80 chars>` (session required)
+Songs from the iTunes Search API, for picking a Story's square song cover. No audio.
+```json
+{"query":"golden hour","tracks":[{"track_id":1640157165,"title":"golden hour","artist":"JVKE","album":"…","has_artwork":true}]}
+```
+
+## `GET /v1/music/artwork/{track_id}` (session required)
+The track's 600×600 cover as `image/jpeg` or `image/png`, fetched server-side from Apple's
+artwork CDN (https `*.mzstatic.com` only, ≤3 MB, decoded with Pillow) so the browser can draw
+it on the canvas and still export. Returns 404 `ARTWORK_NOT_FOUND` otherwise. The UI credits
+"Artwork via Apple Music". `music.track_id` in the analysis result feeds the automatic cover.
+
 ## `DELETE /v1/uploads/{object_key}`
 Idempotent 204 for own keys, including ones already deleted. 404 for foreign or malformed keys.
 

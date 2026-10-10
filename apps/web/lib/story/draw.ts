@@ -100,7 +100,9 @@ export function drawBlurred(ctx: Ctx, photo: Photo, r: Rect, crop: StoryState["c
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(small, r.x, r.y, r.w, r.h);
+  // Upscaling a tiny canvas alone looks blocky; a real blur pass smooths it where supported.
+  ctx.filter = "blur(28px)";
+  ctx.drawImage(small, r.x - 60, r.y - 60, r.w + 120, r.h + 120);
   ctx.restore();
 }
 

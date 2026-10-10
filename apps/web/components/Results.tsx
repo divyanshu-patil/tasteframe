@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import type { Analysis, LayoutSuggestion, Music } from "../lib/api";
 import type { Photo } from "../lib/story/draw";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
-import { TEMPLATE_IDS, type TemplateId } from "../lib/story/types";
+import { type StoryState, TEMPLATE_IDS, type TemplateId } from "../lib/story/types";
 import { inputFor } from "../lib/story/input";
+import { useCoverImage } from "./CoverPanel";
 import { StoryCanvas } from "./StoryCanvas";
 import s from "./maker.module.css";
 
@@ -98,7 +99,7 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
         {previews.map(({ layout, state }, i) => (
           <li key={layout.id} className={s.option}>
             <button className={s.optionPreview} onClick={() => onEdit(layout.id)} aria-label={`Edit the ${layout.name} layout`}>
-              <StoryCanvas photo={photo} state={state} width={240} label={`${layout.name} Story preview`} />
+              <PreviewCanvas photo={photo} state={state} label={`${layout.name} Story preview`} />
             </button>
             <p className={s.optionNo}>No. {(page % pages) * 3 + i + 1}{page % pages === 0 && i === 0 ? " · best match" : ""}</p>
             <h3 className={s.optionName}>{layout.name}</h3>
@@ -195,4 +196,10 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
       )}
     </section>
   );
+}
+
+/** Suggestion preview; song-cover layouts show the suggested song's real artwork when available. */
+function PreviewCanvas({ photo, state, label }: { photo: React.ComponentProps<typeof StoryCanvas>["photo"]; state: StoryState; label: string }) {
+  const cover = useCoverImage(state.cover?.show ? state.cover.trackId : undefined);
+  return <StoryCanvas photo={photo} state={state} cover={cover} width={240} label={label} />;
 }

@@ -89,10 +89,11 @@ def test_itunes_exact_artist_match_only():
     assert asyncio.run(find_track("The Artist", s, transport=_itunes(hit))) == (
         "Song",
         "https://music.apple.com/us/album/x?i=1",
+        None,  # no trackId in this fixture
     )
     assert asyncio.run(find_track("The Artist", s, transport=_itunes(hit[:1]))) is None
     evil = [{"artistName": "The Artist", "trackName": "T", "trackViewUrl": "https://evil.example"}]
-    assert asyncio.run(find_track("The Artist", s, transport=_itunes(evil))) == ("T", None)
+    assert asyncio.run(find_track("The Artist", s, transport=_itunes(evil))) == ("T", None, None)
 
 
 def test_itunes_failure_and_disabled():
@@ -144,8 +145,12 @@ def test_different_photos_get_different_top_sets():
     )
     tops = [tuple(o.id for o in x[:3]) for x in (street, party, dog)]
     assert len(set(tops)) == 3, tops
-    assert street[0].id in {"editorial", "newspaper", "minimal"}
-    assert party[0].id in {"scrapbook", "photodump", "y2k"}
+    from app.services.recommendations.layouts import TEMPLATES_BY_ID as by_id
+
+    # The winner must suit the mood, whichever of the many fitting layouts it is.
+    s, p = by_id[street[0].id].moods, by_id[party[0].id].moods
+    assert max(s.get("editorial", 0), s.get("minimal", 0)) >= 0.8, street[0].id
+    assert max(p.get("playful", 0), p.get("bright", 0)) >= 0.8, party[0].id
 
 
 def test_mood_filter_rules():

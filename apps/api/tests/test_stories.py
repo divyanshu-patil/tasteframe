@@ -171,7 +171,10 @@ def test_save_list_photo_delete_roundtrip(setup, tmp_path):
     r = save(client, h, key)
     assert r.status_code == 201, r.text
     story = r.json()
-    assert story["config"] == CONFIG and story["template_id"] == "editorial"
+    assert (
+        story["config"] == {**CONFIG, "cover": None, "tags": []}
+        and story["template_id"] == "editorial"
+    )
     row = fake.rows[0]
     assert row["user_id"] == ALICE[1] and row["s3_object_key"].startswith(f"saved/{ALICE[1]}/")
     table_req = [q for q in fake.requests if q.url.path == "/rest/v1/stories"][0]
@@ -300,3 +303,28 @@ def test_multi_photo_save_rolls_back_copies_when_one_upload_is_gone(setup, tmp_p
     r = client.post("/v1/stories", headers=h, json={"object_keys": keys, "config": CONFIG})
     assert r.status_code == 404
     assert not list((tmp_path / "uploads").glob("saved/**/*.jpg"))
+
+
+def test_song_cover_config_validated():
+    from pydantic import ValidationError
+
+    from app.schemas.api import StoryConfig
+
+    cover = {
+        "show": True,
+        "x": 0.3,
+        "y": 0.3,
+        "scale": 1.3,
+        "rotate": 0,
+        "style": "plain",
+        "title": "golden hour",
+        "artist": "JVKE",
+        "trackId": 1640157165,
+    }
+    ok = StoryConfig.model_validate(
+        {**CONFIG, "templateId": "coverface", "cover": cover, "tags": ["cake", "party hat"]}
+    )
+    assert ok.cover and ok.cover.trackId == 1640157165
+    for bad in ({**cover, "style": "hologram"}, {**cover, "x": 2}, {**cover, "url": "https://x"}):
+        with pytest.raises(ValidationError):
+            StoryConfig.model_validate({**CONFIG, "cover": bad})

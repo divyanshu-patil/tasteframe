@@ -33,7 +33,8 @@ describe("template catalogue", () => {
     const hits = renderStory(a.ctx, photo, s);
     renderStory(b.ctx, photo, s);
     expect(a.calls).toEqual(b.calls);
-    expect(a.texts.join(" ").toLowerCase()).toContain("golden");
+    // The headline is drawn (some layouts derive it, e.g. the stacked weekday).
+    expect(a.texts.join(" ").toLowerCase()).toContain(s.headline.text.split(/\s/)[0]!.toLowerCase());
     expect(hits.headline.w).toBeGreaterThan(0);
     expect(hits.headline.x).toBeGreaterThanOrEqual(0);
     expect(hits.headline.x + hits.headline.w).toBeLessThanOrEqual(STORY_W);

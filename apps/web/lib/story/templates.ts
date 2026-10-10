@@ -18,6 +18,8 @@ import {
 } from "./draw";
 import { type FilterId, filteredPhoto } from "./filters";
 import { type Slots, type Template, decos, fmtDate, on, pad, stamp, subjectHigh, subjectLow, t, tape, tornRect } from "./kit";
+import { AESTHETIC_TEMPLATES } from "./layouts-aesthetic";
+import { DEFAULT_COVER, drawCover } from "./cover";
 import { drawSticker } from "./stickers";
 import { MORE_TEMPLATES } from "./templates-more";
 import { MULTI_TEMPLATES } from "./templates-multi";
@@ -474,7 +476,23 @@ export const TEMPLATES: Record<TemplateId, Template> = {
   cinematic, stills, editorial, journal, scrapbook, filmstrip, vintage, minimal,
   ...MORE_TEMPLATES,
   ...MULTI_TEMPLATES,
-};
+  ...AESTHETIC_TEMPLATES,
+} as Record<TemplateId, Template>;
+
+/** Default cover for a layout: song-cover layouts show it; "plain" sits over the subject's face. */
+export function coverFor(id: TemplateId, input: TemplateInput) {
+  const c = TEMPLATES[id].cover;
+  const f = input.focuses?.[0] ?? input.focus;
+  const overFace = c?.style === "plain" && c.x === undefined;
+  return {
+    ...DEFAULT_COVER,
+    ...c,
+    ...(overFace ? { x: clamp01(f?.x ?? 0.5), y: Math.min(0.75, Math.max(0.1, (f?.y ?? 0.42) - 0.04)), scale: 1.3 } : {}),
+    title: input.music?.title ?? "",
+    artist: input.music?.artist ?? "",
+    trackId: input.music?.trackId ?? undefined,
+  };
+}
 
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
 
@@ -503,6 +521,8 @@ export function defaultState(id: TemplateId, input: TemplateInput): StoryState {
     // API mood suggestion wins; otherwise the template's signature look.
     filter: input.filter ?? filter ?? ("none" satisfies FilterId),
     stickers: [],
+    cover: coverFor(id, input),
+    tags: (input.scene ?? []).slice(0, 5),
     ...rest,
   };
 }
@@ -537,7 +557,7 @@ export function slotRectsFor(s: StoryState, count: number): Rect[] {
 }
 
 /** Render a story into a context already scaled to 1080×1920 units. Pure and deterministic. */
-export function renderStory(ctx: Ctx, photos: Photo | Photo[], s: StoryState): HitBoxes {
+export function renderStory(ctx: Ctx, photos: Photo | Photo[], s: StoryState, cover: Photo | null = null): HitBoxes {
   const tpl = TEMPLATES[s.templateId];
   const list = Array.isArray(photos) ? photos : [photos];
   const slots = makeSlots(list, s);
@@ -547,6 +567,7 @@ export function renderStory(ctx: Ctx, photos: Photo | Photo[], s: StoryState): H
   const headline = drawText(ctx, s.headline, tpl.text?.headline);
   const caption = drawText(ctx, s.caption, tpl.text?.caption);
   tpl.after?.(ctx, s);
+  drawCover(ctx, s, cover, slots.photo(0));
   for (const st of s.stickers ?? []) drawSticker(ctx, st);
   ctx.restore();
   return { headline, caption, slots: slotRectsFor(s, slots.count) };

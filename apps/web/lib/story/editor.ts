@@ -1,7 +1,8 @@
 // Editor state transitions — pure, so they are unit-testable and serializable.
+import type { CoverState } from "./cover";
 import type { FilterId } from "./filters";
 import type { Sticker } from "./stickers";
-import { defaultState } from "./templates";
+import { TEMPLATES, defaultState } from "./templates";
 import type { StoryState, TemplateId, TemplateInput, TextKey, TextLayer } from "./types";
 
 export type EditorAction =
@@ -15,6 +16,7 @@ export type EditorAction =
   | { type: "sticker-add"; sticker: Sticker }
   | { type: "sticker"; id: string; patch: Partial<Omit<Sticker, "id" | "kind">> }
   | { type: "sticker-remove"; id: string }
+  | { type: "cover"; patch: Partial<CoverState> }
   | { type: "template"; id: TemplateId; input: TemplateInput }
   | { type: "reset"; input: TemplateInput };
 
@@ -68,6 +70,11 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
       const o = { ...s.overlay, ...a.patch };
       return { ...s, overlay: { ...o, strength: clamp(o.strength, 0, 1) } };
     }
+    case "cover": {
+      if (!s.cover) return s;
+      const c = { ...s.cover, ...a.patch };
+      return { ...s, cover: { ...c, x: clamp(c.x, 0, 1), y: clamp(c.y, 0, 1), scale: clamp(c.scale, 0.3, 4), rotate: clamp(c.rotate, -180, 180) } };
+    }
     case "decoration":
       return { ...s, decorations: { ...s.decorations, [a.key]: a.on } };
     case "template": {
@@ -80,6 +87,16 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
         order: s.order,
         crops: s.crops,
         stickers: s.stickers ?? [],
+        // A song-cover layout places the cover its way; otherwise a cover the user added stays.
+        // The chosen song always carries over.
+        cover: fresh.cover && s.cover
+          ? {
+              ...(fresh.cover.show || !s.cover.show || TEMPLATES[s.templateId].cover?.show ? fresh.cover : s.cover),
+              title: s.cover.title,
+              artist: s.cover.artist,
+              trackId: s.cover.trackId,
+            }
+          : fresh.cover,
         headline: { ...fresh.headline, text: s.headline.text },
         caption: { ...fresh.caption, text: s.caption.text },
       };

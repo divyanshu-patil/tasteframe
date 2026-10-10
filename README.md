@@ -137,11 +137,23 @@ prefix on every read and delete.
 
 ## Layouts, filters, stickers
 
-- **19 layouts** (`apps/web/lib/story/templates.ts` + `templates-more.ts`), each modelled on a
-  category in `design-refs/pinterest`: Cinematic, Vintage, Magazine, Film Stills, Film Strip,
-  Photo Dump, Editorial, Newspaper, Journal, Paper Note, Soft Focus, Scrapbook, Mood Board, Torn
-  Reveal, Minimal, Y2K Chrome, Now Playing, Vinyl, Ticket. All are vector-drawn; there are no
-  copied images, logos or brand names.
+- **91 layouts**, all vector-drawn (no copied images, logos or brand names), each modelled on a
+  category in `design-refs/pinterest`:
+  - 26 hand-drawn ones in `templates.ts`, `templates-more.ts` and `templates-multi.ts`.
+  - 65 declarative ones in `layouts-aesthetic.ts`, built by the small spec engine in `spec.ts`
+    from the "aesthetic instagram stories" refs (`aesthetic1-6`). They cover weekday type, notes
+    and sticky cards, checklist/receipt/calendar, arches, circles, blobs, phone mockups,
+    postcards, grids, pills, diagonal and wavy splits, film burn, and more.
+- **Song cover (square album art)**: six layouts are built around it (from `cover1-4`): Cover Over
+  Face, New Single, Floating Player, Bubble Player, Player Stack and Polaroid + Cover. The
+  **Song cover** panel can also add it to any layout.
+  - The artwork comes from the suggested song, a song search (Apple Music catalogue via
+    `GET /v1/music/search`), or your own uploaded image.
+  - Apple artwork is proxied same-origin by `GET /v1/music/artwork/{track_id}` (only
+    `*.mzstatic.com`, decoded and validated), so the canvas stays exportable.
+  - The cover is draggable and has four styles, plus size, tilt and "Place over face" (uses the
+    detected subject position).
+  - Saved Stories keep the track id and refetch the artwork. Uploaded cover images are not saved.
 - **Shuffle**: the API ranks every layout for the photo. The results page shows three at a time,
   and each set of three comes from distinct layout families.
 - **Filters**: Original, Film, Warm, Golden hour, Cool, Faded, Vivid, Sepia, B&W, Noir, 8mm. These

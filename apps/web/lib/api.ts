@@ -1,5 +1,6 @@
 // Browser client for the Tasteframe API. All calls go through the Next.js `/api` rewrite;
 // no provider keys ever reach the browser. Responses are validated before use.
+import { DEFAULT_COVER } from "./story/cover";
 import { accessToken } from "./auth";
 import { FILTER_IDS, type FilterId } from "./story/filters";
 import type { StoryState, TemplateId } from "./story/types";
@@ -65,6 +66,8 @@ export interface Music {
   url: string | null;
   artist_source: "qloo" | null;
   track_source: "itunes" | null;
+  /** Apple Music track id, for the square song cover. */
+  track_id: number | null;
   explanation: string;
 }
 export interface ImageReasoning {
@@ -148,7 +151,11 @@ export function parseAnalysis(v: unknown): Analysis {
   const m = v.music;
   if (!["track", "artist", "none"].includes(m.kind as string) || !isStr(m.explanation)) throw bad();
   // Only trust links on the provider domain we document; never render arbitrary URLs.
-  const music = { ...m, url: isStr(m.url) && SAFE_MUSIC_URL.test(m.url) ? m.url : null } as Music;
+  const music = {
+    ...m,
+    url: isStr(m.url) && SAFE_MUSIC_URL.test(m.url) ? m.url : null,
+    track_id: isNum(m.track_id) && Number.isInteger(m.track_id) && m.track_id > 0 ? m.track_id : null,
+  } as Music;
   // A track title without a verified track source is never shown.
   if (music.kind === "track" && (music.track_source !== "itunes" || !isStr(music.title))) {
     throw bad();
@@ -397,7 +404,8 @@ export function parseStoryState(v: unknown): StoryState | null {
   if (!isObj(v) || !(TEMPLATE_IDS as readonly unknown[]).includes(v.templateId)) return null;
   if (!isLayer(v.headline) || !isLayer(v.caption) || !isObj(v.crop) || !isObj(v.overlay)) return null;
   if (!isObj(v.decorations) || !isStr(v.accent) || !isStrArr(v.palette) || !isStr(v.stamp)) return null;
-  return v as unknown as StoryState;
+  const { cover, ...rest } = v;
+  return { ...rest, cover: isObj(cover) ? cover : { ...DEFAULT_COVER }, tags: isStrArr(v.tags) ? v.tags : [] } as unknown as StoryState;
 }
 
 function parseSaved(v: unknown): SavedStory | null {
@@ -457,4 +465,29 @@ export async function storyPhoto(id: string, index = 0): Promise<Blob> {
 export async function deleteStory(id: string): Promise<void> {
   const res = await authed(`/v1/stories/${encodeURIComponent(id)}`, { method: "DELETE" }, true);
   if (!res.ok) throw await errorFrom(res);
+}
+
+export interface Track {
+  track_id: number;
+  title: string;
+  artist: string;
+  album: string | null;
+}
+
+/** Songs matching free text (Apple Music catalogue), for picking a cover. */
+export async function searchTracks(q: string, signal?: AbortSignal): Promise<Track[]> {
+  const res = await authed(`/v1/music/search?q=${encodeURIComponent(q)}`, { signal });
+  if (!res.ok) throw await errorFrom(res);
+  const v: unknown = await res.json();
+  if (!isObj(v) || !Array.isArray(v.tracks)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  return v.tracks
+    .filter((t): t is Record<string, unknown> => isObj(t) && isNum(t.track_id) && isStr(t.title) && isStr(t.artist) && t.has_artwork === true)
+    .map((t) => ({ track_id: t.track_id as number, title: t.title as string, artist: t.artist as string, album: isStr(t.album) ? t.album : null }));
+}
+
+/** Square cover art for a track, served same-origin by the API (keeps the canvas exportable). */
+export async function trackArtwork(trackId: number): Promise<Blob> {
+  const res = await authed(`/v1/music/artwork/${trackId}`);
+  if (!res.ok) throw await errorFrom(res);
+  return res.blob();
 }

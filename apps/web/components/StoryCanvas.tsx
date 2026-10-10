@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Photo } from "../lib/story/draw";
 import { fontsReady } from "../lib/story/export";
+import { coverBounds } from "../lib/story/cover";
 import { stickerBounds } from "../lib/story/stickers";
 import { type HitBoxes, renderStory } from "../lib/story/templates";
 import type { Crop, Rect, StoryState, TextKey } from "../lib/story/types";
@@ -12,6 +13,8 @@ interface Props {
   /** One photo, or 1–4 for multi-photo layouts (slot order comes from state.order). */
   photo: Photo | Photo[];
   state: StoryState;
+  /** Song cover image (null → photo 1 stands in). */
+  cover?: Photo | null;
   width: number; // CSS pixels
   label: string;
   className?: string;
@@ -25,6 +28,7 @@ interface Props {
   onSelectText?: (key: TextKey) => void;
   onDragSticker?: (id: string, dx: number, dy: number) => void;
   onSelectSticker?: (id: string | null) => void;
+  onDragCover?: (dx: number, dy: number) => void;
   selectedSticker?: string | null;
   /** Wheel / pinch zoom of the photo crop (positive = zoom in). */
   onZoom?: (delta: number) => void;
@@ -33,12 +37,13 @@ interface Props {
 type Target =
   | { kind: "text"; key: TextKey }
   | { kind: "sticker"; id: string }
+  | { kind: "cover" }
   | { kind: "photo"; slot: number; start: Crop };
 
 const inside = (p: { x: number; y: number }, r: Rect) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
 export function StoryCanvas(props: Props) {
-  const { photo, state, width, label, className, selectedSticker } = props;
+  const { photo, state, width, label, className, selectedSticker, cover = null } = props;
   const ref = useRef<HTMLCanvasElement>(null);
   const hits = useRef<HitBoxes | null>(null);
   const drag = useRef<{ target: Target; x: number; y: number } | null>(null);
@@ -62,7 +67,7 @@ export function StoryCanvas(props: Props) {
     const draw = () => {
       if (cancelled) return;
       ctx.setTransform(canvas.width / STORY_W, 0, 0, canvas.height / STORY_H, 0, 0);
-      hits.current = renderStory(ctx, photo, state);
+      hits.current = renderStory(ctx, photo, state, cover);
       const sel = state.stickers?.find((s) => s.id === selectedSticker);
       if (sel) {
         // Editor-only selection outline (never part of the export).
@@ -82,7 +87,7 @@ export function StoryCanvas(props: Props) {
       cancelled = true;
       cancelAnimationFrame(raf);
     };
-  }, [photo, state, width, height, selectedSticker]);
+  }, [photo, state, width, height, selectedSticker, cover]);
 
   // Wheel zoom needs a non-passive listener to stop the page from scrolling.
   useEffect(() => {
@@ -108,6 +113,7 @@ export function StoryCanvas(props: Props) {
       const b = stickerBounds(s);
       if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return { kind: "sticker", id: s.id };
     }
+    if (state.cover?.show && props.onDragCover && inside(p, coverBounds(state.cover))) return { kind: "cover" };
     const pad = 40;
     for (const key of ["headline", "caption"] as const) {
       const b = hits.current?.[key];
@@ -181,6 +187,7 @@ export function StoryCanvas(props: Props) {
                 }
               }
               else if (d.target.kind === "text") cb.current.onDragText?.(d.target.key, dx, dy);
+              else if (d.target.kind === "cover") cb.current.onDragCover?.(dx, dy);
               else cb.current.onDragSticker?.(d.target.id, dx, dy);
             }
           : undefined
