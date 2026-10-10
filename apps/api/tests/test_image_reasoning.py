@@ -121,3 +121,52 @@ def test_pipeline_survives_reasoning_outage(client, monkeypatch):
     res = stream(client.post("/v1/analysis", headers=h, json={"object_key": key}))[-1]["result"]
     assert res["image_reasoning"] is None and len(res["layouts"]) == 3
     assert res["provenance"]["image_reasoning_error"] == "VISION_UNAVAILABLE"
+
+
+SELFIE = """{"summary": "A warm close portrait in window light.", "moods": ["warm", "dreamy"],
+ "scene": ["indoor portrait"], "headline_ideas": ["soft light", "today", "me, lately"],
+ "subject": "person", "subject_x": 0.62, "subject_y": 0.31}"""
+
+
+def test_parse_subject_position_clamped_and_defaulted():
+    r = parse_reply(SELFIE, "gemma4:31b")
+    assert r and (r.subject, r.subject_x, r.subject_y) == ("person", 0.62, 0.31)
+    odd = parse_reply(
+        '{"summary": "x", "subject": "celebrity", "subject_x": 7, "subject_y": "top"}', "m"
+    )
+    assert odd and (odd.subject, odd.subject_x, odd.subject_y) == ("scene", 1.0, 0.5)
+
+
+def test_people_photos_avoid_split_templates_and_focus_on_subject():
+    from app.services.recommendations.layouts import rank_layouts, score_all
+    from tests.test_services import profile
+
+    p = profile(mood=["nostalgic", "cinematic"], composition="landscape")
+    plain = {t.id: s.visual_fit for t, s, _ in score_all(p, [])}
+    people = {t.id: s.visual_fit for t, s, _ in score_all(p, [], people=True)}
+    assert people["filmstrip"] < plain["filmstrip"] and people["stills"] < plain["stills"]
+    assert people["cinematic"] == plain["cinematic"]
+    out = rank_layouts(p, [], None, subject=("person", 0.62, 0.31))
+    assert all((o.focus_x, o.focus_y) == (0.62, 0.31) for o in out)
+    assert "keep the person in shot" in out[0].reason
+    centred = rank_layouts(p, [], None, subject=("scene", 0.9, 0.9))
+    assert all((o.focus_x, o.focus_y) == (0.5, 0.5) for o in centred)
+
+
+def test_pipeline_passes_subject_focus(client, monkeypatch):
+    monkeypatch.setenv("OLLAMA_API_KEY", "k")
+    from app.core.config import get_settings
+    from app.services import analysis
+
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        analysis,
+        "vision_transport",
+        httpx.MockTransport(lambda r: httpx.Response(200, json={"message": {"content": SELFIE}})),
+    )
+    h = new_session(client)
+    key = upload(client, h, make_image())
+    res = stream(client.post("/v1/analysis", headers=h, json={"object_key": key}))[-1]["result"]
+    assert res["image_reasoning"]["subject"] == "person"
+    assert {(lay["focus_x"], lay["focus_y"]) for lay in res["layouts"]} == {(0.62, 0.31)}
+    assert not {"stills", "filmstrip"} & {lay["id"] for lay in res["layouts"]}

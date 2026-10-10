@@ -45,6 +45,10 @@ const decos = (list: [string, string, boolean][]) =>
   list.map(([key, label, on]) => ({ key, label, on }));
 const on = (s: StoryState, key: string) => s.decorations[key] !== false;
 
+// Text drawn over the photo goes to the half away from the main subject (e.g. a face in a selfie).
+const subjectLow = (i: TemplateInput) => (i.focus?.y ?? 0.5) > 0.55;
+const subjectHigh = (i: TemplateInput) => (i.focus?.y ?? 0.5) < 0.5 && i.focus !== undefined;
+
 const fmtDate = (d: Date) =>
   d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }).toLowerCase();
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -60,19 +64,22 @@ const cinematic: Template = {
   ]),
   defaults: (i) => ({
     headline: t({
-      text: i.headline, size: 104, font: "display", align: "center", x: 0.5, y: 0.6, width: 0.86,
+      text: i.headline, size: 104, font: "display", align: "center", x: 0.5,
+      y: subjectLow(i) ? 0.16 : 0.6, width: 0.86,
       color: readableOn("#0b0a09", i.accent === "#c03f13" ? "#f2b84b" : i.accent),
     }),
     caption: t({
       text: i.caption || fmtDate(i.date), size: 38, font: "italic", align: "center", x: 0.5,
-      y: 0.74, width: 0.8, color: "#f4efe6",
+      y: subjectLow(i) ? 0.29 : 0.74, width: 0.8, color: "#f4efe6",
     }),
     overlay: { strength: 0.72, color: "#0b0a09" },
     decorations: { letterbox: false, grain: true },
   }),
   draw(ctx, photo, s) {
     drawPhoto(ctx, photo, { x: 0, y: 0, w: W, h: H }, s.crop);
-    const g = ctx.createLinearGradient(0, H * 0.38, 0, H);
+    // The shadow follows the headline so text stays readable wherever it's placed.
+    const top = s.headline.y < 0.4;
+    const g = top ? ctx.createLinearGradient(0, H * 0.62, 0, 0) : ctx.createLinearGradient(0, H * 0.38, 0, H);
     g.addColorStop(0, rgba(s.overlay.color, 0));
     g.addColorStop(0.55, rgba(s.overlay.color, s.overlay.strength * 0.85));
     g.addColorStop(1, rgba(s.overlay.color, s.overlay.strength));
@@ -430,8 +437,8 @@ const vintage: Template = {
     ["grain", "Film grain", true],
   ]),
   defaults: (i) => ({
-    headline: t({ text: i.headline, size: 96, font: "italic", x: 0.08, y: 0.15, width: 0.8, color: "#f6ead7" }),
-    caption: t({ text: i.caption || fmtDate(i.date), size: 36, font: "italic", x: 0.08, y: 0.27, width: 0.7, color: "#f6ead7" }),
+    headline: t({ text: i.headline, size: 96, font: "italic", x: 0.08, y: subjectHigh(i) ? 0.58 : 0.15, width: 0.8, color: "#f6ead7" }),
+    caption: t({ text: i.caption || fmtDate(i.date), size: 36, font: "italic", x: 0.08, y: subjectHigh(i) ? 0.7 : 0.27, width: 0.7, color: "#f6ead7" }),
     overlay: { strength: 0.4, color: "#d9822b" },
     decorations: { leak: true, dust: true, date: true, grain: true },
   }),
@@ -524,6 +531,8 @@ export const TEMPLATES: Record<TemplateId, Template> = {
   cinematic, stills, editorial, journal, scrapbook, filmstrip, vintage, minimal,
 };
 
+const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
+
 export function stampFor(date: Date): string {
   return `'${String(date.getFullYear()).slice(-2)} ${pad(date.getMonth() + 1)} ${pad(date.getDate())}`;
 }
@@ -532,7 +541,8 @@ export function defaultState(id: TemplateId, input: TemplateInput): StoryState {
   const tpl = TEMPLATES[id];
   return {
     templateId: id,
-    crop: { zoom: 1, x: 0.5, y: 0.5 },
+    // Cover-crop alignment = subject position keeps that point inside the visible frame.
+    crop: { zoom: 1, x: clamp01(input.focus?.x ?? 0.5), y: clamp01(input.focus?.y ?? 0.5) },
     accent: input.accent,
     palette: input.palette.length ? input.palette : [input.accent],
     stamp: stampFor(input.date),

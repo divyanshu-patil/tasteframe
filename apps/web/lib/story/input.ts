@@ -9,5 +9,6 @@ export function inputFor(layout: LayoutSuggestion | null, a: Analysis | null, da
     accent: layout?.accent ?? "#c03f13",
     palette: a?.visual_profile.palette ?? [],
     date,
+    focus: layout && (layout.focus_x !== 0.5 || layout.focus_y !== 0.5) ? { x: layout.focus_x, y: layout.focus_y } : undefined,
   };
 }

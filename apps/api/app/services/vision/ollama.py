@@ -35,7 +35,12 @@ Reply with ONLY a JSON object, no prose, no code fences:
 {{"summary": "one sentence, max 160 chars, about the photo's look and feel",
   "moods": [up to 3 words chosen ONLY from {list(MOODS)}],
   "scene": [up to 4 short lowercase scene cues, e.g. "golden hour", "city street", "seaside"],
-  "headline_ideas": [3 short lowercase Story headlines, max 32 chars, no hashtags/emoji]}}"""
+  "headline_ideas": [3 short lowercase Story headlines, max 32 chars, no hashtags/emoji],
+  "subject": one of "person", "people", "object", "scene" (the photo's main subject),
+  "subject_x": 0.0-1.0 horizontal centre of the main subject (0 = left edge),
+  "subject_y": 0.0-1.0 vertical centre of the main subject (0 = top edge)}}
+For a selfie or portrait, subject is "person" and subject_x/subject_y mark the centre of their
+face area. Positions are for framing only — say nothing about who anyone is."""
 
 
 def model_name(configured: str) -> str:
@@ -76,9 +81,21 @@ def parse_reply(content: str, model: str) -> ImageReasoning | None:
     moods = [w for w in (raw.get("moods") or []) if isinstance(w, str) and w.lower() in MOODS]
     scene = [t.lower() for v in (raw.get("scene") or []) if (t := _clean_text(v, 32))]
     ideas = [t.lower() for v in (raw.get("headline_ideas") or []) if (t := _clean_text(v, 40))]
+    subject = (
+        raw.get("subject")
+        if raw.get("subject") in ("person", "people", "object", "scene")
+        else "scene"
+    )
+
+    def unit(v: object) -> float:
+        return min(1.0, max(0.0, float(v))) if isinstance(v, int | float) else 0.5
+
     try:
         return ImageReasoning(
             model=model,
+            subject=subject,
+            subject_x=unit(raw.get("subject_x")),
+            subject_y=unit(raw.get("subject_y")),
             summary=summary,
             moods=list(dict.fromkeys(w.lower() for w in moods))[:3],
             scene=list(dict.fromkeys(scene))[:4],

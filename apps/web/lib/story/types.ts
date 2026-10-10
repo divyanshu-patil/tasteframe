@@ -49,6 +49,8 @@ export interface TemplateInput {
   accent: string;
   palette: string[];
   date: Date;
+  /** Main subject position (0..1) from image reasoning: default crop focus + text placement. */
+  focus?: { x: number; y: number };
 }
 
 export type TextKey = "headline" | "caption";

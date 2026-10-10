@@ -39,6 +39,8 @@ export interface LayoutSuggestion {
   headline: string;
   caption: string;
   accent: string;
+  focus_x: number;
+  focus_y: number;
 }
 export interface CulturalRecommendation {
   provider: "qloo";
@@ -65,6 +67,7 @@ export interface ImageReasoning {
   moods: Mood[];
   scene: string[];
   headline_ideas: string[];
+  subject: "person" | "people" | "object" | "scene";
 }
 export interface Analysis {
   analysis_id: string;
@@ -122,6 +125,11 @@ export function parseAnalysis(v: unknown): Analysis {
       isStr(l.accent) && HEX.test(l.accent) && isObj(l.score),
   );
   if (!layouts.length) throw bad();
+  const unit = (n: unknown) => (isNum(n) ? Math.min(1, Math.max(0, n)) : 0.5);
+  for (const l of layouts) {
+    l.focus_x = unit(l.focus_x);
+    l.focus_y = unit(l.focus_y);
+  }
   const m = v.music;
   if (!["track", "artist", "none"].includes(m.kind as string) || !isStr(m.explanation)) throw bad();
   // Only trust links on the provider domain we document; never render arbitrary URLs.
@@ -145,6 +153,7 @@ export function parseAnalysis(v: unknown): Analysis {
           moods: isStrArr(ir.moods) ? (ir.moods.filter((m) => (MOODS as readonly string[]).includes(m)) as Mood[]) : [],
           scene: isStrArr(ir.scene) ? ir.scene : [],
           headline_ideas: isStrArr(ir.headline_ideas) ? ir.headline_ideas : [],
+          subject: (["person", "people", "object", "scene"] as const).find((k) => k === ir.subject) ?? "scene",
         }
       : null;
   return { ...(v as unknown as Analysis), layouts, music, cultural_recommendations: recs, image_reasoning };

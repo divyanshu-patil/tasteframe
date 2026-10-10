@@ -143,7 +143,18 @@ with the local Pillow measurements and returns:
 - a one-line aesthetic summary and up to 4 scene cues ("golden hour", "city street"),
 - up to 3 moods from the app's fixed list, which come after the user's own picks and before
   measured moods,
-- 3 headline ideas, spread across the suggested layouts.
+- 3 headline ideas, spread across the suggested layouts,
+- the main subject's kind (person / people / object / scene) and rough position, used only for
+  framing, never identity:
+  - The default crop is aimed at the subject, which is guaranteed to stay in frame.
+  - Text drawn over the photo (Cinematic, Vintage) moves to the half away from the subject.
+  - Cinematic's shadow gradient follows the headline.
+  - For photos of people, Film Stills and Film Strip (which split one photo into three shifted
+    crops) are ranked lower.
+
+Selfies and portraits, the most common Stories, were checked on 12 real photos (2026-10-10):
+people were recognized and described only as "a person"/"people" (no age, gender or ethnicity
+words), positions landed on the face or body, and Stories kept faces clear of text.
 
 Safeguards:
 - The prompt forbids identifying people or inferring sensitive traits.

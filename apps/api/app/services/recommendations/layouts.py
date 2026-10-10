@@ -157,13 +157,18 @@ def _accent(p: VisualProfile) -> str:
     return best if sat(best) > 0.25 else "#c03f13"
 
 
+SPLITS_PHOTO = {"stills", "filmstrip"}  # repeat shifted crops of one photo → can slice a face
+
+
 def score_all(
-    p: VisualProfile, qloo_tags: list[str]
+    p: VisualProfile, qloo_tags: list[str], people: bool = False
 ) -> list[tuple[Template, LayoutScore, list[str]]]:
     """Every template scored, best first (ties broken by id for determinism)."""
     scored = []
     for t in CATALOGUE:
         v = _visual_fit(t, p)
+        if people and t.id in SPLITS_PHOTO:
+            v = round(v * 0.7, 3)  # selfies/portraits: keep the person in one intact frame
         c, hits = _cultural_fit(t, qloo_tags)
         r = _readability(t, p)
         total = round(W_VISUAL * v + W_CULTURAL * c + W_READ * r, 3)
@@ -178,10 +183,14 @@ def rank_layouts(
     music_line: str | None,
     k: int = 3,
     headlines: list[str] | None = None,
+    subject: tuple[str, float, float] | None = None,
 ) -> list[LayoutSuggestion]:
-    """`headlines`: optional ideas from image reasoning; spread across the suggestions."""
+    """`headlines`: optional ideas from image reasoning; spread across the suggestions.
+    `subject`: (kind, x, y) of the main subject from image reasoning — crop focus + ranking."""
+    people = bool(subject and subject[0] in ("person", "people"))
+    focus = (subject[1], subject[2]) if subject and subject[0] != "scene" else (0.5, 0.5)
     picked, families = [], set()
-    for t, score, hits in score_all(p, qloo_tags):
+    for t, score, hits in score_all(p, qloo_tags, people):
         if t.family in families:
             continue
         families.add(t.family)
@@ -203,6 +212,8 @@ def rank_layouts(
             reason += f" Qloo results tagged “{hits[0]}” point to this style."
         if t.text_on_photo and score.readability_fit < 0.6:
             reason += " Text sits on an overlay to stay readable."
+        if people:
+            reason += " Framed to keep the person in shot, with text placed away from them."
         out.append(
             LayoutSuggestion(
                 id=t.id,
@@ -217,6 +228,8 @@ def rank_layouts(
                 ),
                 caption=music_line or "",
                 accent=accent,
+                focus_x=round(focus[0], 3),
+                focus_y=round(focus[1], 3),
             )
         )
     return out

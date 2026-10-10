@@ -81,7 +81,8 @@ Response: `application/x-ndjson`, one JSON object per line:
   "layouts": [{
     "id": "vintage", "name": "Vintage", "reason": "…", "style_tags": ["grain", "light leak", "date stamp"],
     "score": {"visual_fit": 0.8, "cultural_style_fit": 0.9, "readability_fit": 0.7, "total": 0.82},
-    "headline": "golden hour, again.", "caption": "on repeat — <artist>", "accent": "#e79647"
+    "headline": "golden hour, again.", "caption": "on repeat — <artist>", "accent": "#e79647",
+    "focus_x": 0.55, "focus_y": 0.42
   }],
   "music": {
     "kind": "track | artist | none", "artist": "…", "title": "only when kind=track", "url": "https://music.apple.com/… or null",
@@ -89,7 +90,8 @@ Response: `application/x-ndjson`, one JSON object per line:
   },
   "image_reasoning": {
     "provider": "ollama", "model": "gemma4:31b", "summary": "…", "moods": ["cinematic"],
-    "scene": ["golden hour"], "headline_ideas": ["quiet moments"]
+    "scene": ["golden hour"], "headline_ideas": ["quiet moments"],
+    "subject": "person", "subject_x": 0.55, "subject_y": 0.42
   },
   "provenance": {
     "qloo_used": true, "qloo_error": null, "visual_analysis_used": true,
@@ -98,7 +100,8 @@ Response: `application/x-ndjson`, one JSON object per line:
   }
 }
 ```
-`score` is an internal heuristic, never a provider score. Layout `id`s are rendered by
+`score` is an internal heuristic, never a provider score. `focus_x`/`focus_y` (0..1) is the default
+crop focus: the main subject's position from image reasoning, or 0.5/0.5 when unknown. Layout `id`s are rendered by
 `apps/web/lib/story/templates.ts` (a test keeps both catalogues in sync).
 
 ## `GET /v1/taste/search?q=<2–80 chars>&type=<taste type>`

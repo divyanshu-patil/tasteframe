@@ -142,6 +142,9 @@ async def run_analysis(
             tags,
             _music_line(music),
             headlines=reasoning.headline_ideas if reasoning else None,
+            subject=(reasoning.subject, reasoning.subject_x, reasoning.subject_y)
+            if reasoning
+            else None,
         )
 
         result = AnalysisOut(

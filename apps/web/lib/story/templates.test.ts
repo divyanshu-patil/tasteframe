@@ -71,3 +71,34 @@ describe("template catalogue", () => {
     expect(stampFor(new Date(2026, 0, 5))).toBe("'26 01 05");
   });
 });
+
+describe("subject-aware framing (selfies/portraits)", () => {
+  const base = { headline: "h", caption: "c", accent: "#c03f13", palette: [], date: new Date(2026, 9, 10) };
+
+  it("aims the default crop at the subject", () => {
+    const s = defaultState("minimal", { ...base, focus: { x: 0.7, y: 0.25 } });
+    expect(s.crop).toEqual({ zoom: 1, x: 0.7, y: 0.25 });
+    expect(defaultState("minimal", base).crop).toEqual({ zoom: 1, x: 0.5, y: 0.5 });
+  });
+
+  it("moves text that sits on the photo away from the subject", () => {
+    // Face in the lower part → Cinematic text goes to the top (and back down otherwise).
+    expect(defaultState("cinematic", { ...base, focus: { x: 0.5, y: 0.8 } }).headline.y).toBeLessThan(0.3);
+    expect(defaultState("cinematic", { ...base, focus: { x: 0.5, y: 0.3 } }).headline.y).toBeGreaterThan(0.5);
+    // Face in the upper part → Vintage text drops below it; default stays at the top.
+    expect(defaultState("vintage", { ...base, focus: { x: 0.5, y: 0.35 } }).headline.y).toBeGreaterThan(0.5);
+    expect(defaultState("vintage", base).headline.y).toBeLessThan(0.3);
+  });
+
+  it("keeps every text layer inside Instagram's safe area with any focus", () => {
+    for (const id of TEMPLATE_IDS) {
+      for (const y of [0.1, 0.5, 0.9]) {
+        const s = defaultState(id, { ...base, focus: { x: 0.5, y } });
+        for (const l of [s.headline, s.caption]) {
+          expect(l.y).toBeGreaterThanOrEqual(SAFE.top - 0.12);
+          expect(l.y).toBeLessThan(SAFE.bottom);
+        }
+      }
+    }
+  });
+});

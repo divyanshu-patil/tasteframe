@@ -115,6 +115,9 @@ class LayoutSuggestion(BaseModel):
     headline: str
     caption: str
     accent: str  # hex from the photo palette
+    # Default crop focus (0..1) keeping the main subject in frame; 0.5/0.5 when unknown.
+    focus_x: float = 0.5
+    focus_y: float = 0.5
 
 
 class MusicSuggestion(BaseModel):
@@ -136,6 +139,10 @@ class ImageReasoning(BaseModel):
     moods: list[Mood] = Field(default_factory=list, max_length=3)
     scene: list[str] = Field(default_factory=list, max_length=4)
     headline_ideas: list[str] = Field(default_factory=list, max_length=3)
+    # Where the main subject sits (for cropping/text placement) — never who it is.
+    subject: Literal["person", "people", "object", "scene"] = "scene"
+    subject_x: float = Field(0.5, ge=0, le=1)
+    subject_y: float = Field(0.5, ge=0, le=1)
 
 
 class Provenance(BaseModel):
