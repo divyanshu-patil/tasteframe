@@ -1,13 +1,42 @@
+/* Tokens from DESIGN.md ("Miranda" broadsheet): parchment stock, ink, one ember accent. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-parchment: #e2dedb;
+  --color-bone-cream: #cdc6be;
+  --color-ink-black: #1d1d1b;
+  --color-charcoal: #69645f;
+  --color-pure-black: #000000;
+  --color-ember-orange: #c03f13;
+  --color-paper: #ece8e4;
+
+  --font-display: var(--font-story-display), "Bodoni Moda", Didot, serif;
+  --font-body: var(--font-story-serif), "Source Serif 4", Georgia, serif;
+  --font-mono: var(--font-story-mono), "Space Mono", monospace;
+
+  --text-caption: 14px;
+  --text-body-sm: 16px;
+  --text-subheading: 22px;
+  --text-heading-sm: 32px;
+  --text-heading: 65px;
+
+  --spacing-4: 4px;
+  --spacing-7: 7px;
+  --spacing-10: 10px;
+  --spacing-14: 14px;
+  --spacing-22: 22px;
+  --spacing-28: 28px;
+  --spacing-43: 43px;
+  --spacing-65: 65px;
+
+  --page-max-width: 1440px;
+  --radius-sm: 2.88px;
+  --radius-xl: 11.52px;
+  --shadow-sm: rgba(29, 29, 27, 0.2) -4px 4px 6px 0px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html,
@@ -17,34 +46,36 @@ body {
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+  background: var(--color-parchment);
+  color: var(--color-ink-black);
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: var(--text-body-sm);
+  line-height: 1.27;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
   color: inherit;
-  text-decoration: none;
+  text-underline-offset: 3px;
 }
 
-.imgDark {
-  display: none;
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+:focus-visible {
+  outline: 2px solid var(--color-ember-orange);
+  outline-offset: 2px;
+}
 
-  .imgLight {
-    display: none;
-  }
-  .imgDark {
-    display: unset;
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
   }
 }
