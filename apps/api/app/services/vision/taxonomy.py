@@ -645,7 +645,49 @@ def normalize_topic(topic: object) -> str | None:
     return t if t in TOPICS else None
 
 
+# Pose / expression / framing cues (no identity, no sensitive attributes) — these match the
+# portrait-led layouts (Focus, Camcorder, Kiss Mark, Cutout…) to selfies more precisely.
+EXPRESSIONS: tuple[str, ...] = (
+    "face closeup",
+    "pout",
+    "wink",
+    "smile",
+    "laugh",
+    "serious",
+    "tongue out",
+    "kiss face",
+    "hand on face",
+    "finger on lips",
+    "peace sign",
+    "eyes closed",
+    "looking away",
+    "side profile",
+    "over the shoulder",
+    "hair touch",
+    "sunglasses",
+    "glasses",
+    "mirror selfie",
+    "full body",
+    "outfit",
+    "lying down",
+    "candid",
+    "posed",
+    "headphones",
+    "drink in hand",
+)
+_EXPRESSION_KEYS = {e.replace(" ", ""): e for e in EXPRESSIONS}
+
+
+def normalize_expression(term: object) -> str | None:
+    if not isinstance(term, str):
+        return None
+    return _EXPRESSION_KEYS.get("".join(ch for ch in term.lower() if ch.isalpha()))
+
+
 def prompt_vocabulary() -> str:
     topics = "\n".join(f"  - {k}: {v}" for k, v in TOPICS.items())
     elements = "\n".join(f"  {k}: {', '.join(v)}" for k, v in ELEMENTS.items())
-    return f"Topics:\n{topics}\nElement vocabulary:\n{elements}"
+    return (
+        f"Topics:\n{topics}\nElement vocabulary:\n{elements}\n"
+        f"Expression/pose vocabulary: {', '.join(EXPRESSIONS)}"
+    )

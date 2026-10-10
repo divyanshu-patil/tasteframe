@@ -12,6 +12,8 @@ export interface Slots {
   crop(i: number): StoryState["crop"];
   /** True when slot i shows its own photo (not a repeat of an earlier one). */
   own(i: number): boolean;
+  /** Person mask for slot i's photo (null until segmented / when nobody is in it). */
+  mask(i: number): (CanvasImageSource & { width: number; height: number }) | null;
 }
 
 export interface Template {
@@ -29,6 +31,8 @@ export interface Template {
   draw(ctx: Ctx, photo: Photo, s: StoryState, slots: Slots): void;
   /** Photo slot rectangles (story units) for drag-to-reframe / drag-to-swap in the editor. */
   slotRects?(s: StoryState, count: number): Rect[];
+  /** Uses a person cutout (segment.ts); the editor computes masks only for these. */
+  needsMask?: boolean;
   /** Distinct photos the layout shows. */
   capacity?: number;
   after?(ctx: Ctx, s: StoryState): void;

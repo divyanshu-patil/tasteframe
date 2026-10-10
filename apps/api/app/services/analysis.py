@@ -157,7 +157,9 @@ async def run_analysis(
             subject=(reasoning.subject, reasoning.subject_x, reasoning.subject_y)
             if reasoning
             else None,
-            scene=[*reasoning.scene, *reasoning.elements] if reasoning else None,
+            scene=[*reasoning.scene, *reasoning.elements, *reasoning.expressions]
+            if reasoning
+            else None,
             topic=reasoning.about if reasoning else None,
             ai_picks=reasoning.layout_picks if reasoning else None,
             subjects=[(x.subject, x.x, x.y) for x in reasoning.subjects] if reasoning else None,

@@ -68,50 +68,23 @@ LayoutId = Literal[
     "checklist",
     "calendarcard",
     "receipt",
-    "filmborder",
-    "archwindow",
-    "circleframe",
-    "blob",
-    "pastel",
     "doodlesun",
-    "scribbleframe",
-    "tapewall",
     "bigpolaroid",
     "framein",
-    "phone",
-    "letter",
     "postcard",
-    "dategrid",
-    "circlecollage",
-    "thumbrow",
-    "boldquote",
     "stackedcards",
     "bwstack",
-    "overlap",
     "wavecut",
     "diagonal",
-    "hstrip",
-    "pillstack",
-    "ninegrid",
     "filmburn",
     "hearts",
-    "stickerbomb",
     "coverface",
     "coversingle",
     "coverfloat",
     "coverbubble",
     "coverstack",
     "coverpolaroid",
-    "archnight",
-    "circlesun",
-    "pillduo",
-    "polaroidtilt",
-    "phonedark",
-    "tapekraft",
     "notesdark",
-    "quotepaper",
-    "filmborderdark",
-    "blobmint",
 ]
 FilterId = Literal[
     "none", "film", "warm", "golden", "cool", "faded", "vivid", "sepia", "bw", "noir", "8mm"
@@ -131,6 +104,17 @@ StickerKind = Literal[
     "swirl",
     "note",
     "player",
+    "kiss",
+    "kissblur",
+    "brackets",
+    "rec",
+    "tornstrip",
+    "folder",
+    "cursor",
+    "warning",
+    "cat",
+    "faceheart",
+    "barcode",
 ]
 UUID_PATTERN = r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
 
@@ -287,6 +271,8 @@ class ImageReasoning(BaseModel):
     subject_y: float = Field(0.5, ge=0, le=1)
     layout_picks: list[LayoutId] = Field(default_factory=list, max_length=5)
     subjects: list[SubjectPos] = Field(default_factory=list, max_length=4)  # one per photo
+    # Pose/expression cues (taxonomy.EXPRESSIONS): face closeup, pout, wink… never identity.
+    expressions: list[str] = Field(default_factory=list, max_length=5)
     # What the photo is about (controlled vocabulary, sensitive terms neutralised).
     about: str | None = None
     elements: list[str] = Field(default_factory=list, max_length=8)

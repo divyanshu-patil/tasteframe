@@ -25,7 +25,12 @@ from pydantic import ValidationError
 from app.core.config import Settings
 from app.schemas.api import ImageReasoning, Mood, SubjectPos
 from app.services.recommendations.layouts import CATALOGUE
-from app.services.vision.taxonomy import normalize_term, normalize_topic, prompt_vocabulary
+from app.services.vision.taxonomy import (
+    normalize_expression,
+    normalize_term,
+    normalize_topic,
+    prompt_vocabulary,
+)
 
 log = logging.getLogger("tasteframe.vision")
 MOODS: tuple[str, ...] = get_args(Mood)
@@ -63,6 +68,8 @@ Reply with ONLY a JSON object, no prose, no code fences:
 {subjects}  "about": the ONE topic id below that the image is mainly about,
   "elements": [up to 8 major things visible, chosen from the element vocabulary below,
                most important first: subjects, setting, sky, occasion, objects, light/style],
+  "expressions": [up to 5 pose/expression/framing cues from the expression vocabulary below,
+                  only if people are visible, else []],
   "best_layouts": [the 5 layout ids below that best suit {these}
                    (mood, subject, setting{count_hint}), best first;
                    be specific, don't default to the same few]}}
@@ -169,6 +176,11 @@ def parse_reply(content: str, model: str, n: int = 1) -> ImageReasoning | None:
                     t for v in (raw.get("elements") or [])[:16] if (t := normalize_term(v))
                 )
             )[:8],
+            expressions=list(
+                dict.fromkeys(
+                    t for v in (raw.get("expressions") or [])[:10] if (t := normalize_expression(v))
+                )
+            )[:5],
             summary=summary,
             moods=list(dict.fromkeys(w.lower() for w in moods))[:3],
             scene=list(dict.fromkeys(scene))[:4],

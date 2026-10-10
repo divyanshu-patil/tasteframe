@@ -103,5 +103,7 @@ This block is written and re-added by `turbo` before repository-scoped commands 
 - Rendering must stay pure: `renderStory(ctx, photo, state)` with no React state or randomness
   except the seeded `rng()`.
 - Browser e2e: `pnpm --filter web e2e` against a running `pnpm dev` (uses installed Chrome).
-- Pinterest reference images in `design-refs/pinterest/` are gitignored. Never commit them.
+- Pinterest reference images in `design-refs/pinterest/` are gitignored. Never commit them (Pinterest
+  grants no republishing rights). Commit only `SOURCES.tsv` links + author credits; rebuild with
+  `python3 design-refs/fetch.py`.
 - Commits: author is the repository owner only. No AI co-author trailers.

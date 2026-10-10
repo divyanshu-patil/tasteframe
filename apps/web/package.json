@@ -13,6 +13,7 @@
     "e2e": "node e2e/smoke.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "1.0.1",
     "@repo/ui": "workspace:*",
     "@supabase/supabase-js": "2.117.3",
     "next": "16.3.8",

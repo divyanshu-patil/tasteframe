@@ -5,9 +5,14 @@ in `apps/web/lib/story/templates.ts`.
 
 - `pinterest/<style>/*.jpg` — downloaded pins (**local only, gitignored**: third-party copyrighted
   images, used for reference, never shipped).
-- `pinterest/SOURCES.tsv` — category, file, original pin URL, pin title (committed).
+- `pinterest/SOURCES.tsv` — category, file, original pin URL, pin title, **author name, author
+  profile URL** (committed). This is the attribution for every reference.
 
-Re-fetch locally: the images can be re-downloaded from the pin URLs in `SOURCES.tsv`.
+Pinterest's terms keep copyright with each pin's creator and grant no right to republish pin
+images, so the repo carries links and credits only. Rebuild the images locally with
+`python3 design-refs/fetch.py` (official oEmbed lookup, stdlib only; `--authors` refreshes the
+credits). `pinterest/user1/` holds 19 references shared directly by the project owner without
+pin links, so they can't be rebuilt from this repo.
 
 ## What each template borrows
 

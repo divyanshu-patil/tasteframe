@@ -27,6 +27,7 @@ import type { Crop, Rect, StoryState, TemplateId, TemplateInput } from "./types"
 import { STORY_H as H, STORY_W as W } from "./types";
 
 export type { Template } from "./kit";
+export type Mask = CanvasImageSource & { width: number; height: number };
 
 const cinematic: Template = {
   id: "cinematic",
@@ -537,7 +538,7 @@ export interface HitBoxes {
 const DEFAULT_CROP: Crop = { zoom: 1, x: 0.5, y: 0.5, fit: "cover" };
 
 /** Slot accessor for a Story: order maps slots → photos; repeats cycle through the photos. */
-export function makeSlots(photos: Photo[], s: StoryState): Slots {
+export function makeSlots(photos: Photo[], s: StoryState, masks: (Mask | null)[] = []): Slots {
   const n = Math.max(1, Math.min(4, photos.length));
   const order = s.order?.length ? s.order : [0, 1, 2, 3];
   const looks = photos.slice(0, 4).map((p) => filteredPhoto(p, s.filter ?? "none"));
@@ -546,6 +547,7 @@ export function makeSlots(photos: Photo[], s: StoryState): Slots {
     photo: (i) => looks[(order[i] ?? i) % n] ?? looks[0]!,
     crop: (i) => (i === 0 ? s.crop : (s.crops?.[i - 1] ?? DEFAULT_CROP)),
     own: (i) => i < n,
+    mask: (i) => masks[(order[i] ?? i) % n] ?? null,
   };
 }
 
@@ -557,17 +559,24 @@ export function slotRectsFor(s: StoryState, count: number): Rect[] {
 }
 
 /** Render a story into a context already scaled to 1080×1920 units. Pure and deterministic. */
-export function renderStory(ctx: Ctx, photos: Photo | Photo[], s: StoryState, cover: Photo | null = null): HitBoxes {
+/** Side inputs that aren't part of the serializable state: the cover image and person masks. */
+export interface StoryAssets {
+  cover?: Photo | null;
+  /** Person mask per photo index (segment.ts), for cutout layouts. */
+  masks?: (Mask | null)[];
+}
+
+export function renderStory(ctx: Ctx, photos: Photo | Photo[], s: StoryState, assets: StoryAssets = {}): HitBoxes {
   const tpl = TEMPLATES[s.templateId];
   const list = Array.isArray(photos) ? photos : [photos];
-  const slots = makeSlots(list, s);
+  const slots = makeSlots(list, s, assets.masks);
   ctx.save();
   ctx.clearRect(0, 0, W, H);
   tpl.draw(ctx, slots.photo(0), s, slots);
   const headline = drawText(ctx, s.headline, tpl.text?.headline);
   const caption = drawText(ctx, s.caption, tpl.text?.caption);
   tpl.after?.(ctx, s);
-  drawCover(ctx, s, cover, slots.photo(0));
+  drawCover(ctx, s, assets.cover ?? null, slots.photo(0));
   for (const st of s.stickers ?? []) drawSticker(ctx, st);
   ctx.restore();
   return { headline, caption, slots: slotRectsFor(s, slots.count) };

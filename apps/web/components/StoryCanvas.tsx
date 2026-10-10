@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type { Photo } from "../lib/story/draw";
 import { fontsReady } from "../lib/story/export";
 import { coverBounds } from "../lib/story/cover";
+import { elementsReady } from "../lib/story/elements";
 import { stickerBounds } from "../lib/story/stickers";
-import { type HitBoxes, renderStory } from "../lib/story/templates";
+import { type HitBoxes, type Mask, renderStory } from "../lib/story/templates";
 import type { Crop, Rect, StoryState, TextKey } from "../lib/story/types";
 import { STORY_H, STORY_W } from "../lib/story/types";
 
@@ -15,6 +16,8 @@ interface Props {
   state: StoryState;
   /** Song cover image (null → photo 1 stands in). */
   cover?: Photo | null;
+  /** Person masks per photo index, for cutout layouts. */
+  masks?: (Mask | null)[];
   width: number; // CSS pixels
   label: string;
   className?: string;
@@ -43,7 +46,7 @@ type Target =
 const inside = (p: { x: number; y: number }, r: Rect) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
 export function StoryCanvas(props: Props) {
-  const { photo, state, width, label, className, selectedSticker, cover = null } = props;
+  const { photo, state, width, label, className, selectedSticker, cover = null, masks } = props;
   const ref = useRef<HTMLCanvasElement>(null);
   const hits = useRef<HitBoxes | null>(null);
   const drag = useRef<{ target: Target; x: number; y: number } | null>(null);
@@ -67,7 +70,7 @@ export function StoryCanvas(props: Props) {
     const draw = () => {
       if (cancelled) return;
       ctx.setTransform(canvas.width / STORY_W, 0, 0, canvas.height / STORY_H, 0, 0);
-      hits.current = renderStory(ctx, photo, state, cover);
+      hits.current = renderStory(ctx, photo, state, { cover, masks });
       const sel = state.stickers?.find((s) => s.id === selectedSticker);
       if (sel) {
         // Editor-only selection outline (never part of the export).
@@ -82,12 +85,12 @@ export function StoryCanvas(props: Props) {
     };
     const raf = requestAnimationFrame(draw);
     // Canvas text doesn't trigger web-font loads; request story fonts explicitly, then redraw.
-    void fontsReady().then(() => requestAnimationFrame(draw));
+    void Promise.all([fontsReady(), elementsReady()]).then(() => requestAnimationFrame(draw));
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
     };
-  }, [photo, state, width, height, selectedSticker, cover]);
+  }, [photo, state, width, height, selectedSticker, cover, masks]);
 
   // Wheel zoom needs a non-passive listener to stop the page from scrolling.
   useEffect(() => {

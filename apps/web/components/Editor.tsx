@@ -13,6 +13,7 @@ import { STICKER_KINDS, newSticker } from "../lib/story/stickers";
 import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
 import { slotRectsFor } from "../lib/story/templates";
 import { CoverPanel, useCoverImage } from "./CoverPanel";
+import { useMasks } from "./useMasks";
 import { MusicCard } from "./Results";
 import { StoryCanvas } from "./StoryCanvas";
 import s from "./maker.module.css";
@@ -104,11 +105,12 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
   const sticker = story.stickers.find((x) => x.id === selected) ?? null;
   const [uploadedCover, setUploadedCover] = useState<Photo | null>(null);
   const coverImg = useCoverImage(story.cover?.trackId, uploadedCover);
+  const masks = useMasks(photos, Boolean(tpl.needsMask));
 
   const doExport = async () => {
     setExporting("busy");
     try {
-      const blob = await exportPng(photos, story, coverImg);
+      const blob = await exportPng(photos, story, { cover: coverImg, masks });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -131,6 +133,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           photo={photos}
           state={story}
           cover={coverImg}
+          masks={masks}
           onDragCover={(dx, dy) => story.cover && dispatch({ type: "cover", patch: { x: story.cover.x + dx, y: story.cover.y + dy } })}
           width={width}
           label={`Editable ${tpl.name} Story. Drag text to move it, drag elsewhere to reposition the photo.`}

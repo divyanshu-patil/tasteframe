@@ -1,6 +1,7 @@
 // Paper elements & stickers, modelled on design-refs/pinterest/{stickers,scrapbook,notes,photodump}.
 // All drawn as vectors (no copied artwork); deterministic, serializable, draggable in the editor.
 import { type Ctx, fontString, rgba, rng, roundRect, star } from "./draw";
+import { drawElement, isElement } from "./elements";
 import type { Rect } from "./types";
 import { STORY_H as H, STORY_W as W } from "./types";
 
@@ -19,6 +20,18 @@ export const STICKER_KINDS = [
   { kind: "swirl", label: "Swirl", color: "#f4efe6" },
   { kind: "note", label: "Torn note", color: "#fbf6ea" },
   { kind: "player", label: "Mini player", color: "#f4efe6" },
+  // Transparent-PNG elements (elements.ts).
+  { kind: "kiss", label: "Lipstick kiss", color: "#c41630" },
+  { kind: "kissblur", label: "Lipstick blur", color: "#e84a54" },
+  { kind: "brackets", label: "Focus brackets", color: "#40dc6e" },
+  { kind: "rec", label: "REC", color: "#e61e1e" },
+  { kind: "tornstrip", label: "Torn strip", color: "#faf8f2" },
+  { kind: "folder", label: "Folder", color: "#fac43c" },
+  { kind: "cursor", label: "Cursor", color: "#ffffff" },
+  { kind: "warning", label: "Warning", color: "#ffd600" },
+  { kind: "cat", label: "Cat doodle", color: "#ffffff" },
+  { kind: "faceheart", label: "Cheek heart", color: "#ffffff" },
+  { kind: "barcode", label: "Barcode", color: "#111111" },
 ] as const;
 export type StickerKind = (typeof STICKER_KINDS)[number]["kind"];
 
@@ -36,7 +49,8 @@ export interface Sticker {
 const BASE = 150; // px at scale 1
 
 export function stickerBounds(s: Sticker): Rect {
-  const r = (BASE * s.scale * (s.kind === "note" || s.kind === "player" || s.kind === "tape" ? 1.6 : 1)) / 2;
+  const wide = s.kind === "note" || s.kind === "player" || s.kind === "tape" || isElement(s.kind);
+  const r = (BASE * s.scale * (wide ? 1.6 : 1)) / 2;
   return { x: s.x * W - r, y: s.y * H - r, w: r * 2, h: r * 2 };
 }
 
@@ -74,6 +88,11 @@ export function drawSticker(ctx: Ctx, s: Sticker): void {
   ctx.rotate((s.rotate * Math.PI) / 180);
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
+  if (isElement(s.kind)) {
+    drawElement(ctx, s.kind, size * 1.6);
+    ctx.restore();
+    return;
+  }
   switch (s.kind) {
     case "tape": {
       const w = size * 1.5;

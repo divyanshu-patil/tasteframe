@@ -53,3 +53,6 @@ apps/api/.uploads/
 
 # Pinterest reference images are third-party copyrighted; kept locally only (see SOURCES.tsv)
 design-refs/pinterest/**/*.jpg
+design-refs/pinterest/**/*.png
+design-refs/pinterest/**/*.jpeg
+design-refs/pinterest/**/*.webp

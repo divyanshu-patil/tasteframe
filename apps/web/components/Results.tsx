@@ -7,6 +7,7 @@ import { TEMPLATES, defaultState } from "../lib/story/templates";
 import { type StoryState, TEMPLATE_IDS, type TemplateId } from "../lib/story/types";
 import { inputFor } from "../lib/story/input";
 import { useCoverImage } from "./CoverPanel";
+import { useMasks } from "./useMasks";
 import { StoryCanvas } from "./StoryCanvas";
 import s from "./maker.module.css";
 
@@ -201,5 +202,6 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
 /** Suggestion preview; song-cover layouts show the suggested song's real artwork when available. */
 function PreviewCanvas({ photo, state, label }: { photo: React.ComponentProps<typeof StoryCanvas>["photo"]; state: StoryState; label: string }) {
   const cover = useCoverImage(state.cover?.show ? state.cover.trackId : undefined);
-  return <StoryCanvas photo={photo} state={state} cover={cover} width={240} label={label} />;
+  const masks = useMasks(photo, Boolean(TEMPLATES[state.templateId].needsMask));
+  return <StoryCanvas photo={photo} state={state} cover={cover} masks={masks} width={240} label={label} />;
 }

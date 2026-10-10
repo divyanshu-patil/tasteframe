@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { elementsReady } from "../lib/story/elements";
+import { useEffect, useRef, useState } from "react";
 import type { Photo } from "../lib/story/draw";
 import { type FilterId, filteredPhoto } from "../lib/story/filters";
 import { type StickerKind, drawSticker } from "../lib/story/stickers";
@@ -36,13 +37,22 @@ export function FilterSwatch({ photo, filter }: { photo: Photo; filter: FilterId
 
 /** Sticker drawn at swatch size (rendered by the same code as the Story). */
 export function StickerSwatch({ kind, color }: { kind: StickerKind; color: string }) {
+  // PNG elements load asynchronously; redraw once they're in.
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void elementsReady().then(() => live && setLoaded(true));
+    return () => {
+      live = false;
+    };
+  }, []);
   const ref = useSquareCanvas((ctx) => {
     ctx.fillStyle = "#cdc6be";
     ctx.fillRect(0, 0, SIZE, SIZE);
     const k = SIZE / (STORY_W * 0.22);
     ctx.scale(k, k);
     drawSticker(ctx, { id: "swatch", kind, x: (SIZE / k / 2) / STORY_W, y: (SIZE / k / 2) / STORY_H, scale: 0.9, rotate: 0, color, text: kind === "note" ? "hey ♡" : "now playing" });
-  }, [kind, color]);
+  }, [kind, color, loaded]);
   return <canvas ref={ref} style={{ width: SIZE, height: SIZE }} aria-hidden />;
 }
 
