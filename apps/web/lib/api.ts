@@ -1,6 +1,6 @@
 // Browser client for the Tasteframe API. All calls go through the Next.js `/api` rewrite;
 // no provider keys ever reach the browser. Responses are validated before use.
-import { DEFAULT_COVER } from "./story/cover";
+import { DEFAULT_COVER, normalizeCoverStyle } from "./story/cover";
 import { accessToken } from "./auth";
 import { FILTER_IDS, type FilterId } from "./story/filters";
 import type { StoryState, TemplateId } from "./story/types";
@@ -405,7 +405,7 @@ export function parseStoryState(v: unknown): StoryState | null {
   if (!isLayer(v.headline) || !isLayer(v.caption) || !isObj(v.crop) || !isObj(v.overlay)) return null;
   if (!isObj(v.decorations) || !isStr(v.accent) || !isStrArr(v.palette) || !isStr(v.stamp)) return null;
   const { cover, ...rest } = v;
-  return { ...rest, cover: isObj(cover) ? cover : { ...DEFAULT_COVER }, tags: isStrArr(v.tags) ? v.tags : [] } as unknown as StoryState;
+  return { ...rest, cover: isObj(cover) ? { ...DEFAULT_COVER, ...cover, style: normalizeCoverStyle(cover.style) } : { ...DEFAULT_COVER }, tags: isStrArr(v.tags) ? v.tags : [] } as unknown as StoryState;
 }
 
 function parseSaved(v: unknown): SavedStory | null {
@@ -472,6 +472,7 @@ export interface Track {
   title: string;
   artist: string;
   album: string | null;
+  explicit: boolean;
 }
 
 /** Songs matching free text (Apple Music catalogue), for picking a cover. */
@@ -482,7 +483,7 @@ export async function searchTracks(q: string, signal?: AbortSignal): Promise<Tra
   if (!isObj(v) || !Array.isArray(v.tracks)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
   return v.tracks
     .filter((t): t is Record<string, unknown> => isObj(t) && isNum(t.track_id) && isStr(t.title) && isStr(t.artist) && t.has_artwork === true)
-    .map((t) => ({ track_id: t.track_id as number, title: t.title as string, artist: t.artist as string, album: isStr(t.album) ? t.album : null }));
+    .map((t) => ({ track_id: t.track_id as number, title: t.title as string, artist: t.artist as string, album: isStr(t.album) ? t.album : null, explicit: t.explicit === true }));
 }
 
 /** Square cover art for a track, served same-origin by the API (keeps the canvas exportable). */

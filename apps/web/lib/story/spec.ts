@@ -167,12 +167,15 @@ function withRot(ctx: Ctx, r: Rect, deg: number | undefined, fn: () => void) {
   ctx.restore();
 }
 
-function photoInto(ctx: Ctx, slots: Slots, slot: number, r: Rect, shape: Shape, radius: number, shift?: { zoom?: number; dx?: number; dy?: number }) {
+/** Stable box id for a photo decoration (its position), for StoryState.views. */
+const photoKey = (r: Rect) => `p${Math.round(r.x)}-${Math.round(r.y)}`;
+
+function photoInto(ctx: Ctx, slots: Slots, slot: number, r: Rect, shape: Shape, radius: number, shift?: { zoom?: number; dx?: number; dy?: number }, key?: string) {
   ctx.save();
   shapePath(ctx, r, shape, radius, slot + 3);
   ctx.clip();
   const own = slots.own(slot);
-  const base = slots.crop(own ? slot : 0);
+  const base = own && !key ? slots.crop(slot) : slots.adjust(key ?? `slot${slot}`, slots.crop(own ? slot : 0));
   const sh = own && !shift ? { zoom: 1, dx: 0, dy: 0 } : { zoom: shift?.zoom ?? 1 + 0.35 * slot, dx: shift?.dx ?? 0.2 * (slot % 2 ? 1 : -1), dy: shift?.dy ?? 0.15 * slot };
   drawPhoto(ctx, slots.photo(own ? slot : 0), r, {
     ...base,
@@ -450,7 +453,7 @@ function drawDeco(ctx: Ctx, d: DecoSpec, s: StoryState, slots: Slots) {
     case "photo":
       withRot(ctx, d.r, d.rot, () => {
         ctx.globalAlpha = d.alpha ?? 1;
-        photoInto(ctx, slots, d.slot, d.r, d.shape ?? "rect", 20, { zoom: d.zoom, dx: d.dx, dy: d.dy });
+        photoInto(ctx, slots, d.slot, d.r, d.shape ?? "rect", 20, { zoom: d.zoom, dx: d.dx, dy: d.dy }, photoKey(d.r));
       });
       break;
   }
@@ -461,6 +464,10 @@ const resolveText = (v: Spec["headline"], i: TemplateInput) => (typeof v === "fu
 
 /** Turn a declarative Spec into a renderable Template. */
 export function fromSpec(spec: Spec): Template {
+  // Sticker decorations become regular, draggable layout stickers.
+  const isSticker = (d: DecoSpec): d is Extract<DecoSpec, { k: "sticker" }> => d.k === "sticker";
+  const placed = (spec.deco ?? []).filter(isSticker);
+  const deco = (spec.deco ?? []).filter((d) => !isSticker(d));
   const overlay = spec.overlay ?? {
     strength: spec.bg.kind === "photo" ? 0.2 : spec.bg.kind === "blur" ? 0.3 : 0.3,
     color: spec.bg.color ?? (spec.bg.kind === "photo" || spec.bg.kind === "blur" ? "#000000" : "#efebe5"),
@@ -486,6 +493,24 @@ export function fromSpec(spec: Spec): Template {
       filter: spec.filter,
     }),
     cover: spec.cover,
+    views: () =>
+      [...(spec.under ?? []), ...deco]
+        .filter((d): d is Extract<DecoSpec, { k: "photo" }> => d.k === "photo")
+        .map((d) => ({ key: photoKey(d.r), r: d.r })),
+    stickers: placed.length
+      ? () =>
+          placed.map((d, n) => ({
+            id: `layout-${spec.id}-${n}`,
+            kind: d.kind,
+            x: d.x / W,
+            y: d.y / H,
+            scale: d.scale ?? 0.8,
+            rotate: (((d.rot ?? 0) % 360) + 360) % 360,
+            color: d.color ?? "#d9a62e",
+            ...(d.text ? { text: d.text } : {}),
+            layout: true,
+          }))
+      : undefined,
     draw(ctx, _photo, s, slots) {
       const bg = spec.bg;
       if (bg.kind === "photo") {
@@ -504,7 +529,7 @@ export function fromSpec(spec: Spec): Template {
       const details = on(s, "details");
       if (details) for (const d of spec.under ?? []) drawDeco(ctx, d, s, slots);
       for (const f of spec.frames) drawFrame(ctx, f, slots);
-      if (details) for (const d of spec.deco ?? []) drawDeco(ctx, d, s, slots);
+      if (details) for (const d of deco) drawDeco(ctx, d, s, slots);
     },
     text: spec.text,
   };

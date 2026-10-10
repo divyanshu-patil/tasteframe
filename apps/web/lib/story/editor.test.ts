@@ -68,7 +68,7 @@ describe("filters & stickers in the editor", () => {
     const sticker = { id: "a", kind: "star" as const, x: 0.5, y: 0.5, scale: 1, rotate: 0, color: "#d9a62e" };
     let s = editorReducer(s0, { type: "sticker-add", sticker });
     s = editorReducer(s, { type: "sticker", id: "a", patch: { x: 5, scale: 9, rotate: -30 } });
-    expect(s.stickers[0]).toMatchObject({ x: 1, scale: 3, rotate: 330 });
+    expect(s.stickers[0]).toMatchObject({ x: 1, scale: 5, rotate: 330 });
     // Switching layout keeps stickers; reset clears them.
     expect(editorReducer(s, { type: "template", id: "vinyl", input }).stickers).toHaveLength(1);
     expect(editorReducer(s, { type: "reset", input }).stickers).toHaveLength(0);

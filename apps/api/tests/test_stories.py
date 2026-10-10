@@ -44,7 +44,6 @@ CONFIG = {
             "scale": 1.2,
             "rotate": 10,
             "color": "#d9a62e",
-            "text": None,
         }
     ],
     "overlay": {"strength": 0.5, "color": "#efede7"},
@@ -172,7 +171,7 @@ def test_save_list_photo_delete_roundtrip(setup, tmp_path):
     assert r.status_code == 201, r.text
     story = r.json()
     assert (
-        story["config"] == {**CONFIG, "cover": None, "tags": [], "focus": None, "spot": None}
+        story["config"] == {**CONFIG, "tags": [], "tracks": [], "views": {}}
         and story["template_id"] == "editorial"
     )
     row = fake.rows[0]
@@ -316,7 +315,7 @@ def test_song_cover_config_validated():
         "y": 0.3,
         "scale": 1.3,
         "rotate": 0,
-        "style": "plain",
+        "style": "ig",
         "title": "golden hour",
         "artist": "JVKE",
         "trackId": 1640157165,

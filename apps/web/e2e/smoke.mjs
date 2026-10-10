@@ -15,10 +15,28 @@ const CHROME =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : "/usr/bin/google-chrome");
 const OUT = process.env.E2E_OUT ?? "e2e/.output";
+/** Open a collapsible editor section by its title. */
+async function openSection(page, title) {
+  const sec = page.locator("details", { has: page.locator("summary", { hasText: new RegExp(`^${title}`) }) }).first();
+  if (!(await sec.evaluate((d) => d.open))) await sec.locator("summary").first().click();
+  return sec;
+}
+
+/** Choose a layout in the grouped, collapsible picker. */
+async function pickLayout(page, name) {
+  const sec = await openSection(page, "Layout");
+  const btn = sec.getByRole("button", { name: new RegExp(`^${name.replace(/[+]/g, "\\+")}( suggested)?$`) }).first();
+  for (const g of await sec.locator("details").all()) {
+    if (await btn.isVisible()) break;
+    if (!(await g.evaluate((d) => d.open))) await g.locator("summary").click();
+  }
+  await btn.click();
+}
+
 const TEMPLATES = [
   "Film Stills", "Journal", "Scrapbook", "Film Strip", "Vintage", "Minimal", "Editorial", "Cinematic",
   "Photo Dump", "Magazine", "Now Playing", "Vinyl", "Mood Board", "Ticket", "Y2K Chrome", "Torn Reveal",
-  "Paper Note", "Newspaper", "Soft Focus",
+  "Paper Note", "Newspaper", "Soft Focus", "Colour Box", "Torn Strip", "Playlist", "WhatsApp Screen", "Night Cam", "Song on Lips",
 ];
 mkdirSync(OUT, { recursive: true });
 
@@ -48,10 +66,13 @@ async function run(name, contextOptions) {
     await page.getByRole("button", { name: /Shuffle/ }).click();
     if ((await page.locator("ol h3").allInnerTexts()).join() === firstSet) throw new Error("shuffle didn't change layouts");
     await page.getByRole("button", { name: "Edit this Story" }).first().click();
-    await page.getByLabel("Words").fill("still so young.");
+    // Select the headline (inspector) and edit it; add a sticker from the collapsed section.
+    await page.locator("[aria-label='Select an element']").getByRole("button", { name: "Headline", exact: true }).click();
+    await page.getByLabel("Words").first().fill("still so young.");
+    await openSection(page, "Stickers & elements");
     await page.getByRole("button", { name: "Gold star" }).click(); // a sticker rides along every export
     for (const tpl of TEMPLATES) {
-      await page.locator("fieldset", { hasText: "Layout" }).getByRole("button", { name: tpl }).first().click();
+      await pickLayout(page, tpl);
       const [dl] = await Promise.all([
         page.waitForEvent("download"),
         page.getByRole("button", { name: "Download PNG" }).click(),

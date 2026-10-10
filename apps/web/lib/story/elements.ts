@@ -17,6 +17,9 @@ export const ELEMENT_FILES = {
 } as const;
 export type ElementKind = keyof typeof ELEMENT_FILES;
 
+/** Bump when any element PNG changes, so browsers don't keep a cached old copy. */
+const ELEMENTS_VERSION = 2;
+
 const images = new Map<ElementKind, HTMLImageElement>();
 let ready: Promise<void> | null = null;
 
@@ -33,11 +36,37 @@ export function elementsReady(): Promise<void> {
             resolve();
           };
           img.onerror = () => resolve(); // a missing element just doesn't draw
-          img.src = `/elements/${ELEMENT_FILES[k].file}.png`;
+          img.src = `/elements/${ELEMENT_FILES[k].file}.png?v=${ELEMENTS_VERSION}`;
         }),
     ),
-  ).then(() => undefined);
+  )
+    .then(() =>
+      Promise.all(
+        (Object.keys(SCREENS) as (keyof typeof SCREENS)[]).map(
+          (k) =>
+            new Promise<void>((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                screens.set(k, img);
+                resolve();
+              };
+              img.onerror = () => resolve();
+              img.src = `${SCREENS[k]}?v=${ELEMENTS_VERSION}`;
+            }),
+        ),
+      ),
+    )
+    .then(() => undefined);
   return ready;
+}
+
+/** Full-Story overlay images (green-screen templates keyed by apps/api/scripts/key_template.py). */
+export const SCREENS = { whatsapp: "/templates/whatsapp-screen.png" } as const;
+const screens = new Map<keyof typeof SCREENS, HTMLImageElement>();
+
+export function drawScreen(ctx: Ctx, name: keyof typeof SCREENS, w: number, h: number): void {
+  const img = screens.get(name);
+  if (img) ctx.drawImage(img, 0, 0, w, h);
 }
 
 export const isElement = (kind: string): kind is ElementKind => kind in ELEMENT_FILES;

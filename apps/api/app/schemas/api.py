@@ -48,6 +48,8 @@ LayoutId = Literal[
     "mosaic",
     "polaroids",
     "playlist",
+    "covermouth",
+    "camtilt",
     "playercut",
     "triptych",
     "cctv",
@@ -144,6 +146,7 @@ StickerKind = Literal[
     "cat",
     "faceheart",
     "barcode",
+    "spotify",
 ]
 UUID_PATTERN = r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
 
@@ -355,6 +358,7 @@ class CropConfig(BaseModel):
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
     fit: Literal["cover", "contain"] = "cover"
+    rot: Literal[0, 90, 180, 270] | None = None  # clockwise quarter turns
 
 
 class StickerConfig(BaseModel):
@@ -364,10 +368,11 @@ class StickerConfig(BaseModel):
     kind: StickerKind
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
-    scale: float = Field(ge=0.3, le=3)
+    scale: float = Field(ge=0.3, le=5)
     rotate: float = Field(ge=0, lt=360)
     color: str = Field(pattern=HEX)
     text: str | None = Field(None, max_length=40)
+    layout: bool | None = None  # placed by the layout (vs added by the user)
 
 
 class OverlayConfig(BaseModel):
@@ -387,6 +392,36 @@ class Rect01(Point01):
     h: float = Field(gt=0, le=1)
 
 
+class ViewTweak(BaseModel):
+    """Drag/zoom inside a box showing part of the photo, relative to the layout's framing."""
+
+    model_config = {"extra": "forbid"}
+
+    dx: float = Field(ge=-1, le=1)
+    dy: float = Field(ge=-1, le=1)
+    zoom: float = Field(ge=0.5, le=4)
+
+
+class PanelTrack(BaseModel):
+    """A real catalogue track (iTunes) for the playlist panel — never user-invented text."""
+
+    model_config = {"extra": "forbid"}
+
+    title: str = Field(max_length=120)
+    artist: str = Field(max_length=120)
+    explicit: bool | None = None
+    trackId: int | None = Field(None, ge=1)  # noqa: N815
+
+
+class OutlineConfig(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    show: bool
+    color: str = Field(pattern=HEX)
+    width: float = Field(ge=0, le=40)
+    margin: float = Field(0, ge=0, le=60)
+
+
 class CoverConfig(BaseModel):
     """Square song cover placed on the Story; the image is refetched by track id."""
 
@@ -397,7 +432,8 @@ class CoverConfig(BaseModel):
     y: float = Field(ge=0, le=1)
     scale: float = Field(ge=0.3, le=4)
     rotate: float = Field(ge=-180, le=180)
-    style: Literal["plain", "card", "bubble", "sticker"]
+    style: Literal["ig", "igpill", "igart"]
+    textColor: str | None = Field(None, pattern=HEX)  # noqa: N815
     title: str = Field(max_length=120)
     artist: str = Field(max_length=120)
     trackId: int | None = Field(None, ge=1)  # noqa: N815
@@ -422,6 +458,11 @@ class StoryConfig(BaseModel):
     palette: list[Annotated[str, Field(pattern=HEX)]] = Field(max_length=6)
     stamp: str = Field(max_length=16)
     cover: CoverConfig | None = None
+    tracks: list[PanelTrack] = Field(default_factory=list, max_length=10)
+    views: dict[Annotated[str, Field(pattern=r"^[a-z0-9-]{1,24}$")], ViewTweak] = Field(
+        default_factory=dict, max_length=24
+    )
+    outline: OutlineConfig | None = None
     focus: Point01 | None = None
     spot: Rect01 | None = None
     tags: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=5)
@@ -474,6 +515,7 @@ class TrackOut(BaseModel):
     artist: str
     album: str | None = None
     has_artwork: bool
+    explicit: bool = False
 
 
 class TrackSearchOut(BaseModel):

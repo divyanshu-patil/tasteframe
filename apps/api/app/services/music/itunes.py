@@ -102,6 +102,7 @@ async def search_tracks(
                 if isinstance(r.get("collectionName"), str)
                 else None,
                 "has_artwork": isinstance(r.get("artworkUrl100"), str),
+                "explicit": r.get("trackExplicitness") == "explicit",
             }
         )
     return out[:8]

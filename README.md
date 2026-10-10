@@ -137,33 +137,55 @@ prefix on every read and delete.
 
 ## Layouts, filters, stickers
 
-- **91 layouts**, all vector-drawn (no copied images, logos or brand names), each modelled on a
-  category in `design-refs/pinterest`:
+- **84 layouts**, grouped in the editor (Cutouts & posters, Screens & cameras, Song cover &
+  music, Multi-photo, Type & notes, Film & mood, Paper & scrapbook). Each was modelled on Pinterest
+  references (`design-refs/pinterest`; see `design-refs/README.md`):
   - 26 hand-drawn ones in `templates.ts`, `templates-more.ts` and `templates-multi.ts`.
-  - 65 declarative ones in `layouts-aesthetic.ts`, built by the small spec engine in `spec.ts`
-    from the "aesthetic instagram stories" refs (`aesthetic1-6`). They cover weekday type, notes
-    and sticky cards, checklist/receipt/calendar, arches, circles, blobs, phone mockups,
-    postcards, grids, pills, diagonal and wavy splits, film burn, and more.
-- **Song cover (square album art)**: six layouts are built around it (from `cover1-4`): Cover Over
-  Face, New Single, Floating Player, Bubble Player, Player Stack and Polaroid + Cover. The
-  **Song cover** panel can also add it to any layout.
-  - The artwork comes from the suggested song, a song search (Apple Music catalogue via
-    `GET /v1/music/search`), or your own uploaded image.
+  - 38 declarative ones in `layouts-aesthetic.ts`, built by the spec engine in `spec.ts`. The
+    flat-colour ones were removed for quality.
+  - 20 from the owner's own pins in `templates-refs.ts`: Playlist (Spotify-style table), Player
+    Cutout, Triptych, CCTV, Colour Box, Torn Strip, Sticker Cutout, Focus, Camera Screen,
+    Camcorder, Night Cam, Sepia Prints, Desktop, WhatsApp Screen, Kiss Mark, Xerox Poster,
+    Yearbook, Song on Lips, Sepia + Song and Song Corner.
+- **Pinterest originals**: every suggestion, the editor and the gallery show the pin a layout was
+  modelled on. This uses Pinterest's own oEmbed thumbnail, linked to the pin with the creator
+  credited (`lib/story/pins.json`, built by `design-refs/build_pins.py`). No pin images are stored
+  or served.
+- **Gallery** (`/gallery`): every layout rendered live, plus every reference pin. "Use this
+  layout" opens `/create?layout=<id>`, which goes straight into that layout after upload.
+- **Person cutouts** (Sticker Cutout, Player Cutout, Colour Box, Yearbook) use MediaPipe's selfie
+  segmenter in the browser.
+  - The model (Apache-2.0, 250 KB) is vendored in `public/models`. The wasm runtime (pinned) loads
+    on first use only.
+  - Free, no server load; the photo isn't sent anywhere for this step.
+  - The die-cut outline has adjustable thickness, gap from the person and colour.
+- **Song sticker** (Instagram music-sticker looks): album art with the playing bars and
+  title/artist (white or black), the white pill, or art only.
+  - Artwork comes from the suggested song, a song search (`GET /v1/music/search`, Apple Music
+    catalogue), or your own image.
   - Apple artwork is proxied same-origin by `GET /v1/music/artwork/{track_id}` (only
     `*.mzstatic.com`, decoded and validated), so the canvas stays exportable.
-  - The cover is draggable and has four styles, plus size, tilt and "Place over face" (uses the
-    detected subject position).
-  - Saved Stories keep the track id and refetch the artwork. Uploaded cover images are not saved.
-- **Shuffle**: the API ranks every layout for the photo. The results page shows three at a time,
-  and each set of three comes from distinct layout families.
-- **Filters**: Original, Film, Warm, Golden hour, Cool, Faded, Vivid, Sepia, B&W, Noir, 8mm. These
-  are deterministic per-pixel looks on a cached copy, so preview equals export. Each layout gets a
-  mood-based filter suggestion, or its signature look (e.g. Newspaper → B&W).
-- **Stickers & paper**: washi tape, star, sparkle, heart, flower, daisy, bow, paperclip, push
-  pin, stamp, doodle arrow, swirl, torn note (editable text) and mini player (shows the suggested
-  song). Drag them on the Story; size, rotation and colour are editable.
-- **Crop**: Fill frame or Fit whole photo, zoom up to 4×, drag to pan, scroll or pinch to zoom,
-  reset.
+  - Saved Stories keep the track id and refetch the artwork.
+- **Playlist panel**: a Spotify-style table filled with real tracks by the song's artist (Apple
+  Music catalogue, never invented). You can drag, rotate or delete it like any sticker.
+- **WhatsApp Screen** uses the owner's green-screen template. `apps/api/scripts/key_template.py`
+  keys out the green, keeps the white UI and finds the photo windows.
+- **Filters**: Original, Film, Warm, Golden hour, Cool, Faded, Vivid, Sepia, B&W, Noir, 8mm and
+  Xerox. They are deterministic per-pixel looks, so preview equals export.
+- **Stickers & elements**: paper stickers (tape, stars, flowers, notes, mini player…) plus
+  transparent-PNG elements (lipstick kiss, focus brackets, REC, torn strip, folder, cursor, warning,
+  cat doodle, cheek heart, barcode, playlist panel).
+  - The PNGs in `public/elements` are generated by `apps/api/scripts/make_elements.py`; the
+    lipstick kiss is the owner's PNG.
+  - A layout's own elements are regular stickers, so they can be dragged, resized, rotated,
+    recoloured, reordered, duplicated or deleted, and "Bring back removed elements" restores them.
+- **Editing**: tap anything on the Story to select it. The inspector then shows only that
+  element's fine controls: sliders with −/+ nudges, and arrow keys (Shift for bigger steps).
+  - Photo boxes support fill/fit, zoom, pan and rotate in 90° steps.
+  - **Every box that shows part of a photo** (repeated bands, collage tiles, CCTV callouts, insets)
+    can be dragged or zoomed to choose what it shows.
+  - Strips and windows (Torn Strip, Focus, Colour Box) drag, or move and resize with sliders.
+  - The "This layout" section shows only the controls that layout uses.
 
 ### How layouts are ranked
 
@@ -221,6 +243,8 @@ request `format: "json"` and validate ourselves. `gemma4:31b:cloud` is accepted 
 |---|---|
 | `/` | Landing page: pitch, example Stories, how it works, link to the studio |
 | `/create` | The MVP studio: upload → mood → taste → three Stories → editor → PNG export |
+| `/create?layout=<id>` | Same, but opens straight in a chosen layout after upload |
+| `/gallery` | Every layout and every Pinterest reference (credited, linked); pick one to start |
 
 Creating and downloading never need an account. **Saving a Story to the backend requires login.**
 

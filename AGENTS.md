@@ -106,4 +106,8 @@ This block is written and re-added by `turbo` before repository-scoped commands 
 - Pinterest reference images in `design-refs/pinterest/` are gitignored. Never commit them (Pinterest
   grants no republishing rights). Commit only `SOURCES.tsv` links + author credits; rebuild with
   `python3 design-refs/fetch.py`.
+- Layout ids also live in `apps/web/lib/story/groups.ts` (editor/gallery sections; a test keeps it
+  complete) and `supabase/schema.sql` (`stories_template` check; a test keeps it in sync).
+- Generated assets: `apps/api/scripts/make_elements.py` (PNG elements), `apps/api/scripts/
+  key_template.py` (green-screen templates), `design-refs/build_pins.py` (pins.json credits).
 - Commits: author is the repository owner only. No AI co-author trailers.

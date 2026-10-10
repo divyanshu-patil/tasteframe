@@ -1,7 +1,8 @@
 // Paper elements & stickers, modelled on design-refs/pinterest/{stickers,scrapbook,notes,photodump}.
 // All drawn as vectors (no copied artwork); deterministic, serializable, draggable in the editor.
 import { type Ctx, fontString, rgba, rng, roundRect, star } from "./draw";
-import { drawElement, isElement } from "./elements";
+import { ELEMENT_FILES, drawElement, isElement } from "./elements";
+import type { Photo } from "./draw";
 import type { Rect } from "./types";
 import { STORY_H as H, STORY_W as W } from "./types";
 
@@ -32,6 +33,7 @@ export const STICKER_KINDS = [
   { kind: "cat", label: "Cat doodle", color: "#ffffff" },
   { kind: "faceheart", label: "Cheek heart", color: "#ffffff" },
   { kind: "barcode", label: "Barcode", color: "#111111" },
+  { kind: "spotify", label: "Playlist panel", color: "#1ed760" },
 ] as const;
 export type StickerKind = (typeof STICKER_KINDS)[number]["kind"];
 
@@ -44,14 +46,157 @@ export interface Sticker {
   rotate: number; // degrees
   color: string;
   text?: string; // note / player label
+  /** Placed by the layout (swapped out when switching layouts); user stickers stay. */
+  layout?: boolean;
 }
 
 const BASE = 150; // px at scale 1
+/** The playlist panel's natural size at scale 1 (Story px). */
+export const PANEL = { w: 620, h: 1040 };
 
+/** Unrotated size of a sticker, Story px. */
+export function stickerSize(s: Pick<Sticker, "kind" | "scale">): { w: number; h: number } {
+  if (s.kind === "spotify") return { w: PANEL.w * s.scale, h: PANEL.h * s.scale };
+  if (isElement(s.kind)) {
+    const { w, h } = ELEMENT_FILES[s.kind];
+    const k = (BASE * 1.6 * s.scale) / Math.max(w, h);
+    return { w: w * k, h: h * k };
+  }
+  const side = BASE * s.scale * (s.kind === "note" || s.kind === "player" || s.kind === "tape" ? 1.6 : 1);
+  return { w: side, h: side };
+}
+
+/** Axis-aligned box around the (rotated) sticker — hit-testing and the selection outline. */
 export function stickerBounds(s: Sticker): Rect {
-  const wide = s.kind === "note" || s.kind === "player" || s.kind === "tape" || isElement(s.kind);
-  const r = (BASE * s.scale * (wide ? 1.6 : 1)) / 2;
-  return { x: s.x * W - r, y: s.y * H - r, w: r * 2, h: r * 2 };
+  const { w, h } = stickerSize(s);
+  const a = (s.rotate * Math.PI) / 180;
+  const bw = Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a));
+  const bh = Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a));
+  return { x: s.x * W - bw / 2, y: s.y * H - bh / 2, w: bw, h: bh };
+}
+
+/** Track rows for the playlist panel — real catalogue data only (never invented). */
+export interface PanelTrack {
+  title: string;
+  artist: string;
+  explicit?: boolean;
+  trackId?: number;
+}
+export interface StickerExtras {
+  tracks?: PanelTrack[];
+  art?: Map<number, Photo>;
+  /** Fallback thumbnails when a track has no artwork loaded. */
+  photo?: Photo;
+}
+
+/** Spotify-style playlist table (desktop), drawn centred at the origin. */
+function playlistPanel(ctx: Ctx, s: Sticker, x: StickerExtras) {
+  const k = s.scale;
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.translate(-PANEL.w / 2, -PANEL.h / 2);
+  ctx.fillStyle = "#121212";
+  ctx.fillRect(0, 0, PANEL.w, PANEL.h);
+  // Action row: green play button, then outline icons.
+  ctx.fillStyle = "#1ed760";
+  ctx.beginPath();
+  ctx.arc(64, 70, 38, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.moveTo(54, 50);
+  ctx.lineTo(82, 70);
+  ctx.lineTo(54, 90);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#b3b3b3";
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = "round";
+  // shuffle
+  ctx.beginPath();
+  ctx.moveTo(130, 56); ctx.bezierCurveTo(150, 56, 160, 84, 180, 84);
+  ctx.moveTo(130, 84); ctx.bezierCurveTo(150, 84, 160, 56, 180, 56);
+  ctx.stroke();
+  // download (circle + arrow)
+  ctx.beginPath();
+  ctx.arc(222, 70, 17, 0, Math.PI * 2);
+  ctx.moveTo(222, 60); ctx.lineTo(222, 79); ctx.moveTo(214, 72); ctx.lineTo(222, 80); ctx.lineTo(230, 72);
+  ctx.stroke();
+  // add user
+  ctx.beginPath();
+  ctx.arc(270, 62, 9, 0, Math.PI * 2);
+  ctx.moveTo(254, 88); ctx.quadraticCurveTo(270, 70, 286, 88);
+  ctx.moveTo(292, 64); ctx.lineTo(292, 80); ctx.moveTo(284, 72); ctx.lineTo(300, 72);
+  ctx.stroke();
+  // more ⋯
+  ctx.fillStyle = "#b3b3b3";
+  for (const dx of [0, 12, 24]) {
+    ctx.beginPath();
+    ctx.arc(330 + dx, 70, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Header
+  ctx.font = fontString("sans", 22);
+  ctx.textBaseline = "middle";
+  ctx.fillText("#", 34, 150);
+  ctx.fillText("Title", 84, 150);
+  ctx.fillStyle = "#2a2a2a";
+  ctx.fillRect(24, 172, PANEL.w - 48, 2);
+  const rows = 10;
+  const rh = (PANEL.h - 196) / rows;
+  const tracks = x.tracks ?? [];
+  for (let i = 0; i < rows; i++) {
+    const y = 190 + i * rh;
+    const t = tracks[i];
+    ctx.fillStyle = "#b3b3b3";
+    ctx.font = fontString("sans", 22);
+    ctx.textAlign = "center";
+    ctx.fillText(String(i + 1), 40, y + rh / 2);
+    ctx.textAlign = "left";
+    const art = { x: 74, y: y + (rh - 58) / 2, w: 58, h: 58 };
+    const img = (t?.trackId && x.art?.get(t.trackId)) || x.photo;
+    ctx.save();
+    roundRect(ctx, art, 4);
+    ctx.clip();
+    if (img) {
+      const side = Math.min(img.width, img.height);
+      const shift = t?.trackId && x.art?.get(t.trackId) ? 0 : (i * 0.13) % 0.5; // vary fallback crops
+      ctx.drawImage(img, (img.width - side) * (0.25 + shift), (img.height - side) / 2, side, side, art.x, art.y, art.w, art.h);
+    } else {
+      ctx.fillStyle = "#333";
+      ctx.fillRect(art.x, art.y, art.w, art.h);
+    }
+    ctx.restore();
+    const tx = 150;
+    if (t) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = fontString("sans", 25);
+      ctx.fillText(t.title, tx, y + rh / 2 - 15, PANEL.w - tx - 24);
+      let ax = tx;
+      if (t.explicit) {
+        ctx.fillStyle = "#b3b3b3";
+        roundRect(ctx, { x: ax, y: y + rh / 2 + 6, w: 20, h: 20 }, 3);
+        ctx.fill();
+        ctx.fillStyle = "#121212";
+        ctx.font = fontString("sans", 15);
+        ctx.textAlign = "center";
+        ctx.fillText("E", ax + 10, y + rh / 2 + 17);
+        ctx.textAlign = "left";
+        ax += 28;
+      }
+      ctx.fillStyle = "#b3b3b3";
+      ctx.font = fontString("sans", 20);
+      ctx.fillText(t.artist, ax, y + rh / 2 + 17, PANEL.w - ax - 24);
+    } else {
+      ctx.fillStyle = "#2f2f2f";
+      roundRect(ctx, { x: tx, y: y + rh / 2 - 22, w: 200 + ((i * 67) % 150), h: 16 }, 8);
+      ctx.fill();
+      ctx.fillStyle = "#262626";
+      roundRect(ctx, { x: tx, y: y + rh / 2 + 8, w: 110 + ((i * 41) % 90), h: 12 }, 6);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
 }
 
 function petals(ctx: Ctx, n: number, len: number, wid: number, fill: string, stroke?: string) {
@@ -81,7 +226,7 @@ function heartPath(ctx: Ctx, size: number) {
 }
 
 /** Draw one sticker. Coordinates are in 1080×1920 story units. */
-export function drawSticker(ctx: Ctx, s: Sticker): void {
+export function drawSticker(ctx: Ctx, s: Sticker, extras: StickerExtras = {}): void {
   const size = BASE * s.scale;
   ctx.save();
   ctx.translate(s.x * W, s.y * H);
@@ -90,6 +235,11 @@ export function drawSticker(ctx: Ctx, s: Sticker): void {
   ctx.lineCap = "round";
   if (isElement(s.kind)) {
     drawElement(ctx, s.kind, size * 1.6);
+    ctx.restore();
+    return;
+  }
+  if (s.kind === "spotify") {
+    playlistPanel(ctx, s, extras);
     ctx.restore();
     return;
   }

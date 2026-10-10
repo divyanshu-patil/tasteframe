@@ -13,7 +13,7 @@ const photo = { width: 1200, height: 1600 } as never;
 describe("song cover", () => {
   it("cover layouts show it; Cover Over Face sits on the subject", () => {
     const s = defaultState("coverface", input);
-    expect(s.cover).toMatchObject({ show: true, style: "plain", x: 0.3, trackId: 11, title: "golden hour" });
+    expect(s.cover).toMatchObject({ show: true, style: "ig", x: 0.3, trackId: 11, title: "golden hour" });
     expect(s.cover!.y).toBeCloseTo(0.31);
     expect(s.cover!.scale).toBe(1.3);
     expect(defaultState("editorial", input).cover?.show).toBe(false);

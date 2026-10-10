@@ -127,3 +127,25 @@ export function filteredPhoto(photo: Photo, id: FilterId = "none"): Photo {
   byFilter.set(id, c);
   return c;
 }
+
+const turned = new WeakMap<object, Map<number, HTMLCanvasElement>>();
+
+/** The photo (or mask) turned clockwise by `rot` degrees (cached). 0 returns it unchanged. */
+export function rotatedPhoto<T extends Photo>(photo: T, rot = 0): T | HTMLCanvasElement {
+  if (!rot || typeof document === "undefined") return photo;
+  let byRot = turned.get(photo);
+  if (!byRot) turned.set(photo, (byRot = new Map()));
+  const hit = byRot.get(rot);
+  if (hit) return hit;
+  const c = document.createElement("canvas");
+  const side = rot === 90 || rot === 270;
+  c.width = side ? photo.height : photo.width;
+  c.height = side ? photo.width : photo.height;
+  const ctx = c.getContext("2d");
+  if (!ctx) return photo;
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate((rot * Math.PI) / 180);
+  ctx.drawImage(photo, -photo.width / 2, -photo.height / 2);
+  byRot.set(rot, c);
+  return c;
+}

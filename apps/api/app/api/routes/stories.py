@@ -52,6 +52,7 @@ def _not_found() -> AppError:
 @router.post(
     "",
     response_model=StoryOut,
+    response_model_exclude_none=True,
     status_code=201,
     dependencies=[Depends(rate_limit("save", "rate_limit_analysis_per_10min", 600))],
 )
@@ -89,7 +90,7 @@ async def save_story(
     return _out(row)
 
 
-@router.get("", response_model=StoryListOut)
+@router.get("", response_model=StoryListOut, response_model_exclude_none=True)
 async def list_stories(
     user: AuthUser = Depends(require_user), repo: SupabaseStories = Depends(get_repo)
 ) -> StoryListOut:

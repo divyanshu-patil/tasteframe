@@ -23,7 +23,7 @@ function put(ctx: Ctx, slots: Slots, i: number, r: Rect, radius = 0) {
   ctx.clip();
   if (slots.own(i)) drawPhoto(ctx, slots.photo(i), r, slots.crop(i));
   else {
-    const c = slots.crop(0);
+    const c = slots.adjust(`slot${i}`, slots.crop(0));
     const sh = SHIFTS[i % SHIFTS.length]!;
     drawPhoto(ctx, slots.photo(0), r, {
       ...c,

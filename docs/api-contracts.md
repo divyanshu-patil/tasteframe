@@ -117,7 +117,7 @@ crop focus: the main subject's position from image reasoning, or 0.5/0.5 when un
 ## `GET /v1/music/search?q=<2–80 chars>` (session required)
 Songs from the iTunes Search API, for picking a Story's square song cover. No audio.
 ```json
-{"query":"golden hour","tracks":[{"track_id":1640157165,"title":"golden hour","artist":"JVKE","album":"…","has_artwork":true}]}
+{"query":"golden hour","tracks":[{"track_id":1640157165,"title":"golden hour","artist":"JVKE","album":"…","has_artwork":true,"explicit":false}]}
 ```
 
 ## `GET /v1/music/artwork/{track_id}` (session required)
@@ -157,6 +157,21 @@ API verifies the token with Supabase Auth, then queries PostgREST **as that user
  "config": { "...exact StoryState from apps/web/lib/story/types.ts (strictly validated)..." },
  "provenance": {"qloo_used": true, "music_artist": "…", "music_title": null, "track_source": null}}
 ```
+
+`config` is the editor's serializable state, validated field by field. Beyond text, crop and
+overlay it can carry:
+
+- `stickers`: user stickers and layout elements, with `layout: true`;
+- `cover`: the Instagram-style song sticker (`ig` | `igpill` | `igart`, `trackId`);
+- `tracks`: real Apple Music tracks for the playlist panel;
+- `views`: per-box pan/zoom, keyed `slotN` or a named inset;
+- `spot`: the movable strip/window;
+- `outline`: thickness, gap and colour of the die-cut;
+- `focus`;
+- `crop.rot`.
+
+Unknown keys are rejected.
+
 Copies the photo to `saved/<user_id>/`, inserts a row, and returns
 `StoryOut {id, template_id, config, provenance, created_at}`. Errors: `STORY_LIMIT` (409, 20 per
 user), `OBJECT_NOT_FOUND` (404, upload expired), `PERSISTENCE_UNAVAILABLE` (503, copy rolled back).

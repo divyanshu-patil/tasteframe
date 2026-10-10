@@ -26,3 +26,38 @@ describe("movable strips and windows", () => {
     expect(defaultState("colorbox", input).spot).toBeDefined();
   });
 });
+
+describe("layout-placed elements", () => {
+  it("places the kiss mark on the face as a draggable sticker", () => {
+    const s = defaultState("kissmark", input);
+    const kiss = s.stickers.find((x) => x.kind === "kiss")!;
+    expect(kiss).toMatchObject({ x: 0.45, layout: true });
+    expect(kiss.y).toBeCloseTo(0.31);
+  });
+
+  it("swaps layout elements on layout change but keeps the user's own stickers", () => {
+    let s = defaultState("kissmark", input);
+    s = editorReducer(s, { type: "sticker-add", sticker: { id: "mine", kind: "star", x: 0.5, y: 0.5, scale: 1, rotate: 0, color: "#d9a62e" } });
+    const next = editorReducer(s, { type: "template", id: "camcorder", input });
+    expect(next.stickers.map((x) => x.id)).toContain("mine");
+    expect(next.stickers.some((x) => x.kind === "kiss")).toBe(false);
+    expect(next.stickers.some((x) => x.kind === "brackets" && x.layout)).toBe(true);
+  });
+
+  it("outline width is configurable and clamped", () => {
+    const s = editorReducer(defaultState("cutout", input), { type: "outline", patch: { width: 99, color: "#ff0000" } });
+    expect(s.outline).toEqual({ show: true, color: "#ff0000", width: 40, margin: 0 });
+  });
+});
+
+describe("auto-fit headlines", () => {
+  it("shrinks a long single word to the layer width", async () => {
+    const { drawText } = await import("./draw");
+    const { fakeCtx } = await import("./fakeCtx");
+    const layer = { text: "CELEBRATION", size: 210, color: "#fff", align: "center" as const, x: 0.5, y: 0.1, width: 0.9, font: "sans" as const };
+    const wide = drawText(fakeCtx().ctx, layer);
+    const fit = drawText(fakeCtx().ctx, layer, { fit: true });
+    expect(wide.w).toBeGreaterThan(0.9 * 1080);
+    expect(fit.w).toBeLessThanOrEqual(0.9 * 1080 + 1);
+  });
+});

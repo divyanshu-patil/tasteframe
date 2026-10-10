@@ -52,7 +52,7 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
   return img;
 }
 
-export function StoryMaker() {
+export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   const [phase, setPhase] = useState<Phase>("setup");
   // 1–4 photos for one Story (order = upload order; layouts can rearrange them per slot).
   const [photos, setPhotos] = useState<PhotoFile[]>([]);
@@ -224,8 +224,14 @@ export function StoryMaker() {
       );
       if (!live()) return;
       setAnalysis(result);
-      setStoryDate(new Date());
-      setPhase("results");
+      const date = new Date();
+      setStoryDate(date);
+      if (preset) {
+        // Picked from the gallery: go straight to that layout, personalised by the analysis.
+        const layout = result.layouts.find((l) => l.id === preset) ?? result.layouts[0] ?? null;
+        setStory(defaultState(preset, inputFor(layout, result, date)));
+        setPhase("edit");
+      } else setPhase("results");
     } catch (e) {
       if (!live() || (e as Error).name === "AbortError") return;
       if (
@@ -252,9 +258,13 @@ export function StoryMaker() {
   const continueLocally = () => {
     runId.current++;
     setAnalysis(null);
-    setStoryDate(new Date());
+    const date = new Date();
+    setStoryDate(date);
     setRunError(null);
-    setPhase("results");
+    if (preset) {
+      setStory(defaultState(preset, inputFor(null, null, date)));
+      setPhase("edit");
+    } else setPhase("results");
   };
 
   const openEditor = (id: TemplateId) => {
@@ -410,6 +420,14 @@ export function StoryMaker() {
 
         {canSave && user && (
           <SavedStories key={`${user.id}:${savedVersion}`} onOpen={openSaved} />
+        )}
+
+        {preset && (
+          <p className={s.notice} role="status">
+            Layout chosen: <strong>{TEMPLATES[preset].name}</strong>
+            {(TEMPLATES[preset].capacity ?? 1) > 1 ? ` (holds up to ${TEMPLATES[preset].capacity} photos)` : ""}. Add your photo
+            and it opens straight in this layout. <a className={s.linkBtn} href="/gallery">Pick another</a>
+          </p>
         )}
 
         <div className={s.step}>

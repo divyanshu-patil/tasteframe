@@ -3,10 +3,10 @@
 // shapes; text comes from the Story, never invented track names.
 import { drawCutout } from "./cutout";
 import { type Ctx, type Photo, drawGrain, drawPhoto, fontString, rgba, rng, roundRect } from "./draw";
-import { drawElement } from "./elements";
+import { drawScreen } from "./elements";
 import { filteredPhoto } from "./filters";
 import { type Slots, type Template, decos, fmtDate, on, pad, t } from "./kit";
-import { drawSticker } from "./stickers";
+import type { Sticker, StickerKind } from "./stickers";
 import type { Crop, Rect, StoryState, TemplateId, TemplateInput } from "./types";
 import { STORY_H as H, STORY_W as W } from "./types";
 
@@ -31,6 +31,19 @@ function face(s: StoryState, slots: Slots, r: Rect = FULL) {
   return { x: Math.min(r.x + r.w - 60, Math.max(r.x + 60, p.x)), y: Math.min(r.y + r.h - 60, Math.max(r.y + 60, p.y)), w: p.w };
 }
 
+const fp = (i: TemplateInput) => i.focuses?.[0] ?? i.focus ?? { x: 0.5, y: 0.42 };
+/** A layout-placed element sticker; `px` is its longest side in Story pixels. */
+const el = (kind: StickerKind, x: number, y: number, px: number, rotate = 0, color = "#ffffff"): Sticker => ({
+  id: `layout-${kind}-${Math.round(x * 1000)}-${Math.round(y * 1000)}`,
+  kind,
+  x: Math.min(1, Math.max(0, x)),
+  y: Math.min(1, Math.max(0, y)),
+  scale: Math.min(5, Math.max(0.3, px / 240)),
+  rotate: ((rotate % 360) + 360) % 360,
+  color,
+  layout: true,
+});
+
 /** Eye-level band default: with the subject crop, photo-y f lands at Story-y f. */
 const eyeBand = (i: TemplateInput, x: number, w: number, h: number): Rect => {
   const fy = (i.focuses?.[0] ?? i.focus)?.y ?? 0.4;
@@ -44,7 +57,7 @@ const SHIFT = [
   { x: 0.04, y: 0.08, z: 1.35 },
 ];
 /** Slot i (own photo, or a gently shifted crop of photo 1) into r, clipped. */
-function slotPhoto(ctx: Ctx, slots: Slots, i: number, r: Rect, radius = 0, photoOverride?: (p: Photo) => Photo) {
+function slotPhoto(ctx: Ctx, slots: Slots, i: number, r: Rect, radius = 0, photoOverride?: (p: Photo) => Photo, key?: string) {
   ctx.save();
   if (radius) roundRect(ctx, r, radius);
   else {
@@ -53,7 +66,7 @@ function slotPhoto(ctx: Ctx, slots: Slots, i: number, r: Rect, radius = 0, photo
   }
   ctx.clip();
   const own = slots.own(i);
-  const base = slots.crop(own ? i : 0);
+  const base = own ? slots.crop(i) : slots.adjust(key ?? `slot${i}`, slots.crop(0));
   const sh = own ? SHIFT[0]! : SHIFT[i % SHIFT.length]!;
   const src = slots.photo(own ? i : 0);
   drawPhoto(ctx, photoOverride ? photoOverride(src) : src, r, {
@@ -65,20 +78,18 @@ function slotPhoto(ctx: Ctx, slots: Slots, i: number, r: Rect, radius = 0, photo
   ctx.restore();
 }
 
+/** The Story's outline setting; `base` scales the width for layouts with a subtler die-cut. */
+function outlineOf(s: StoryState, base = 14) {
+  const o = s.outline ?? { show: true, color: WHITE, width: 14, margin: 0 };
+  return o.show && o.width > 0 && base > 0 ? { color: o.color, width: (o.width * base) / 14, margin: o.margin ?? 0 } : undefined;
+}
+
 function rot(ctx: Ctx, cx: number, cy: number, deg: number, fn: () => void) {
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate((deg * Math.PI) / 180);
   ctx.translate(-cx, -cy);
   fn();
-  ctx.restore();
-}
-
-function element(ctx: Ctx, kind: Parameters<typeof drawElement>[1], x: number, y: number, size: number, deg = 0) {
-  ctx.save();
-  ctx.translate(x, y);
-  if (deg) ctx.rotate((deg * Math.PI) / 180);
-  drawElement(ctx, kind, size);
   ctx.restore();
 }
 
@@ -105,66 +116,44 @@ const timeFrom = (s: StoryState) => {
   return `${pad(10 + (n % 13))}:${pad((n * 7) % 60)}`;
 };
 
-// ---- u01 Playlist: a dark library panel over two stacked photos -------------------------
+// ---- u01 Playlist (pin 613967361752648972): Spotify playlist table over two photos --------
+// The table is a regular sticker (kind "spotify"): drag, rotate or delete it. Rows hold real
+// Apple Music tracks by the song's artist (StoryState.tracks), never invented titles.
 const playlist: Template = {
   id: "playlist",
   name: "Playlist",
-  blurb: "A dark music-library panel up top, two photos stacked below.",
-  overlayLabel: "Panel",
+  blurb: "A Spotify-style playlist table across the top, two photos below — rotate anything.",
+  overlayLabel: "Background",
   capacity: 2,
-  decorations: decos([["hearts", "Hearts", true]]),
+  decorations: [],
+  stickers: () => [
+    { ...el("spotify", 0.5, 0.168, 1080, 90), scale: 1.04, color: "#1ed760" },
+    { ...el("heart", 0.3, 0.84, 84, 350), color: "#ff8a3d", scale: 0.35 },
+    { ...el("heart", 0.2, 0.93, 96, 10), color: "#ff3d8b", scale: 0.4 },
+  ],
   slotRects: () => [
-    { x: 0, y: 700, w: W, h: 610 },
-    { x: 0, y: 1310, w: W, h: 610 },
+    { x: 0, y: 646, w: W, h: 637 },
+    { x: 0, y: 1283, w: W, h: 637 },
   ],
   defaults: (i) => ({
-    headline: t({ text: i.headline, font: "sans", size: 44, color: WHITE, x: 0.08, y: 0.15, width: 0.84 }),
-    caption: t({ text: i.caption || fmtDate(i.date), font: "mono", size: 22, color: WHITE, x: 0.08, y: 0.78 }),
-    overlay: { strength: 1, color: "#121212" },
-    decorations: { hearts: true },
+    headline: t({ text: i.headline, font: "sans", size: 30, color: WHITE, x: 0.06, y: 0.78, width: 0.6 }),
+    caption: t({ text: "", font: "mono", size: 20, color: WHITE, x: 0.06, y: 0.8 }),
+    overlay: { strength: 1, color: "#000000" },
+    decorations: {},
   }),
   draw(ctx, _p, s, slots) {
-    slotPhoto(ctx, slots, 0, { x: 0, y: 700, w: W, h: 610 });
-    slotPhoto(ctx, slots, 1, { x: 0, y: 1310, w: W, h: 610 });
     ctx.fillStyle = s.overlay.color;
-    ctx.fillRect(0, 0, W, 700);
-    label(ctx, "#     title", 86, 380, 20, "#8a8a8a");
-    ctx.fillStyle = "#2a2a2a";
-    ctx.fillRect(86, 412, W - 172, 2);
-    for (let r = 0; r < 4; r++) {
-      const y = 432 + r * 64;
-      label(ctx, String(r + 1), 86, y + 16, 22, "#8a8a8a");
-      slotPhoto(ctx, slots, r % Math.max(1, slots.count), { x: 130, y, w: 52, h: 52 }, 4);
-      if (r === 0 && songTitle(s)) {
-        label(ctx, songTitle(s), 204, y + 2, 24, WHITE, "sans");
-        label(ctx, songArtist(s), 204, y + 30, 18, "#9a9a9a", "sans");
-      } else {
-        // No invented track names: neutral placeholders.
-        bar(ctx, 204, y + 10, 220 + ((r * 97) % 160), 14, "#3a3a3a");
-        bar(ctx, 204, y + 34, 120 + ((r * 53) % 90), 10, "#2c2c2c");
-      }
-    }
-    ctx.fillStyle = s.accent;
-    ctx.beginPath();
-    ctx.arc(W - 120, 300, 42, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#121212";
-    ctx.beginPath();
-    ctx.moveTo(W - 132, 280);
-    ctx.lineTo(W - 104, 300);
-    ctx.lineTo(W - 132, 320);
-    ctx.fill();
-    if (on(s, "hearts")) {
-      drawSticker(ctx, { id: "h1", kind: "heart", x: 0.3, y: 0.84, scale: 0.35, rotate: 350, color: "#ff8a3d" });
-      drawSticker(ctx, { id: "h2", kind: "heart", x: 0.2, y: 0.93, scale: 0.4, rotate: 10, color: "#ff3d8b" });
-    }
+    ctx.fillRect(0, 0, W, H);
+    slotPhoto(ctx, slots, 0, { x: 0, y: 646, w: W, h: 637 });
+    slotPhoto(ctx, slots, 1, { x: 0, y: 1283, w: W, h: 637 });
   },
-  text: { caption: { shadow: true } },
+  text: { headline: { shadow: true } },
 };
 
 // ---- u02 Player Cutout: die-cut person over collage paper on a player card ---------------
 const playercut: Template = {
   id: "playercut",
+  outline: true,
   name: "Player Cutout",
   blurb: "You cut out over a collage, on a deep-red music player card.",
   overlayLabel: "Card",
@@ -189,12 +178,12 @@ const playercut: Template = {
     const paper = { x: 110, y: 300, w: 860, h: 760 };
     ctx.save();
     ctx.globalAlpha = 0.7;
-    slotPhoto(ctx, slots, 0, paper, 0, (p) => filteredPhoto(p, "faded"));
+    slotPhoto(ctx, slots, 1, paper, 0, (p) => filteredPhoto(p, "faded"), "paper");
     ctx.restore();
     ctx.fillStyle = "rgba(240,225,200,0.35)";
     ctx.fillRect(paper.x, paper.y, paper.w, paper.h);
     const cut = { x: 60, y: 200, w: 960, h: 960 };
-    const ok = drawCutout(ctx, slots.photo(0), slots.mask(0), cut, slots.crop(0), { color: WHITE, width: 7 });
+    const ok = drawCutout(ctx, slots.photo(0), slots.mask(0), cut, slots.crop(0), outlineOf(s, 7));
     if (!ok) slotPhoto(ctx, slots, 0, paper);
     label(ctx, "now playing", 130, 1150, 22, "#e8a0a8");
     if (!on(s, "controls")) return;
@@ -252,14 +241,24 @@ const RED = "#b83333";
 const cctv: Template = {
   id: "cctv",
   name: "CCTV",
+  views: (s, slots) => {
+    const f = face(s, slots);
+    return on(s, "callouts") ? [{ key: "inset", r: cctvInset(f, cctvBox(f)) }] : [];
+  },
   blurb: "Surveillance-cam frame: timestamp, red tracking boxes and zoomed callouts.",
   overlayLabel: "Photo tint",
-  decorations: decos([["icons", "Folder & warning icons", true], ["callouts", "Zoom callouts", true]]),
+  decorations: decos([["callouts", "Zoom callouts", true]]),
+  stickers: (i) => [
+    el("folder", 150 / W, 980 / H, 120, -6),
+    el("folder", 210 / W, 1140 / H, 80, 4),
+    el("warning", (W - 170) / W, 560 / H, 110),
+    el("cursor", fp(i).x + 0.05, fp(i).y + 0.04, 110),
+  ],
   defaults: (i) => ({
     headline: t({ text: i.headline.toUpperCase(), font: "mono", size: 40, color: WHITE, x: 0.08, y: 0.09, width: 0.6 }),
     caption: t({ text: `DATA UPDATE\n${(i.caption || fmtDate(i.date)).toUpperCase()}`, font: "mono", size: 24, color: WHITE, x: 0.08, y: 0.78, width: 0.5 }),
     overlay: { strength: 0.12, color: "#000000" },
-    decorations: { icons: true, callouts: true },
+    decorations: { callouts: true },
     filter: "faded",
   }),
   draw(ctx, _p, s, slots) {
@@ -275,8 +274,8 @@ const cctv: Template = {
     label(ctx, "SCENE 05/20", W - 86, 150, 34, WHITE, "mono", "right");
     label(ctx, "DESIGN BY\nYOU", W - 86, 1490, 24, WHITE, "mono", "right");
     const f = face(s, slots);
-    const bw = Math.max(240, Math.min(380, f.w * 0.26));
-    const box = { x: f.x - bw / 2, y: f.y - bw * 0.62, w: bw, h: bw * 1.15 };
+    const box = cctvBox(f);
+    const bw = box.w;
     ctx.strokeStyle = RED;
     ctx.lineWidth = 5;
     ctx.strokeRect(box.x, box.y, box.w, box.h);
@@ -285,7 +284,7 @@ const cctv: Template = {
     label(ctx, "SUBJECT", box.x + box.w - 70, box.y - 34, 24, WHITE, "mono", "center");
     if (on(s, "callouts")) {
       const bw2 = filteredPhoto(slots.photo(0), "bw");
-      const ins = { x: f.x < W / 2 ? W - 400 : 90, y: Math.min(1180, box.y + box.h + 120), w: 310, h: 310 };
+      const ins = cctvInset(f, box);
       ctx.beginPath();
       ctx.moveTo(box.x + (ins.x > f.x ? box.w : 0), box.y + box.h);
       ctx.lineTo(ins.x + (ins.x > f.x ? 0 : ins.w), ins.y);
@@ -295,7 +294,7 @@ const cctv: Template = {
       ctx.rect(ins.x, ins.y, ins.w, ins.h);
       ctx.clip();
       const c = slots.crop(0);
-      drawPhoto(ctx, bw2, ins, { ...c, zoom: c.zoom * 2.4, x: s.focus?.x ?? 0.5, y: s.focus?.y ?? 0.4 });
+      drawPhoto(ctx, bw2, ins, slots.adjust("inset", { ...c, zoom: c.zoom * 2.4, x: s.focus?.x ?? 0.5, y: s.focus?.y ?? 0.4 }));
       ctx.restore();
       ctx.strokeRect(ins.x, ins.y, ins.w, ins.h);
       label(ctx, `#${s.accent.replace("#", "").toUpperCase()}`, ins.x, ins.y - 32, 22, WHITE);
@@ -305,14 +304,17 @@ const cctv: Template = {
       ctx.fillRect(d.x, d.y - 36, 110, 36);
       label(ctx, "DETAIL", d.x + 55, d.y - 31, 20, WHITE, "mono", "center");
     }
-    if (on(s, "icons")) {
-      element(ctx, "folder", 150, 980, 120, -6);
-      element(ctx, "folder", 210, 1140, 80, 4);
-      element(ctx, "warning", W - 170, 560, 110);
-      element(ctx, "cursor", box.x + box.w * 0.6, box.y + box.h * 0.75, 110);
-    }
   },
 };
+
+function cctvBox(f: { x: number; y: number; w: number }): Rect {
+  const bw = Math.max(240, Math.min(380, f.w * 0.26));
+  return { x: f.x - bw / 2, y: f.y - bw * 0.62, w: bw, h: bw * 1.15 };
+}
+
+function cctvInset(f: { x: number; y: number }, box: Rect): Rect {
+  return { x: f.x < W / 2 ? W - 400 : 90, y: Math.min(1180, box.y + box.h + 120), w: 310, h: 310 };
+}
 
 // ---- u05 Colour Box: B&W photo with a draggable colour window ----------------------------
 const MAROON = "#6e1420";
@@ -340,7 +342,7 @@ const colorbox: Template = {
   },
   front(ctx, s, slots) {
     // The person in front of the big title, then the colour window.
-    drawCutout(ctx, filteredPhoto(slots.photo(0), "bw"), slots.mask(0), FULL, slots.crop(0));
+    drawCutout(ctx, filteredPhoto(slots.photo(0), "bw"), slots.mask(0), FULL, slots.crop(0), outlineOf(s, 0));
     const sp = s.spot ?? { x: 0.2, y: 0.4, w: 0.6, h: 0.3 };
     const r = { x: sp.x * W, y: sp.y * H, w: sp.w * W, h: sp.h * H };
     ctx.save();
@@ -358,7 +360,7 @@ const colorbox: Template = {
       label(ctx, (s.tags?.[0] || "style").toUpperCase(), W - 180, r.y + 46, 52, WHITE, "sans", "center");
     }
   },
-  text: { headline: { lineHeight: 0.85, tracking: 0.02 } },
+  text: { headline: { lineHeight: 0.85, tracking: 0.02, fit: true } },
 };
 
 // ---- u06 Torn Strip: magazine cover torn open across the eyes -----------------------------
@@ -412,22 +414,24 @@ const tornstrip: Template = {
     tornBand(ctx, top, 11, 1);
     tornBand(ctx, bot, 23, -1);
   },
-  text: { headline: { tracking: 0.08 } },
+  text: { headline: { tracking: 0.08, fit: true } },
 };
 
 // ---- u07 Sticker Cutout: you as a die-cut sticker over huge words ------------------------
 const cutout: Template = {
   id: "cutout",
+  outline: true,
   name: "Sticker Cutout",
   blurb: "You as a die-cut sticker with a white outline, standing over huge words.",
   overlayLabel: "Photo tint",
   needsMask: true,
-  decorations: decos([["doodles", "Cat & heart doodles", true]]),
+  decorations: [],
+  stickers: (i) => [el("faceheart", fp(i).x + 0.06, fp(i).y + 0.035, 72), el("cat", 220 / W, 1520 / H, 170)],
   defaults: (i) => ({
     headline: t({ text: i.headline.toUpperCase(), font: "sans", size: 210, color: WHITE, x: 0.5, y: 0.14, width: 0.95, align: "center" }),
     caption: t({ text: i.caption || fmtDate(i.date), font: "mono", size: 22, color: WHITE, x: 0.08, y: 0.79 }),
     overlay: { strength: 0.1, color: "#000000" },
-    decorations: { doodles: true },
+    decorations: {},
   }),
   draw(ctx, _p, s, slots) {
     drawPhoto(ctx, slots.photo(0), FULL, slots.crop(0));
@@ -435,13 +439,9 @@ const cutout: Template = {
     ctx.fillRect(0, 0, W, H);
   },
   front(ctx, s, slots) {
-    drawCutout(ctx, slots.photo(0), slots.mask(0), FULL, slots.crop(0), { color: WHITE, width: 16 });
-    if (!on(s, "doodles")) return;
-    const f = face(s, slots);
-    element(ctx, "faceheart", f.x + f.w * 0.06, f.y + f.w * 0.05, 46);
-    element(ctx, "cat", 220, 1520, 170);
+    drawCutout(ctx, slots.photo(0), slots.mask(0), FULL, slots.crop(0), outlineOf(s));
   },
-  text: { headline: { lineHeight: 0.84, tracking: -0.04 }, caption: { shadow: true } },
+  text: { headline: { lineHeight: 0.84, tracking: -0.04, fit: true }, caption: { shadow: true } },
 };
 
 // ---- u08 Focus: blurred B&W with a sharp colour strip over the eyes ----------------------
@@ -450,7 +450,8 @@ const focus: Template = {
   name: "Focus",
   blurb: "Soft black-and-white blur with one sharp strip across the eyes.",
   overlayLabel: "Blur tint",
-  decorations: decos([["barcode", "Barcode & date", true]]),
+  decorations: decos([["barcode", "Date", true]]),
+  stickers: () => [el("barcode", (W - 170) / W, 1520 / H, 260, 0, "#111111")],
   spot: (i) => eyeBand(i, 0.1, 0.86, 0.156),
   defaults: (i) => ({
     headline: t({ text: i.headline.toUpperCase(), font: "sans", size: 130, color: WHITE, x: 0.5, y: 0.04, width: 0.96, align: "center" }),
@@ -480,10 +481,9 @@ const focus: Template = {
     if (on(s, "barcode")) {
       const d = new Date(2000 + Number(s.stamp.slice(1, 3)), Number(s.stamp.slice(4, 6)) - 1, Number(s.stamp.slice(7, 9)));
       label(ctx, `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`, 60, 1500, 34, WHITE, "sans");
-      element(ctx, "barcode", W - 170, 1520, 260);
     }
   },
-  text: { headline: { outline: 3, tracking: 0.08 }, caption: { rotate: -Math.PI / 2 } },
+  text: { headline: { outline: 3, tracking: 0.08, fit: true }, caption: { rotate: -Math.PI / 2 } },
 };
 
 // ---- u09 Camera LCD: the photo on a camera's back screen ---------------------------------
@@ -492,7 +492,11 @@ const viewfinder: Template = {
   name: "Camera Screen",
   blurb: "Your photo on a camera's back screen, with focus brackets and REC.",
   overlayLabel: "Body",
-  decorations: decos([["hud", "Screen HUD", true]]),
+  decorations: decos([["hud", "Screen readouts", true]]),
+  stickers: (i) => [
+    el("brackets", (130 + fp(i).x * 820) / W, (330 + fp(i).y * 1120) / H, 260),
+    el("rec", 840 / W, 380 / H, 140),
+  ],
   slotRects: () => [{ x: 130, y: 330, w: 820, h: 1120 }],
   defaults: (i) => ({
     headline: t({ text: i.headline, font: "sans", size: 40, color: WHITE, x: 0.12, y: 0.79, width: 0.76 }),
@@ -520,9 +524,6 @@ const viewfinder: Template = {
     ctx.fillStyle = "rgba(220,255,235,0.12)";
     ctx.fillRect(scr.x, scr.y, scr.w, scr.h);
     if (!on(s, "hud")) return;
-    const f = face(s, slots, scr);
-    element(ctx, "brackets", f.x, f.y, Math.max(200, Math.min(320, f.w * 0.3)));
-    element(ctx, "rec", scr.x + scr.w - 110, scr.y + 50, 140);
     label(ctx, "ISO 400   1/125   F2.8   AWB", scr.x + 30, scr.y + scr.h - 50, 20, "#7dffb0");
     label(ctx, "4K", scr.x + 30, scr.y + 30, 22, "#7dffb0");
   },
@@ -534,7 +535,8 @@ const camcorder: Template = {
   name: "Camcorder",
   blurb: "Full-frame camcorder viewfinder: REC dot, timer and green focus brackets on the face.",
   overlayLabel: "Frame",
-  decorations: decos([["hud", "Viewfinder HUD", true]]),
+  decorations: decos([["hud", "Viewfinder readouts", true]]),
+  stickers: (i) => [el("brackets", fp(i).x, fp(i).y, 280), el("rec", (W - 150) / W, 305 / H, 150)],
   defaults: (i) => ({
     headline: t({ text: i.headline, font: "mono", size: 30, color: WHITE, x: 0.08, y: 0.76, width: 0.84 }),
     caption: t({ text: i.caption || fmtDate(i.date), font: "mono", size: 20, color: WHITE, x: 0.08, y: 0.8 }),
@@ -548,10 +550,7 @@ const camcorder: Template = {
     ctx.lineWidth = 36;
     ctx.strokeRect(0, 0, W, H);
     if (!on(s, "hud")) return;
-    const f = face(s, slots);
-    element(ctx, "brackets", f.x, f.y, Math.max(220, Math.min(340, f.w * 0.3)));
     label(ctx, "AF    ISO 200    1/60    ▮▮▮", 70, 290, 22, WHITE);
-    element(ctx, "rec", W - 150, 305, 150);
     label(ctx, `00:${timeFrom(s)}`, 70, 1600, 26, WHITE);
   },
   text: { headline: { shadow: true }, caption: { shadow: true } },
@@ -666,49 +665,54 @@ const desktop: Template = {
   },
 };
 
-// ---- u15 Chat: two photo messages on a dark screen ----------------------------------------
+// ---- u15 / pin 997125173755428109: WhatsApp on a laptop — the owner's green-screen template.
+// public/templates/whatsapp-screen.png has the green keyed out; photos sit in its windows.
+const WA: Rect[] = [
+  { x: 121, y: 0, w: 931, h: 173 },
+  { x: 169, y: 144, w: 877, h: 659 },
+  { x: 155, y: 819, w: 860, h: 589 },
+];
 const chat: Template = {
   id: "chat",
-  name: "Chat",
-  blurb: "Two photos sent as chat messages, with the headline typed in the message box.",
-  overlayLabel: "Screen",
-  capacity: 2,
+  name: "WhatsApp Screen",
+  blurb: "Your photos as WhatsApp messages on a laptop screen at night.",
+  overlayLabel: "Screen tint",
+  capacity: 3,
   decorations: decos([["times", "Timestamps", true]]),
-  slotRects: () => [
-    { x: 100, y: 330, w: 880, h: 560 },
-    { x: 100, y: 920, w: 880, h: 560 },
-  ],
+  slotRects: () => [WA[1]!, WA[2]!, WA[0]!],
   defaults: (i) => ({
-    headline: t({ text: i.headline, font: "sans", size: 34, color: WHITE, x: 0.13, y: 0.785, width: 0.7 }),
-    caption: t({ text: i.caption || "online", font: "sans", size: 24, color: "#9ad1b5", x: 0.13, y: 0.135 }),
-    overlay: { strength: 1, color: "#0e1311" },
+    headline: t({ text: i.headline, font: "sans", size: 30, color: "#e9edef", x: 0.06, y: 0.746, width: 0.7 }),
+    caption: t({ text: "", font: "mono", size: 20, color: WHITE, x: 0.06, y: 0.8 }),
+    overlay: { strength: 0.06, color: "#000000" },
     decorations: { times: true },
   }),
   draw(ctx, _p, s, slots) {
-    ctx.fillStyle = "#050605";
+    ctx.fillStyle = "#0b0b0b";
     ctx.fillRect(0, 0, W, H);
-    rot(ctx, W / 2, H / 2, 1.5, () => {
-      ctx.fillStyle = s.overlay.color;
-      roundRect(ctx, { x: 50, y: 200, w: W - 100, h: 1560 }, 30);
-      ctx.fill();
-      [0, 1].forEach((i) => {
-        const r = { x: 100, y: 330 + i * 590, w: 880, h: 560 };
-        slotPhoto(ctx, slots, i, r, 18);
-        ctx.strokeStyle = "#1f6f4a";
-        ctx.lineWidth = 6;
-        roundRect(ctx, r, 18);
+    // Slot order: middle (main), bottom, then the top sliver.
+    slotPhoto(ctx, slots, 0, WA[1]!);
+    slotPhoto(ctx, slots, 1, WA[2]!);
+    slotPhoto(ctx, slots, 2, WA[0]!);
+    ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength);
+    ctx.fillRect(0, 0, W, H);
+    drawScreen(ctx, "whatsapp", W, H);
+    if (on(s, "times")) {
+      for (const [x, y] of [[985, 152], [957, 778], [933, 1338]] as const) {
+        ctx.save();
+        ctx.shadowColor = "rgba(0,0,0,0.6)";
+        ctx.shadowBlur = 6;
+        label(ctx, timeFrom(s), x - 28, y - 14, 25, WHITE, "sans", "right");
+        ctx.strokeStyle = WHITE;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(x - 8, y, 10, 0, Math.PI * 2);
+        ctx.moveTo(x - 8, y - 6);
+        ctx.lineTo(x - 8, y);
+        ctx.lineTo(x - 3, y + 3);
         ctx.stroke();
-        if (on(s, "times")) {
-          ctx.fillStyle = "rgba(0,0,0,0.45)";
-          roundRect(ctx, { x: r.x + r.w - 150, y: r.y + r.h - 56, w: 130, h: 40 }, 20);
-          ctx.fill();
-          label(ctx, `${timeFrom(s)} ✓`, r.x + r.w - 85, r.y + r.h - 50, 22, WHITE, "sans", "center");
-        }
-      });
-      ctx.fillStyle = "#1b2420";
-      roundRect(ctx, { x: 100, y: 1490, w: 880, h: 100 }, 50);
-      ctx.fill();
-    });
+        ctx.restore();
+      }
+    }
   },
 };
 
@@ -716,24 +720,20 @@ const chat: Template = {
 const kissmark: Template = {
   id: "kissmark",
   name: "Kiss Mark",
-  blurb: "An out-of-focus lipstick print on the lens, right over your face.",
+  blurb: "A translucent lipstick kiss on the lens, right over your face.",
   overlayLabel: "Photo tint",
-  decorations: decos([["kiss", "Lipstick mark", true]]),
+  decorations: [],
+  stickers: (i) => [el("kiss", fp(i).x, fp(i).y + 0.01, 860, -6)],
   defaults: (i) => ({
     headline: t({ text: i.headline, font: "hand", size: 64, color: WHITE, x: 0.08, y: 0.74, width: 0.84 }),
     caption: t({ text: i.caption || fmtDate(i.date), font: "mono", size: 20, color: WHITE, x: 0.08, y: 0.13 }),
     overlay: { strength: 0.12, color: "#4a5a20" },
-    decorations: { kiss: true },
+    decorations: {},
   }),
   draw(ctx, _p, s, slots) {
     drawPhoto(ctx, slots.photo(0), FULL, slots.crop(0));
     ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength);
     ctx.fillRect(0, 0, W, H);
-  },
-  front(ctx, s, slots) {
-    if (!on(s, "kiss")) return;
-    const f = face(s, slots);
-    element(ctx, "kissblur", f.x, f.y, Math.max(640, Math.min(980, f.w * 0.75)), -4);
   },
   text: { headline: { shadow: true }, caption: { shadow: true } },
 };
@@ -742,6 +742,7 @@ const kissmark: Template = {
 const xerox: Template = {
   id: "xerox",
   name: "Xerox Poster",
+  views: (s) => (on(s, "inset") ? [{ key: "inset", r: { x: 56, y: 522, w: 216, h: 326 } }] : []),
   blurb: "Photocopied poster: toner-speckled portrait, a lyric column and a giant vertical word.",
   overlayLabel: "Paper",
   decorations: decos([["inset", "Inset sketch", true]]),
@@ -767,7 +768,7 @@ const xerox: Template = {
       ctx.beginPath();
       ctx.rect(56, 522, 216, 326);
       ctx.clip();
-      drawPhoto(ctx, slots.photo(0), { x: 56, y: 522, w: 216, h: 326 }, { ...c, zoom: c.zoom * 1.4 });
+      drawPhoto(ctx, slots.photo(0), { x: 56, y: 522, w: 216, h: 326 }, slots.adjust("inset", { ...c, zoom: c.zoom * 1.4 }));
       ctx.restore();
     }
     ctx.strokeStyle = "#3a3a3a";
@@ -779,64 +780,162 @@ const xerox: Template = {
   text: { headline: { rotate: -Math.PI / 2, lineHeight: 0.8, tracking: -0.02 } },
 };
 
-// ---- u19 Yearbook: portrait cards on a tilted sheet --------------------------------------
-function mottled(ctx: Ctx, r: Rect) {
-  const g = ctx.createRadialGradient(r.x + r.w * 0.45, r.y + r.h * 0.35, r.w * 0.1, r.x + r.w / 2, r.y + r.h / 2, r.w);
-  g.addColorStop(0, "#3d6c98");
-  g.addColorStop(1, "#0f2540");
+// ---- u19 / pin 1093178509566174434: yearbook sheet photographed in a dim room ----------
+function mottled(ctx: Ctx, r: Rect, seed: number) {
+  const g = ctx.createRadialGradient(r.x + r.w * 0.42, r.y + r.h * 0.3, r.w * 0.08, r.x + r.w / 2, r.y + r.h / 2, r.w * 0.95);
+  g.addColorStop(0, "#4a78a3");
+  g.addColorStop(0.55, "#22466e");
+  g.addColorStop(1, "#0c1c33");
   ctx.fillStyle = g;
   ctx.fillRect(r.x, r.y, r.w, r.h);
+  // Studio-backdrop mottling.
+  const rand = rng(seed);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(r.x, r.y, r.w, r.h);
+  ctx.clip();
+  for (let k = 0; k < 14; k++) {
+    ctx.fillStyle = `rgba(${rand() > 0.5 ? "120,160,200" : "5,15,30"},0.12)`;
+    ctx.beginPath();
+    ctx.ellipse(r.x + rand() * r.w, r.y + rand() * r.h, r.w * (0.1 + rand() * 0.25), r.h * (0.06 + rand() * 0.15), rand() * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+/** A portrait card: blue backdrop + the person (cutout when available). */
+function portraitCard(ctx: Ctx, slots: Slots, r: Rect, seed: number, i: number) {
+  mottled(ctx, r, seed);
+  const ok = drawCutout(ctx, slots.photo(0), slots.mask(0), r, { ...slots.crop(0), zoom: slots.crop(0).zoom * (i ? 1.05 : 1) });
+  if (!ok) {
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    slotPhoto(ctx, slots, i, r);
+    ctx.restore();
+    const v = ctx.createRadialGradient(r.x + r.w / 2, r.y + r.h * 0.45, r.w * 0.3, r.x + r.w / 2, r.y + r.h / 2, r.w * 0.8);
+    v.addColorStop(0, "rgba(12,28,51,0)");
+    v.addColorStop(1, "rgba(12,28,51,0.8)");
+    ctx.fillStyle = v;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+  }
 }
 const yearbook: Template = {
   id: "yearbook",
   name: "Yearbook",
-  blurb: "School-portrait cards on a tilted sheet, your name set in classic serif caps.",
-  overlayLabel: "Sheet",
+  blurb: "School-portrait cards on a sheet, photographed in a dim, moody room.",
+  overlayLabel: "Room light",
   needsMask: true,
-  decorations: decos([["cards", "Neighbour cards", true]]),
-  slotRects: () => [{ x: 160, y: 300, w: 760, h: 900 }],
+  decorations: decos([["cards", "Neighbour cards", true], ["grain", "Film grain", true]]),
+  slotRects: () => [{ x: 170, y: 330, w: 740, h: 880 }],
   defaults: (i) => ({
-    headline: t({ text: i.headline.toUpperCase(), font: "serif", size: 52, color: INK, x: 0.5, y: 0.66, width: 0.86, align: "center" }),
-    caption: t({ text: (i.caption || "special edition").toUpperCase(), font: "serif", size: 28, color: "#3a3530", x: 0.5, y: 0.7, width: 0.7, align: "center" }),
-    overlay: { strength: 1, color: "#e8e2d8" },
-    decorations: { cards: true },
+    headline: t({ text: i.headline.toUpperCase(), font: "serif", size: 50, color: "#1b1a18", x: 0.5, y: 0.665, width: 0.86, align: "center" }),
+    caption: t({ text: (i.caption || "special edition").toUpperCase(), font: "serif", size: 27, color: "#2f2b26", x: 0.5, y: 0.705, width: 0.7, align: "center" }),
+    overlay: { strength: 0.72, color: "#0d0b09" },
+    decorations: { cards: true, grain: true },
   }),
   draw(ctx, _p, s, slots) {
-    ctx.fillStyle = "#cfc8bc";
+    ctx.fillStyle = "#14110e";
     ctx.fillRect(0, 0, W, H);
-    rot(ctx, W / 2, H / 2, -6, () => {
-      ctx.fillStyle = s.overlay.color;
-      ctx.fillRect(-200, -200, W + 400, H + 400);
+    rot(ctx, W / 2, H / 2, -7, () => {
+      ctx.fillStyle = "#c4bdb1";
+      ctx.fillRect(-120, -160, W + 240, H + 320);
+      drawGrain(ctx, 0.08, 17);
       if (on(s, "cards")) {
-        for (const r of [
-          { x: 160, y: -60, w: 760, h: 300 },
-          { x: -680, y: 300, w: 780, h: 900 },
-          { x: 980, y: 300, w: 780, h: 900 },
-          { x: 160, y: 1560, w: 760, h: 600 },
-        ]) {
-          mottled(ctx, r);
-          ctx.globalAlpha = 0.5;
-          slotPhoto(ctx, slots, 1, r);
-          ctx.globalAlpha = 1;
-        }
+        [
+          { x: 170, y: -40, w: 740, h: 260 },
+          { x: -640, y: 330, w: 740, h: 880 },
+          { x: 980, y: 330, w: 740, h: 880 },
+          { x: 170, y: 1600, w: 740, h: 600 },
+        ].forEach((r, n) => portraitCard(ctx, slots, r, 11 + n, n + 1));
       }
-      const main = { x: 160, y: 300, w: 760, h: 900 };
-      mottled(ctx, main);
-      const ok = drawCutout(ctx, slots.photo(0), slots.mask(0), main, slots.crop(0));
-      if (!ok) {
-        ctx.save();
-        ctx.globalAlpha = 0.92;
-        slotPhoto(ctx, slots, 0, main);
-        ctx.restore();
-        const v = ctx.createRadialGradient(main.x + main.w / 2, main.y + main.h * 0.45, main.w * 0.3, main.x + main.w / 2, main.y + main.h / 2, main.w * 0.8);
-        v.addColorStop(0, "rgba(15,37,64,0)");
-        v.addColorStop(1, "rgba(15,37,64,0.75)");
-        ctx.fillStyle = v;
-        ctx.fillRect(main.x, main.y, main.w, main.h);
-      }
+      portraitCard(ctx, slots, { x: 170, y: 330, w: 740, h: 880 }, 7, 0);
     });
   },
-  text: { headline: { rotate: -0.105, tracking: 0.04 }, caption: { rotate: -0.105, tracking: 0.12 } },
+  after(ctx, s) {
+    // The room: warm dim light falling off to dark corners, over everything incl. the words.
+    // A single warm lamp on the main card; everything else falls into shadow.
+    const g = ctx.createRadialGradient(W * 0.5, H * 0.4, H * 0.08, W * 0.5, H * 0.45, H * 0.72);
+    g.addColorStop(0, "rgba(255,200,140,0.05)");
+    g.addColorStop(0.45, rgba(s.overlay.color, s.overlay.strength * 0.45));
+    g.addColorStop(1, rgba(s.overlay.color, Math.min(1, s.overlay.strength + 0.32)));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength * 0.3);
+    ctx.fillRect(0, 0, W, H);
+    if (on(s, "grain")) drawGrain(ctx, 0.14, 63);
+  },
+  text: { headline: { rotate: -0.122, tracking: 0.04 }, caption: { rotate: -0.122, tracking: 0.12 } },
+};
+
+// ---- pin 1151514198494369585: the song sticker right on the lips -------------------------
+const covermouth: Template = {
+  id: "covermouth",
+  name: "Song on Lips",
+  blurb: "Close-up with the song's Instagram sticker placed right over the lips.",
+  overlayLabel: "Photo tint",
+  decorations: decos([["grain", "Grain", true]]),
+  cover: { show: true, style: "ig", scale: 0.85, rotate: 0 },
+  defaults: (i) => ({
+    headline: t({ text: i.headline, font: "sans", size: 30, color: WHITE, x: 0.08, y: 0.78, width: 0.84 }),
+    caption: t({ text: "", font: "mono", size: 20, color: WHITE, x: 0.08, y: 0.8 }),
+    overlay: { strength: 0.05, color: "#000000" },
+    decorations: { grain: true },
+  }),
+  draw(ctx, _p, s, slots) {
+    drawPhoto(ctx, slots.photo(0), FULL, slots.crop(0));
+    ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength);
+    ctx.fillRect(0, 0, W, H);
+    if (on(s, "grain")) drawGrain(ctx, 0.08, 5);
+  },
+  text: { headline: { shadow: true } },
+};
+
+// ---- pin 1125970344365273773: tilted night-vision camcorder frame ------------------------
+const camtilt: Template = {
+  id: "camtilt",
+  name: "Night Cam",
+  blurb: "A tilted, green night-vision camcorder frame with the date burned in.",
+  overlayLabel: "Night tint",
+  decorations: decos([["lines", "Frame lines", true]]),
+  slotRects: () => [{ x: 140, y: 470, w: 800, h: 1020 }],
+  defaults: (i) => ({
+    headline: t({ text: i.headline, font: "hand", size: 64, color: "#d8ffe0", x: 0.1, y: 0.42, width: 0.5 }),
+    caption: t({ text: i.caption || "no, no, no,", font: "hand", size: 36, color: "#d8ffe0", x: 0.3, y: 0.56, width: 0.5 }),
+    overlay: { strength: 0.32, color: "#3dff7a" },
+    decorations: { lines: true },
+    filter: "noir",
+  }),
+  draw(ctx, _p, s, slots) {
+    ctx.fillStyle = "#0c0c0c";
+    ctx.fillRect(0, 0, W, H);
+    if (on(s, "lines")) {
+      ctx.fillStyle = "#f2f2f2";
+      ctx.fillRect(56, 380, 5, 1220);
+      ctx.fillRect(W - 62, 380, 5, 1220);
+    }
+    rot(ctx, W / 2, 980, 9, () => {
+      const r = { x: 140, y: 470, w: 800, h: 1020 };
+      ctx.save();
+      roundRect(ctx, r, 30);
+      ctx.clip();
+      slotPhoto(ctx, slots, 0, r);
+      ctx.globalCompositeOperation = "multiply";
+      ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength + 0.4);
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength * 0.35);
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      drawGrain(ctx, 0.18, 41);
+      ctx.restore();
+      const d = new Date(2000 + Number(s.stamp.slice(1, 3)), Number(s.stamp.slice(4, 6)) - 1, Number(s.stamp.slice(7, 9)));
+      const mon = d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
+      label(ctx, "CAM", r.x + 50, r.y + 40, 40, "#d8ffe0");
+      label(ctx, "SP", r.x + r.w - 60, r.y + 40, 30, "#d8ffe0", "mono", "right");
+      label(ctx, `-00:${timeFrom(s)}`, r.x + r.w - 50, r.y + 80, 38, "#d8ffe0", "mono", "right");
+      label(ctx, `${mon} ${pad(d.getDate())} ${d.getFullYear()}`, r.x + 40, r.y + r.h - 120, 40, "#d8ffe0");
+      label(ctx, `PM ${timeFrom(s)}`, r.x + r.w - 60, r.y + r.h - 70, 40, "#d8ffe0", "mono", "right");
+    });
+  },
+  text: { headline: { rotate: 0.157 }, caption: { rotate: 0.157 } },
 };
 
 // ---- u11 / u16: Instagram-style music sticker over a full photo --------------------------
@@ -847,7 +946,7 @@ function musicSticker(id: TemplateId, name: string, blurb: string, filter: "sepi
     blurb,
     overlayLabel: "Photo tint",
     decorations: decos([["grain", "Grain", true]]),
-    cover: { show: true, style: "plain", rotate: 0, ...cover },
+    cover: { show: true, style: "ig", rotate: 0, ...cover },
     defaults: (i: TemplateInput) => ({
       headline: t({ text: i.headline, font: "italic", size: 46, color: WHITE, x: 0.08, y: 0.74, width: 0.84 }),
       caption: t({ text: i.caption || fmtDate(i.date), font: "mono", size: 20, color: WHITE, x: 0.08, y: 0.79 }),
@@ -876,6 +975,8 @@ function musicSticker(id: TemplateId, name: string, blurb: string, filter: "sepi
 export const REF_TEMPLATES: Record<string, Template> = Object.fromEntries(
   [
     playlist,
+    covermouth,
+    camtilt,
     playercut,
     triptych,
     cctv,

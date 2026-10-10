@@ -1,6 +1,7 @@
 // Shared building blocks for templates (templates.ts and templates-more.ts).
 import { type Ctx, type Photo, type TextOpts, fontString, rgba, rng, roundRect, star } from "./draw";
 import type { CoverState } from "./cover";
+import type { Sticker } from "./stickers";
 import type { FilterId } from "./filters";
 import type { Rect, StoryState, TemplateId, TemplateInput, TextKey, TextLayer } from "./types";
 
@@ -14,6 +15,8 @@ export interface Slots {
   own(i: number): boolean;
   /** Person mask for slot i's photo (null until segmented / when nobody is in it). */
   mask(i: number): (CanvasImageSource & { width: number; height: number }) | null;
+  /** `crop` with the user's drag/zoom for box `key` applied (StoryState.views). */
+  adjust(key: string, crop: StoryState["crop"]): StoryState["crop"];
 }
 
 export interface Template {
@@ -24,13 +27,15 @@ export interface Template {
   decorations: { key: string; label: string; on: boolean }[];
   defaults(input: TemplateInput): Omit<
     StoryState,
-    "templateId" | "crop" | "palette" | "stamp" | "accent" | "filter" | "stickers" | "order" | "crops" | "cover" | "tags" | "focus" | "spot"
+    "templateId" | "crop" | "palette" | "stamp" | "accent" | "filter" | "stickers" | "order" | "crops" | "cover" | "tags" | "focus" | "spot" | "outline" | "tracks"
   > & { filter?: FilterId };
   /** Song-cover layouts: where the cover sits by default (shown when `show`). */
   cover?: Partial<CoverState>;
   draw(ctx: Ctx, photo: Photo, s: StoryState, slots: Slots): void;
   /** Photo slot rectangles (story units) for drag-to-reframe / drag-to-swap in the editor. */
   slotRects?(s: StoryState, count: number): Rect[];
+  /** Shows the configurable die-cut outline (StoryState.outline). */
+  outline?: boolean;
   /** Uses a person cutout (segment.ts); the editor computes masks only for these. */
   needsMask?: boolean;
   /** Distinct photos the layout shows. */
@@ -38,6 +43,10 @@ export interface Template {
   after?(ctx: Ctx, s: StoryState): void;
   /** Drawn after the headline, before the caption — e.g. a person cutout in front of big words. */
   front?(ctx: Ctx, s: StoryState, slots: Slots): void;
+  /** Overlay elements the layout places as regular (draggable) stickers, flagged `layout`. */
+  stickers?: (i: TemplateInput) => Sticker[];
+  /** Extra boxes showing part of the photo (insets, callouts) — draggable to reframe. */
+  views?: (s: StoryState, slots: Slots) => { key: string; r: Rect }[];
   /** Default colour-window rect (0..1) for layouts that use StoryState.spot. */
   spot?: (i: TemplateInput) => Rect;
   text?: Partial<Record<TextKey, TextOpts>>;

@@ -159,6 +159,8 @@ export interface TextOpts {
   tracking?: number; // em
   rotate?: number; // radians around the block anchor
   outline?: number; // stroke width: outlined letters instead of filled
+  /** Shrink the type so no line (even one long word) is wider than the layer width. */
+  fit?: boolean;
 }
 
 /** Draw a text layer; returns its bounding box (for hit-testing / dragging in the editor). */
@@ -176,7 +178,15 @@ export function drawText(ctx: Ctx, layer: TextLayer, opts: TextOpts = {}): Rect 
   ctx.textAlign = layer.align;
   ctx.textBaseline = "top";
   const maxW = layer.width * STORY_W;
-  const lines = wrap(ctx, layer.text, maxW);
+  let lines = wrap(ctx, layer.text, maxW);
+  if (opts.fit) {
+    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    if (widest > maxW) {
+      layer = { ...layer, size: Math.max(12, Math.floor(layer.size * (maxW / widest) * 0.99)) };
+      ctx.font = fontString(layer.font, layer.size);
+      lines = wrap(ctx, layer.text, maxW);
+    }
+  }
   const lh = layer.size * (opts.lineHeight ?? (layer.font === "display" ? 0.95 : 1.2));
   const ax = layer.x * STORY_W;
   const ay = layer.y * STORY_H;

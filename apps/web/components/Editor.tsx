@@ -1,21 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { Music } from "../lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { type Music, searchTracks } from "../lib/api";
 import type { Photo } from "../lib/story/draw";
 import { type EditorAction, editorReducer } from "../lib/story/editor";
 import { exportFilename, exportPng } from "../lib/story/export";
-import { TEMPLATES } from "../lib/story/templates";
-import type { Align, FontRole, StoryState, TemplateId, TemplateInput, TextKey } from "../lib/story/types";
-import { TEMPLATE_IDS } from "../lib/story/types";
 import { FILTERS } from "../lib/story/filters";
-import { STICKER_KINDS, newSticker } from "../lib/story/stickers";
-import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
-import { slotRectsFor } from "../lib/story/templates";
-import { CoverPanel, useCoverImage } from "./CoverPanel";
-import { useMasks } from "./useMasks";
+import { LAYOUT_GROUPS, groupOf } from "../lib/story/groups";
+import { pinsFor } from "../lib/story/pins";
+import type { Selection } from "../lib/story/selection";
+import { STICKER_KINDS, type Sticker, newSticker } from "../lib/story/stickers";
+import { TEMPLATES, slotRectsFor } from "../lib/story/templates";
+import type { Align, Crop, FontRole, StoryState, TemplateId, TemplateInput, TextKey } from "../lib/story/types";
+import { CoverPanel, useCoverImage, useTrackArt } from "./CoverPanel";
+import { ColorField, Section, Segmented, Slider, Toggle, deg, pct, px, times } from "./controls";
 import { MusicCard } from "./Results";
+import { PinSource } from "./PinSource";
 import { StoryCanvas } from "./StoryCanvas";
+import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
+import { useMasks } from "./useMasks";
 import s from "./maker.module.css";
 
 interface Props {
@@ -43,6 +46,8 @@ const FONTS: { id: FontRole; label: string }[] = [
   { id: "hand", label: "Handwritten" },
   { id: "mono", label: "Typewriter" },
 ];
+const ACCEPT = "image/jpeg,image/jpg,image/pjpeg,image/png,image/webp,.jpg,.jpeg,.jpe,.jfif,.png,.webp";
+const DEFAULT_VIEW = { dx: 0, dy: 0, zoom: 1 };
 
 function usePreviewWidth(): number {
   const [w, setW] = useState(360);
@@ -59,37 +64,63 @@ function usePreviewWidth(): number {
   return w;
 }
 
+const stickerName = (st: Sticker) => STICKER_KINDS.find((k) => k.kind === st.kind)?.label ?? "Sticker";
+
 export function Editor({ photos, story, setStory, input, suggested, music, onBack, onStartOver, onSave, signedIn = false, onAddPhotos }: Props) {
-  const [active, setActive] = useState<TextKey>("headline");
-  const [exporting, setExporting] = useState<"idle" | "busy" | "error" | "done">("idle");
-  const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
-  // Any edit after saving makes "Save" available again (saves a new copy).
-  useEffect(() => setSaving((cur) => (cur.kind === "done" ? { kind: "idle" } : cur)), [story]);
-  const doSave = async () => {
-    if (!onSave) return;
-    setSaving({ kind: "busy" });
-    try {
-      await onSave();
-      setSaving({ kind: "done" });
-    } catch (e) {
-      if ((e as { code?: string }).code === "LOGIN_CANCELLED") return setSaving({ kind: "idle" });
-      setSaving({ kind: "error", msg: e instanceof Error && e.message ? e.message : "Saving failed." });
-    }
-  };
   const width = usePreviewWidth();
   const dispatch = (a: EditorAction) => setStory((cur) => (cur ? editorReducer(cur, a) : cur));
   const tpl = TEMPLATES[story.templateId];
-  const layer = story[active];
-  const [selected, setSelected] = useState<string | null>(null);
-  // Which photo slot the Crop controls act on (multi-photo layouts).
-  const slotCount = Math.min(photos.length, slotRectsFor(story, photos.length).length);
-  const [slotRaw, setSlot] = useState(0);
-  const slot = Math.min(slotRaw, Math.max(0, slotCount - 1));
-  const cropOf = (i: number) => (i === 0 ? story.crop : (story.crops?.[i - 1] ?? story.crop));
-  const crop = cropOf(slot);
+  const [sel, setSel] = useState<Selection>(null);
+  const [textTab, setTextTab] = useState<TextKey>("headline");
+  const [exporting, setExporting] = useState<"idle" | "busy" | "error" | "done">("idle");
+  const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
+  const [uploadedCover, setUploadedCover] = useState<Photo | null>(null);
+  const coverImg = useCoverImage(story.cover?.trackId, uploadedCover);
+  const masks = useMasks(photos, Boolean(tpl.needsMask));
+  const art = useTrackArt((story.tracks ?? []).flatMap((t) => (t.trackId ? [t.trackId] : [])));
   const order = story.order?.length ? story.order : [0, 1, 2, 3];
-  const capacity = TEMPLATES[story.templateId].capacity ?? 1;
+  const boxes = slotRectsFor(story, photos.length);
+  const capacity = tpl.capacity ?? 1;
   const emptySlots = Math.max(0, Math.min(4, capacity) - photos.length);
+  const pins = useMemo(() => pinsFor(story.templateId), [story.templateId]);
+  const hasPanel = story.stickers.some((x) => x.kind === "spotify");
+  const layoutEls = story.stickers.filter((x) => x.layout);
+
+  // Any edit after saving makes "Save" available again (saves a new copy).
+  useEffect(() => setSaving((cur) => (cur.kind === "done" ? { kind: "idle" } : cur)), [story]);
+  // Drop a selection that no longer exists (deleted sticker, layout without a strip…).
+  useEffect(() => {
+    if (sel?.kind === "sticker" && !story.stickers.some((x) => x.id === sel.id)) setSel(null);
+    if (sel?.kind === "spot" && !story.spot) setSel(null);
+    if (sel?.kind === "cover" && !story.cover?.show) setSel(null);
+  }, [sel, story]);
+
+  // Playlist panel: fill with real tracks by the song's artist (Apple Music catalogue).
+  const [tracksState, setTracksState] = useState<{ kind: "idle" | "busy" } | { kind: "error"; msg: string }>({ kind: "idle" });
+  const [artistQuery, setArtistQuery] = useState("");
+  const loadTracks = async (artist: string) => {
+    if (artist.trim().length < 2) return;
+    setTracksState({ kind: "busy" });
+    try {
+      const found = await searchTracks(artist.trim());
+      const a = artist.trim().toLowerCase();
+      const byArtist = found.filter((t) => t.artist.toLowerCase().includes(a));
+      const list = (byArtist.length ? byArtist : found).slice(0, 10);
+      dispatch({ type: "tracks", tracks: list.map((t) => ({ title: t.title, artist: t.artist, explicit: t.explicit, trackId: t.track_id })) });
+      setTracksState(list.length ? { kind: "idle" } : { kind: "error", msg: "No songs found for that artist." });
+    } catch (e) {
+      setTracksState({ kind: "error", msg: e instanceof Error ? e.message : "Couldn't load songs." });
+    }
+  };
+  const autoArtist = story.cover?.artist || music?.artist || "";
+  const triedAuto = useRef("");
+  useEffect(() => {
+    if (!hasPanel || story.tracks?.length || !autoArtist || triedAuto.current === autoArtist) return;
+    triedAuto.current = autoArtist;
+    void loadTracks(autoArtist);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run when the panel/artist appears
+  }, [hasPanel, autoArtist, story.tracks?.length]);
+
   const [adding, setAdding] = useState<{ kind: "idle" | "busy" } | { kind: "error"; msg: string }>({ kind: "idle" });
   const addInput = useRef<HTMLInputElement>(null);
   const addPhotos = async (files: FileList | null) => {
@@ -102,15 +133,22 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
       setAdding({ kind: "error", msg: e instanceof Error ? e.message : "Couldn't add that photo." });
     }
   };
-  const sticker = story.stickers.find((x) => x.id === selected) ?? null;
-  const [uploadedCover, setUploadedCover] = useState<Photo | null>(null);
-  const coverImg = useCoverImage(story.cover?.trackId, uploadedCover);
-  const masks = useMasks(photos, Boolean(tpl.needsMask));
 
+  const doSave = async () => {
+    if (!onSave) return;
+    setSaving({ kind: "busy" });
+    try {
+      await onSave();
+      setSaving({ kind: "done" });
+    } catch (e) {
+      if ((e as { code?: string }).code === "LOGIN_CANCELLED") return setSaving({ kind: "idle" });
+      setSaving({ kind: "error", msg: e instanceof Error && e.message ? e.message : "Saving failed." });
+    }
+  };
   const doExport = async () => {
     setExporting("busy");
     try {
-      const blob = await exportPng(photos, story, { cover: coverImg, masks });
+      const blob = await exportPng(photos, story, { cover: coverImg, masks, art });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -125,150 +163,227 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
     }
   };
 
+  // ---- framing helpers: own photo slots use their crop; repeats and insets use views ----
+  const cropOf = (i: number): Crop => (i === 0 ? story.crop : (story.crops?.[i - 1] ?? story.crop));
+  const ownSlot = (i: number) => i < photos.length;
+  const viewOf = (key: string) => story.views?.[key] ?? DEFAULT_VIEW;
+  const panBy = (target: Selection, dx: number, dy: number) => {
+    if (!target) return;
+    switch (target.kind) {
+      case "text":
+        return dispatch({ type: "move-by", key: target.key, dx, dy });
+      case "sticker":
+        return dispatch({ type: "sticker-move", id: target.id, dx, dy });
+      case "spot":
+        return dispatch({ type: "spot", dx, dy });
+      case "cover":
+        return dispatch({ type: "cover-move", dx, dy });
+      case "view":
+        return dispatch({ type: "view", key: target.key, dx: -dx * 1.5, dy: -dy * 1.5 });
+      case "slot": {
+        if (!ownSlot(target.i)) return dispatch({ type: "view", key: `slot${target.i}`, dx: -dx * 1.5, dy: -dy * 1.5 });
+        const c = cropOf(target.i);
+        return dispatch({ type: "crop", slot: target.i, patch: { x: c.x - dx * 1.5, y: c.y - dy * 1.5 } });
+      }
+    }
+  };
+  const zoomBy = (target: Selection, d: number) => {
+    if (target?.kind === "view") return dispatch({ type: "view", key: target.key, zoom: 1 + d });
+    if (target?.kind === "sticker") {
+      const st = story.stickers.find((x) => x.id === target.id);
+      return st && dispatch({ type: "sticker", id: st.id, patch: { scale: st.scale * (1 + d) } });
+    }
+    if (target?.kind === "cover" && story.cover) return dispatch({ type: "cover", patch: { scale: story.cover.scale * (1 + d) } });
+    const i = target?.kind === "slot" ? target.i : 0;
+    if (!ownSlot(i)) return dispatch({ type: "view", key: `slot${i}`, zoom: 1 + d });
+    dispatch({ type: "crop", slot: i, patch: { zoom: cropOf(i).zoom * (1 + d) } });
+  };
+
+  // Arrow keys nudge the selection (Shift = bigger steps); Delete removes a sticker.
+  const onKey = (e: React.KeyboardEvent) => {
+    if (!sel) return;
+    const step = e.shiftKey ? 0.02 : 0.004;
+    const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+    if (d) {
+      e.preventDefault();
+      panBy(sel, d[0]!, d[1]!);
+    } else if ((e.key === "Delete" || e.key === "Backspace") && sel.kind === "sticker") {
+      e.preventDefault();
+      dispatch({ type: "sticker-remove", id: sel.id });
+    } else if (e.key === "Escape") setSel(null);
+  };
+
+  const chooseLayout = (id: TemplateId) => {
+    dispatch({ type: "template", id, input: input(id) });
+    setSel(null);
+  };
+
+  // Everything selectable, so each element is reachable without hunting on the canvas.
+  const selectables: { sel: Selection; label: string }[] = [
+    { sel: { kind: "text", key: "headline" }, label: "Headline" },
+    ...(story.caption.text ? [{ sel: { kind: "text", key: "caption" } as Selection, label: "Caption" }] : []),
+    ...boxes.map((_, i) => ({ sel: { kind: "slot", i } as Selection, label: boxes.length > 1 ? `Photo box ${i + 1}` : "Photo" })),
+    ...(story.spot ? [{ sel: { kind: "spot" } as Selection, label: story.templateId === "colorbox" ? "Colour box" : "Strip" }] : []),
+    ...(story.cover?.show ? [{ sel: { kind: "cover" } as Selection, label: "Song sticker" }] : []),
+    ...story.stickers.map((st) => ({ sel: { kind: "sticker", id: st.id } as Selection, label: stickerName(st) })),
+  ];
+  const isSel = (x: Selection) => JSON.stringify(x) === JSON.stringify(sel);
+  // Selecting on the canvas brings its controls into view.
+  const inspectorRef = useRef<HTMLDivElement>(null);
+  const selKey = JSON.stringify(sel);
+  useEffect(() => {
+    if (sel) inspectorRef.current?.scrollIntoView({ block: "nearest", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the selection changes
+  }, [selKey]);
+
   return (
     <section className={s.editor} aria-label="Story editor">
-      <div className={s.editorStage}>
+      <div className={s.editorStage} tabIndex={0} onKeyDown={onKey} aria-label="Story canvas. Arrow keys move the selected element.">
         <StoryCanvas
           className={s.editorCanvas}
           photo={photos}
           state={story}
           cover={coverImg}
           masks={masks}
-          onDragSpot={(dx, dy) => story.spot && dispatch({ type: "spot", x: story.spot.x + dx, y: story.spot.y + dy })}
-          onDragCover={(dx, dy) => story.cover && dispatch({ type: "cover", patch: { x: story.cover.x + dx, y: story.cover.y + dy } })}
           width={width}
-          label={`Editable ${tpl.name} Story. Drag text to move it, drag elsewhere to reposition the photo.`}
-          onSelectText={setActive}
-          onDragText={(key, dx, dy) => dispatch({ type: "move", key, x: story[key].x + dx, y: story[key].y + dy })}
-          onDragPhoto={(dx, dy, slot) => {
-            const c = cropOf(slot);
-            setSlot(slot);
-            dispatch({ type: "crop", slot, patch: { x: c.x - dx * 1.5, y: c.y - dy * 1.5 } });
+          label={`Editable ${tpl.name} Story. Tap anything to select it, drag to move it.`}
+          selection={sel}
+          onSelect={(x) => {
+            setSel(x);
+            if (x?.kind === "text") setTextTab(x.key);
           }}
+          photoCount={photos.length}
+          onDragText={(key, dx, dy) => dispatch({ type: "move-by", key, dx, dy })}
+          onDragPhoto={(dx, dy, slot) => panBy({ kind: "slot", i: slot }, dx, dy)}
+          onDragView={(key, dx, dy) => panBy({ kind: "view", key }, dx, dy)}
+          onDragSpot={(dx, dy) => dispatch({ type: "spot", dx, dy })}
+          onDragCover={(dx, dy) => dispatch({ type: "cover-move", dx, dy })}
+          onDragSticker={(id, dx, dy) => dispatch({ type: "sticker-move", id, dx, dy })}
           onSetCrop={(slot, crop) => dispatch({ type: "crop", slot, patch: crop })}
           onSwapSlots={photos.length > 1 ? (a, b) => dispatch({ type: "swap", a, b }) : undefined}
-          onSelectSlot={setSlot}
-          onDragSticker={(id, dx, dy) => {
-            const st = story.stickers.find((x) => x.id === id);
-            if (st) dispatch({ type: "sticker", id, patch: { x: st.x + dx, y: st.y + dy } });
-          }}
-          onSelectSticker={setSelected}
-          selectedSticker={selected}
-          onZoom={(d) => dispatch({ type: "crop", slot, patch: { zoom: crop.zoom * (1 + d) } })}
+          onZoom={(d) => zoomBy(sel, d)}
         />
-        <p className={s.small}>Drag text, stickers or the photo · scroll/pinch to zoom · exports at 1080 × 1920</p>
-        {story.spot && (
-          <p className={s.small}>Drag the {story.templateId === "colorbox" ? "colour box" : "strip"} on the Story to move it.</p>
-        )}
-        {tpl.needsMask && !masks && (
-          <p className={s.small} role="status">Cutting you out of the photo… (runs on your device; first time loads a small model)</p>
-        )}
-        {tpl.needsMask && masks && !masks[0] && (
-          <p className={s.small} role="status">Couldn&apos;t find a person to cut out, so this layout shows the whole photo.</p>
-        )}
+        <p className={s.small}>Tap to select · drag to move · scroll or pinch to zoom · arrow keys nudge</p>
+        {tpl.needsMask && !masks && <p className={s.small} role="status">Cutting you out of the photo on your device (the first time loads a small model)…</p>}
+        {tpl.needsMask && masks && !masks[0] && <p className={s.small} role="status">No person found to cut out, so this layout shows the whole photo.</p>}
       </div>
 
       <div className={s.panel}>
         <div className={s.panelHead}>
-          {onBack ? <button className={s.linkBtn} onClick={onBack}>← All suggestions</button> : <span />}
+          {onBack ? <button className={s.linkBtn} onClick={onBack}>All suggestions</button> : <span />}
           <button className={s.linkBtn} onClick={onStartOver}>Start over</button>
         </div>
 
-        <fieldset className={s.group}>
-          <legend>Layout</legend>
-          <div className={s.chips}>
-            {TEMPLATE_IDS.map((id) => (
-              <button
-                key={id}
-                className={`${s.chip} ${story.templateId === id ? s.chipOn : ""}`}
-                aria-pressed={story.templateId === id}
-                onClick={() => dispatch({ type: "template", id, input: input(id) })}
-              >
-                {TEMPLATES[id].name}
-                {suggested.includes(id) && <span className={s.dot} aria-label="suggested" />}
-              </button>
+        {inspector()}
+
+        <Section title="Layout" hint={tpl.name} open={false}>
+          <div className={s.layoutGroups}>
+            {suggested.length > 0 && (
+              layoutGroup({ name: "Suggested for this photo", ids: suggested, open: true })
+            )}
+            {LAYOUT_GROUPS.map((g) => (
+              <div key={g.id}>{layoutGroup({ name: g.name, ids: g.ids, open: groupOf(story.templateId)?.id === g.id })}</div>
             ))}
           </div>
-        </fieldset>
+          <a className={s.linkBtn} href="/gallery">Browse every layout and its Pinterest original</a>
+        </Section>
 
-        {(photos.length > 1 || capacity > 1) && (
-          <fieldset className={s.group}>
-            <legend>Photos</legend>
+        <Section title="This layout" hint={tpl.blurb} open>
+          {pins.length > 0 && <PinSource pin={pins[0]!} more={pins.length - 1} moreHref={`/gallery?layout=${story.templateId}`} />}
+          {tpl.outline && (
+            <div className={s.subgroup}>
+              <p className={s.subhead}>Cutout outline</p>
+              <Toggle label="Outline around you" checked={story.outline?.show ?? true} onChange={(v) => dispatch({ type: "outline", patch: { show: v } })} />
+              <Slider label="Thickness" value={story.outline?.width ?? 14} min={0} max={40} step={1} nudge={1} format={px} onChange={(v) => dispatch({ type: "outline", patch: { width: v } })} />
+              <Slider label="Gap from you" value={story.outline?.margin ?? 0} min={0} max={60} step={1} nudge={1} format={px} onChange={(v) => dispatch({ type: "outline", patch: { margin: v } })} />
+              <ColorField label="Outline colour" value={story.outline?.color ?? "#ffffff"} onChange={(v) => dispatch({ type: "outline", patch: { color: v } })} />
+            </div>
+          )}
+          {story.spot && (
+            <div className={s.subgroup}>
+              <p className={s.subhead}>{story.templateId === "colorbox" ? "Colour box" : "Strip"}</p>
+              {spotControls()}
+            </div>
+          )}
+          <div className={s.subgroup}>
+            <p className={s.subhead}>{tpl.overlayLabel}</p>
+            <Slider label="Strength" value={story.overlay.strength} min={0} max={1} step={0.01} nudge={0.02} format={pct} onChange={(v) => dispatch({ type: "overlay", patch: { strength: v } })} />
+            <ColorField label="Colour" value={story.overlay.color} onChange={(v) => dispatch({ type: "overlay", patch: { color: v } })} />
+          </div>
+          {tpl.decorations.length > 0 && (
+            <div className={s.subgroup}>
+              <p className={s.subhead}>Details</p>
+              {tpl.decorations.map((d) => (
+                <Toggle key={d.key} label={d.label} checked={story.decorations[d.key] !== false} onChange={(v) => dispatch({ type: "decoration", key: d.key, on: v })} />
+              ))}
+            </div>
+          )}
+          {(layoutEls.length > 0 || defaultElCount(story, input) > 0) && (
+            <div className={s.subgroup}>
+              <p className={s.subhead}>Elements placed by this layout</p>
+              <div className={s.chips}>
+                {layoutEls.map((st) => (
+                  <button key={st.id} className={`${s.chip} ${isSel({ kind: "sticker", id: st.id }) ? s.chipOn : ""}`} onClick={() => setSel({ kind: "sticker", id: st.id })}>
+                    {stickerName(st)}
+                  </button>
+                ))}
+              </div>
+              {layoutEls.length < defaultElCount(story, input) && (
+                <button className={s.linkBtn} onClick={() => dispatch({ type: "restore-elements", input: input(story.templateId) })}>Bring back removed elements</button>
+              )}
+            </div>
+          )}
+          {hasPanel && (
+            <div className={s.subgroup}>
+              <p className={s.subhead}>Playlist songs</p>
+              <p className={s.small}>Real songs from Apple Music by one artist{story.tracks?.length ? ` (showing ${story.tracks[0]!.artist})` : ""}.</p>
+              <div className={s.searchRow}>
+                <input className={s.input} value={artistQuery} maxLength={80} placeholder={autoArtist || "Artist name"} aria-label="Artist for the playlist" onChange={(e) => setArtistQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void loadTracks(artistQuery || autoArtist)} />
+                <button className={s.secondary} disabled={tracksState.kind === "busy"} onClick={() => void loadTracks(artistQuery || autoArtist)}>
+                  {tracksState.kind === "busy" ? "Loading…" : "Load songs"}
+                </button>
+              </div>
+              {tracksState.kind === "error" && <p role="alert" className={s.error}>{tracksState.msg}</p>}
+            </div>
+          )}
+        </Section>
+
+        {(photos.length > 1 || capacity > 1 || boxes.length > 1) && (
+          <Section title="Photos" hint={`${photos.length} of ${Math.max(capacity, photos.length)}`} open={photos.length > 1}>
             <p className={s.small}>
-              {slotCount < photos.length
-                ? `This layout shows ${slotCount} of your ${photos.length} photos — switch layouts to show all.`
-                : emptySlots > 0
-                  ? `This layout has room for ${emptySlots} more photo${emptySlots > 1 ? "s" : ""} — empty slots repeat your photos until you add more.`
-                  : "Drag a photo onto another on the Story to swap them, or use the arrows."}
+              {emptySlots > 0
+                ? `Room for ${emptySlots} more photo${emptySlots > 1 ? "s" : ""}; empty boxes repeat your photos until you add more. Drag inside any box to choose what it shows.`
+                : "Drag a photo onto another to swap them. Drag inside a box to reframe it."}
             </p>
             <div className={s.slotRow}>
-              {Array.from({ length: slotCount }, (_, i) => (
-                <div key={i} className={`${s.slotCard} ${slot === i ? s.swatchOn : ""}`}>
-                  <button className={s.slotThumb} onClick={() => setSlot(i)} aria-label={`Edit crop of photo slot ${i + 1}`} aria-pressed={slot === i}>
+              {boxes.slice(0, Math.max(photos.length, Math.min(4, capacity))).map((_, i) => (
+                <div key={i} className={`${s.slotCard} ${isSel({ kind: "slot", i }) ? s.swatchOn : ""}`}>
+                  <button className={s.slotThumb} onClick={() => setSel({ kind: "slot", i })} aria-label={`Select photo box ${i + 1}`}>
                     <PhotoThumb photo={photos[(order[i] ?? i) % photos.length]!} />
-                    <span>Slot {i + 1}</span>
+                    <span>Box {i + 1}</span>
                   </button>
-                  <div className={s.row}>
-                    <button className={s.chipX} disabled={i === 0} aria-label={`Move slot ${i + 1} earlier`} onClick={() => { dispatch({ type: "swap", a: i, b: i - 1 }); setSlot(i - 1); }}>←</button>
-                    <button className={s.chipX} disabled={i === slotCount - 1} aria-label={`Move slot ${i + 1} later`} onClick={() => { dispatch({ type: "swap", a: i, b: i + 1 }); setSlot(i + 1); }}>→</button>
-                  </div>
+                  {photos.length > 1 && (
+                    <div className={s.row}>
+                      <button className={s.chipX} disabled={i === 0} aria-label={`Move box ${i + 1} earlier`} onClick={() => dispatch({ type: "swap", a: i, b: i - 1 })}>←</button>
+                      <button className={s.chipX} disabled={i >= photos.length - 1} aria-label={`Move box ${i + 1} later`} onClick={() => dispatch({ type: "swap", a: i, b: i + 1 })}>→</button>
+                    </div>
+                  )}
                 </div>
               ))}
               {onAddPhotos && emptySlots > 0 && (
                 <div className={s.slotCard}>
                   <button className={s.photoAddSmall} disabled={adding.kind === "busy"} onClick={() => addInput.current?.click()}>
-                    {adding.kind === "busy" ? "Adding…" : "+ Add photo"}
+                    {adding.kind === "busy" ? "Adding…" : "Add photo"}
                   </button>
                 </div>
               )}
             </div>
-            <input
-              ref={addInput}
-              type="file"
-              multiple
-              accept="image/jpeg,image/jpg,image/pjpeg,image/png,image/webp,.jpg,.jpeg,.jpe,.jfif,.png,.webp"
-              className={s.srOnly}
-              aria-label="Add photos to this layout"
-              onChange={(e) => {
-                void addPhotos(e.target.files);
-                e.target.value = "";
-              }}
-            />
+            <input ref={addInput} type="file" multiple accept={ACCEPT} className={s.srOnly} aria-label="Add photos to this layout" onChange={(e) => { void addPhotos(e.target.files); e.target.value = ""; }} />
             {adding.kind === "error" && <p role="alert" className={s.error}>{adding.msg}</p>}
-          </fieldset>
+          </Section>
         )}
 
-        <fieldset className={s.group}>
-          <legend>Crop{slotCount > 1 ? ` · slot ${slot + 1}` : ""}</legend>
-          <div className={s.segment} role="group" aria-label="Photo fit">
-            {(["cover", "contain"] as const).map((fit) => (
-              <button key={fit} aria-pressed={crop.fit === fit} className={crop.fit === fit ? s.segOn : ""} onClick={() => dispatch({ type: "crop", slot, patch: { fit } })}>
-                {fit === "cover" ? "Fill frame" : "Fit whole photo"}
-              </button>
-            ))}
-          </div>
-          <label className={s.field}>
-            <span>Zoom · {crop.zoom.toFixed(2)}×</span>
-            <input type="range" min={1} max={4} step={0.01} value={crop.zoom} onChange={(e) => dispatch({ type: "crop", slot, patch: { zoom: Number(e.target.value) } })} />
-          </label>
-          <div className={s.grid2}>
-            <label className={s.field}>
-              <span>Left ↔ right</span>
-              <input type="range" min={0} max={1} step={0.01} value={crop.x} onChange={(e) => dispatch({ type: "crop", slot, patch: { x: Number(e.target.value) } })} />
-            </label>
-            <label className={s.field}>
-              <span>Top ↕ bottom</span>
-              <input type="range" min={0} max={1} step={0.01} value={crop.y} onChange={(e) => dispatch({ type: "crop", slot, patch: { y: Number(e.target.value) } })} />
-            </label>
-          </div>
-          <p className={s.small}>
-            Drag the photo to reframe · scroll or pinch to zoom ·{" "}
-            <button className={s.linkBtn} onClick={() => dispatch({ type: "crop", slot, patch: { zoom: 1, x: 0.5, y: 0.5, fit: "cover" } })}>Reset crop</button>
-          </p>
-        </fieldset>
-
-        <fieldset className={s.group}>
-          <legend>Filter</legend>
+        <Section title="Look" hint={FILTERS.find((f) => f.id === story.filter)?.name}>
           <div className={s.swatchGrid} role="group" aria-label="Photo filter">
             {FILTERS.map((f) => (
               <button key={f.id} className={`${s.swatchBtn} ${story.filter === f.id ? s.swatchOn : ""}`} aria-pressed={story.filter === f.id} onClick={() => dispatch({ type: "filter", id: f.id })}>
@@ -277,74 +392,14 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
               </button>
             ))}
           </div>
-        </fieldset>
+        </Section>
 
-        <fieldset className={s.group}>
-          <legend>Text</legend>
-          <div className={s.segment} role="tablist">
-            {(["headline", "caption"] as const).map((k) => (
-              <button key={k} role="tab" aria-selected={active === k} className={active === k ? s.segOn : ""} onClick={() => setActive(k)}>
-                {k === "headline" ? "Headline" : "Caption"}
-              </button>
-            ))}
-          </div>
-          <label className={s.field}>
-            <span>Words</span>
-            <textarea
-              className={s.input}
-              rows={2}
-              maxLength={160}
-              value={layer.text}
-              onChange={(e) => dispatch({ type: "text", key: active, patch: { text: e.target.value } })}
-            />
-          </label>
-          <div className={s.grid2}>
-            <label className={s.field}>
-              <span>Typeface</span>
-              <select className={s.select} value={layer.font} onChange={(e) => dispatch({ type: "text", key: active, patch: { font: e.target.value as FontRole } })}>
-                {FONTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-              </select>
-            </label>
-            <label className={s.field}>
-              <span>Colour</span>
-              <input type="color" className={s.color} value={layer.color} onChange={(e) => dispatch({ type: "text", key: active, patch: { color: e.target.value } })} />
-            </label>
-          </div>
-          <label className={s.field}>
-            <span>Size · {Math.round(layer.size)}px</span>
-            <input type="range" min={14} max={200} value={layer.size} onChange={(e) => dispatch({ type: "text", key: active, patch: { size: Number(e.target.value) } })} />
-          </label>
-          <div className={s.segment} role="group" aria-label="Alignment">
-            {(["left", "center", "right"] as Align[]).map((al) => (
-              <button key={al} aria-pressed={layer.align === al} className={layer.align === al ? s.segOn : ""} onClick={() => dispatch({ type: "text", key: active, patch: { align: al } })}>
-                {al}
-              </button>
-            ))}
-          </div>
-          <div className={s.grid2}>
-            <label className={s.field}>
-              <span>Horizontal</span>
-              <input type="range" min={0} max={1} step={0.01} value={layer.x} onChange={(e) => dispatch({ type: "move", key: active, x: Number(e.target.value), y: layer.y })} />
-            </label>
-            <label className={s.field}>
-              <span>Vertical</span>
-              <input type="range" min={0} max={0.97} step={0.005} value={layer.y} onChange={(e) => dispatch({ type: "move", key: active, x: layer.x, y: Number(e.target.value) })} />
-            </label>
-          </div>
-        </fieldset>
+        <Section title="Text" hint={story.headline.text.slice(0, 28)}>
+          <Segmented label="Text layer" value={textTab} options={[{ id: "headline", label: "Headline" }, { id: "caption", label: "Caption" }]} onChange={(k) => { setTextTab(k); setSel({ kind: "text", key: k }); }} />
+          {textControls({ k: textTab })}
+        </Section>
 
-        {story.cover && (
-          <CoverPanel
-            cover={story.cover}
-            onChange={(patch) => dispatch({ type: "cover", patch })}
-            onUpload={setUploadedCover}
-            focus={{ x: story.crop.x, y: story.crop.y }}
-            hasImage={Boolean(coverImg)}
-          />
-        )}
-
-        <fieldset className={s.group}>
-          <legend>Stickers &amp; paper</legend>
+        <Section title="Stickers & elements" hint={`${story.stickers.length} on the Story`}>
           <div className={s.swatchGrid} role="group" aria-label="Add a sticker">
             {STICKER_KINDS.map((k) => (
               <button
@@ -352,8 +407,8 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
                 className={s.swatchBtn}
                 onClick={() => {
                   const st = newSticker(k.kind, k.kind === "player" ? (music?.title ?? music?.artist ?? undefined) : undefined);
-                  dispatch({ type: "sticker-add", sticker: st });
-                  setSelected(st.id);
+                  dispatch({ type: "sticker-add", sticker: k.kind === "spotify" ? { ...st, scale: 0.9, rotate: 0 } : st });
+                  setSel({ kind: "sticker", id: st.id });
                 }}
               >
                 <StickerSwatch kind={k.kind} color={k.color} />
@@ -361,97 +416,38 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
               </button>
             ))}
           </div>
-          {sticker ? (
-            <div className={s.stickerPanel}>
-              <p className={s.kicker}>Selected: {STICKER_KINDS.find((k) => k.kind === sticker.kind)?.label} · drag it on the Story</p>
-              <div className={s.grid2}>
-                <label className={s.field}>
-                  <span>Size · {sticker.scale.toFixed(1)}×</span>
-                  <input type="range" min={0.3} max={3} step={0.05} value={sticker.scale} onChange={(e) => dispatch({ type: "sticker", id: sticker.id, patch: { scale: Number(e.target.value) } })} />
-                </label>
-                <label className={s.field}>
-                  <span>Rotate · {Math.round(sticker.rotate)}°</span>
-                  <input type="range" min={0} max={359} step={1} value={sticker.rotate} onChange={(e) => dispatch({ type: "sticker", id: sticker.id, patch: { rotate: Number(e.target.value) } })} />
-                </label>
-              </div>
-              <div className={s.grid2}>
-                <label className={s.field}>
-                  <span>Colour</span>
-                  <input type="color" className={s.color} value={sticker.color} onChange={(e) => dispatch({ type: "sticker", id: sticker.id, patch: { color: e.target.value } })} />
-                </label>
-                {(sticker.kind === "note" || sticker.kind === "player") && (
-                  <label className={s.field}>
-                    <span>Words</span>
-                    <input className={s.input} maxLength={28} value={sticker.text ?? ""} onChange={(e) => dispatch({ type: "sticker", id: sticker.id, patch: { text: e.target.value } })} />
-                  </label>
-                )}
-              </div>
-              <div className={s.row}>
-                <button className={s.secondary} onClick={() => { dispatch({ type: "sticker-remove", id: sticker.id }); setSelected(null); }}>Remove sticker</button>
-                <button className={s.linkBtn} onClick={() => setSelected(null)}>Done</button>
-              </div>
-            </div>
-          ) : (
-            (story.stickers ?? []).length > 0 && <p className={s.small}>Tap a sticker on the Story to resize, rotate, recolour or remove it.</p>
-          )}
-        </fieldset>
+        </Section>
 
-        <fieldset className={s.group}>
-          <legend>{tpl.overlayLabel}</legend>
-          <div className={s.grid2}>
-            <label className={s.field}>
-              <span>Strength · {Math.round(story.overlay.strength * 100)}%</span>
-              <input type="range" min={0} max={1} step={0.01} value={story.overlay.strength} onChange={(e) => dispatch({ type: "overlay", patch: { strength: Number(e.target.value) } })} />
-            </label>
-            <label className={s.field}>
-              <span>Colour</span>
-              <input type="color" className={s.color} value={story.overlay.color} onChange={(e) => dispatch({ type: "overlay", patch: { color: e.target.value } })} />
-            </label>
-          </div>
-        </fieldset>
+        {story.cover && (
+          <Section title="Song sticker" hint={story.cover.show ? story.cover.title || "On" : "Off"} open={Boolean(tpl.cover?.show)}>
+            <CoverPanel
+              cover={story.cover}
+              onChange={(patch) => dispatch({ type: "cover", patch })}
+              onUpload={setUploadedCover}
+              focus={story.focus ?? { x: story.crop.x, y: story.crop.y }}
+              hasImage={Boolean(coverImg)}
+            />
+          </Section>
+        )}
 
-        <fieldset className={s.group}>
-          <legend>Details</legend>
-          {tpl.decorations.map((d) => (
-            <label key={d.key} className={s.check}>
-              <input type="checkbox" checked={story.decorations[d.key] !== false} onChange={(e) => dispatch({ type: "decoration", key: d.key, on: e.target.checked })} />
-              {d.label}
-            </label>
-          ))}
-        </fieldset>
-
-        <div className={s.exportRow}>
+        <div className={s.exportBar}>
           <button className={s.primary} onClick={doExport} disabled={exporting === "busy"}>
             {exporting === "busy" ? "Rendering…" : "Download PNG"}
           </button>
           {onSave && (
             <button className={s.secondary} onClick={doSave} disabled={saving.kind === "busy" || saving.kind === "done"}>
-              {saving.kind === "busy" ? "Saving…" : saving.kind === "done" ? "Saved ✓" : signedIn ? "Save to my Stories" : "Log in to save"}
+              {saving.kind === "busy" ? "Saving…" : saving.kind === "done" ? "Saved" : signedIn ? "Save to my Stories" : "Log in to save"}
             </button>
           )}
-          <button className={s.secondary} onClick={() => dispatch({ type: "reset", input: input(story.templateId) })}>
-            Reset to template
-          </button>
+          <button className={s.linkBtn} onClick={() => { dispatch({ type: "reset", input: input(story.templateId) }); setSel(null); }}>Reset layout</button>
         </div>
         <div aria-live="polite">
-          {saving.kind === "error" && (
-            <p className={s.error}>
-              {saving.msg} <button className={s.linkBtn} onClick={doSave}>Try again</button>
-            </p>
-          )}
-          {saving.kind === "done" && (
-            <p className={s.small}>Saved to your account. Find it under &ldquo;Your saved Stories&rdquo; on any device; the photo copy is stored privately.</p>
-          )}
-        </div>
-        <div aria-live="polite">
-          {exporting === "error" && (
-            <p className={s.error}>
-              Export failed. <button className={s.linkBtn} onClick={doExport}>Try again</button>
-            </p>
-          )}
+          {saving.kind === "error" && <p className={s.error}>{saving.msg} <button className={s.linkBtn} onClick={doSave}>Try again</button></p>}
+          {saving.kind === "done" && <p className={s.small}>Saved to your account. Find it under &ldquo;Your saved Stories&rdquo; on any device; the photo copy is stored privately.</p>}
+          {exporting === "error" && <p className={s.error}>Export failed. <button className={s.linkBtn} onClick={doExport}>Try again</button></p>}
           {exporting === "done" && (
             <p className={s.small}>
-              Saved. Post it as a Story, then add the song with Instagram&apos;s Music sticker.{" "}
+              Downloaded. Post it as a Story, then add the song with Instagram&apos;s Music sticker.{" "}
               <button className={s.linkBtn} onClick={onStartOver}>Make another</button>
             </p>
           )}
@@ -460,4 +456,187 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
       </div>
     </section>
   );
+
+  // ---- pieces (closures over the editor state) -------------------------------------------
+
+  function layoutGroup({ name, ids, open }: { name: string; ids: TemplateId[]; open?: boolean }) {
+    return (
+      <details className={s.layoutGroup} open={open}>
+        <summary>
+          {name} <span className={s.muted}>{ids.length}</span>
+        </summary>
+        <div className={s.chips}>
+          {ids.map((id) => (
+            <button key={id} className={`${s.chip} ${story.templateId === id ? s.chipOn : ""}`} aria-pressed={story.templateId === id} onClick={() => chooseLayout(id)}>
+              {TEMPLATES[id].name}
+              {suggested.includes(id) && <span className={s.dot} aria-label="suggested" />}
+            </button>
+          ))}
+        </div>
+      </details>
+    );
+  }
+
+  function spotControls() {
+    const sp = story.spot!;
+    const full = sp.w >= 0.99;
+    return (
+      <>
+        {!full && <Slider label="Left ↔ right" value={sp.x} min={0} max={1 - sp.w} step={0.001} nudge={0.005} format={pct} onChange={(v) => dispatch({ type: "spot", x: v })} />}
+        <Slider label="Up ↕ down" value={sp.y} min={0} max={1 - sp.h} step={0.001} nudge={0.005} format={pct} onChange={(v) => dispatch({ type: "spot", y: v })} />
+        {!full && <Slider label="Width" value={sp.w} min={0.08} max={1} step={0.005} nudge={0.01} format={pct} onChange={(v) => dispatch({ type: "spot", w: v })} />}
+        <Slider label="Height" value={sp.h} min={0.04} max={0.6} step={0.005} nudge={0.01} format={pct} onChange={(v) => dispatch({ type: "spot", h: v })} />
+      </>
+    );
+  }
+
+  function textControls({ k }: { k: TextKey }) {
+    const layer = story[k];
+    return (
+      <>
+        <label className={s.field}>
+          <span>Words</span>
+          <textarea className={s.input} rows={2} maxLength={160} value={layer.text} onChange={(e) => dispatch({ type: "text", key: k, patch: { text: e.target.value } })} />
+        </label>
+        <div className={s.grid2}>
+          <label className={s.field}>
+            <span>Typeface</span>
+            <select className={s.select} value={layer.font} onChange={(e) => dispatch({ type: "text", key: k, patch: { font: e.target.value as FontRole } })}>
+              {FONTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          </label>
+          <ColorField label="Colour" value={layer.color} onChange={(v) => dispatch({ type: "text", key: k, patch: { color: v } })} />
+        </div>
+        <Slider label="Size" value={layer.size} min={14} max={240} step={1} nudge={2} format={px} onChange={(v) => dispatch({ type: "text", key: k, patch: { size: v } })} />
+        <Slider label="Line width" value={layer.width} min={0.2} max={1.2} step={0.01} nudge={0.02} format={pct} onChange={(v) => dispatch({ type: "text", key: k, patch: { width: v } })} />
+        <Segmented<Align> label="Alignment" value={layer.align} options={[{ id: "left", label: "Left" }, { id: "center", label: "Centre" }, { id: "right", label: "Right" }]} onChange={(al) => dispatch({ type: "text", key: k, patch: { align: al } })} />
+        <Slider label="Left ↔ right" value={layer.x} min={0} max={1} step={0.001} nudge={0.005} format={pct} onChange={(v) => dispatch({ type: "move", key: k, x: v, y: layer.y })} />
+        <Slider label="Up ↕ down" value={layer.y} min={0} max={0.97} step={0.001} nudge={0.005} format={pct} onChange={(v) => dispatch({ type: "move", key: k, x: layer.x, y: v })} />
+      </>
+    );
+  }
+
+  function boxControls({ i, viewKey }: { i?: number; viewKey?: string }) {
+    const own = i !== undefined && ownSlot(i) && !viewKey;
+    if (own) {
+      const c = cropOf(i);
+      return (
+        <>
+          <Segmented label="Photo fit" value={c.fit} options={[{ id: "cover", label: "Fill box" }, { id: "contain", label: "Whole photo" }]} onChange={(fit) => dispatch({ type: "crop", slot: i, patch: { fit } })} />
+          <Slider label="Zoom" value={c.zoom} min={1} max={4} step={0.01} nudge={0.05} format={times} onChange={(v) => dispatch({ type: "crop", slot: i, patch: { zoom: v } })} />
+          <Slider label="Left ↔ right" value={c.x} min={0} max={1} step={0.001} nudge={0.01} format={pct} onChange={(v) => dispatch({ type: "crop", slot: i, patch: { x: v } })} />
+          <Slider label="Up ↕ down" value={c.y} min={0} max={1} step={0.001} nudge={0.01} format={pct} onChange={(v) => dispatch({ type: "crop", slot: i, patch: { y: v } })} />
+          <div className={s.row}>
+            <button className={s.secondary} onClick={() => dispatch({ type: "crop", slot: i, patch: { rot: ((((c.rot ?? 0) + 90) % 360) as Crop["rot"]) } })}>Rotate photo 90°</button>
+            <button className={s.linkBtn} onClick={() => dispatch({ type: "crop", slot: i, patch: { zoom: 1, x: 0.5, y: 0.5, fit: "cover", rot: 0 } })}>Reset framing</button>
+          </div>
+        </>
+      );
+    }
+    const key = viewKey ?? `slot${i}`;
+    const v = viewOf(key);
+    const set = (patch: Partial<typeof v>) =>
+      dispatch({ type: "view", key, dx: (patch.dx ?? v.dx) - v.dx, dy: (patch.dy ?? v.dy) - v.dy, zoom: (patch.zoom ?? v.zoom) / v.zoom });
+    return (
+      <>
+        <p className={s.small}>This box shows part of your photo. Drag inside it, or use these, to choose which part.</p>
+        <Slider label="Zoom" value={v.zoom} min={0.5} max={4} step={0.01} nudge={0.05} format={times} onChange={(z) => set({ zoom: z })} />
+        <Slider label="Left ↔ right" value={-v.dx} min={-1} max={1} step={0.001} nudge={0.01} format={(n) => n.toFixed(2)} onChange={(n) => set({ dx: -n })} />
+        <Slider label="Up ↕ down" value={-v.dy} min={-1} max={1} step={0.001} nudge={0.01} format={(n) => n.toFixed(2)} onChange={(n) => set({ dy: -n })} />
+        <button className={s.linkBtn} onClick={() => dispatch({ type: "view", key, reset: true })}>Reset this box</button>
+      </>
+    );
+  }
+
+  function stickerControls({ st }: { st: Sticker }) {
+    const patch = (p: Partial<Sticker>) => dispatch({ type: "sticker", id: st.id, patch: p });
+    return (
+      <>
+        <Slider label="Size" value={st.scale} min={0.3} max={5} step={0.01} nudge={0.05} format={times} onChange={(v) => patch({ scale: v })} />
+        <Slider label="Rotation" value={st.rotate} min={0} max={359} step={1} nudge={1} format={deg} onChange={(v) => patch({ rotate: v })} />
+        <Slider label="Left ↔ right" value={st.x} min={0} max={1} step={0.001} nudge={0.005} format={pct} onChange={(v) => patch({ x: v })} />
+        <Slider label="Up ↕ down" value={st.y} min={0} max={1} step={0.001} nudge={0.005} format={pct} onChange={(v) => patch({ y: v })} />
+        <ColorField label="Colour" value={st.color} onChange={(v) => patch({ color: v })} />
+        {(st.kind === "note" || st.kind === "player") && (
+          <label className={s.field}>
+            <span>Words</span>
+            <input className={s.input} maxLength={28} value={st.text ?? ""} onChange={(e) => patch({ text: e.target.value })} />
+          </label>
+        )}
+        <div className={s.row}>
+          <button className={s.secondary} onClick={() => patch({ rotate: (st.rotate + 90) % 360 })}>Turn 90°</button>
+          <button className={s.secondary} onClick={() => dispatch({ type: "sticker-order", id: st.id, to: "front" })}>Bring to front</button>
+          <button className={s.secondary} onClick={() => dispatch({ type: "sticker-order", id: st.id, to: "back" })}>Send to back</button>
+          <button
+            className={s.secondary}
+            onClick={() => {
+              const copy = { ...st, id: `${st.kind}-${Date.now().toString(36)}`, x: Math.min(1, st.x + 0.04), y: Math.min(1, st.y + 0.03), layout: undefined };
+              dispatch({ type: "sticker-add", sticker: copy });
+              setSel({ kind: "sticker", id: copy.id });
+            }}
+          >
+            Duplicate
+          </button>
+          <button className={s.danger} onClick={() => dispatch({ type: "sticker-remove", id: st.id })}>Delete</button>
+        </div>
+      </>
+    );
+  }
+
+  function inspector() {
+    let title = "Nothing selected";
+    let body: React.ReactNode = <p className={s.small}>Tap anything on the Story to adjust it, or pick it here.</p>;
+    if (sel?.kind === "text") {
+      title = sel.key === "headline" ? "Headline" : "Caption";
+      body = textControls({ k: sel.key });
+    } else if (sel?.kind === "sticker") {
+      const st = story.stickers.find((x) => x.id === sel.id);
+      if (st) {
+        title = stickerName(st);
+        body = stickerControls({ st });
+      }
+    } else if (sel?.kind === "slot") {
+      title = boxes.length > 1 ? `Photo box ${sel.i + 1}` : "Photo";
+      body = boxControls({ i: sel.i });
+    } else if (sel?.kind === "view") {
+      title = sel.key.startsWith("slot") ? `Photo box ${Number(sel.key.slice(4)) + 1}` : "Zoomed box";
+      body = boxControls({ viewKey: sel.key });
+    } else if (sel?.kind === "spot" && story.spot) {
+      title = story.templateId === "colorbox" ? "Colour box" : "Strip";
+      body = spotControls();
+    } else if (sel?.kind === "cover" && story.cover) {
+      const c = story.cover;
+      title = "Song sticker";
+      body = (
+        <>
+          <Slider label="Size" value={c.scale} min={0.3} max={4} step={0.01} nudge={0.05} format={times} onChange={(v) => dispatch({ type: "cover", patch: { scale: v } })} />
+          <Slider label="Tilt" value={c.rotate} min={-45} max={45} step={1} nudge={1} format={deg} onChange={(v) => dispatch({ type: "cover", patch: { rotate: v } })} />
+          <Slider label="Left ↔ right" value={c.x} min={0} max={1} step={0.001} nudge={0.005} format={pct} onChange={(v) => dispatch({ type: "cover", patch: { x: v } })} />
+          <Slider label="Up ↕ down" value={c.y} min={0} max={1} step={0.001} nudge={0.005} format={pct} onChange={(v) => dispatch({ type: "cover", patch: { y: v } })} />
+          <p className={s.small}>Pick the song, style and title colour under Song sticker.</p>
+        </>
+      );
+    }
+    return (
+      <div ref={inspectorRef} className={s.inspector} aria-live="polite">
+        <div className={s.inspectorHead}>
+          <h3>{title}</h3>
+          {sel && <button className={s.linkBtn} onClick={() => setSel(null)}>Done</button>}
+        </div>
+        {body}
+        <div className={s.selectables} role="group" aria-label="Select an element">
+          {selectables.map((x) => (
+            <button key={JSON.stringify(x.sel)} className={`${s.chip} ${isSel(x.sel) ? s.chipOn : ""}`} aria-pressed={isSel(x.sel)} onClick={() => setSel(x.sel)}>
+              {x.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+}
+
+/** How many elements this layout places by default (to offer restoring deleted ones). */
+function defaultElCount(s: StoryState, input: (id: TemplateId) => TemplateInput): number {
+  return TEMPLATES[s.templateId].stickers?.(input(s.templateId)).length ?? 0;
 }

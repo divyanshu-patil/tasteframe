@@ -31,6 +31,7 @@ export default function Home() {
           </p>
           <div className={styles.ctaRow}>
             <Link href="/create" className={styles.cta}>Start creating</Link>
+            <Link href="/gallery" className={styles.homeLink}>Browse the layout gallery</Link>
             <span className={styles.ctaNote}>No account needed to create or download.</span>
           </div>
         </div>

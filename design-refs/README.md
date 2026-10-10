@@ -11,8 +11,12 @@ in `apps/web/lib/story/templates.ts`.
 Pinterest's terms keep copyright with each pin's creator and grant no right to republish pin
 images, so the repo carries links and credits only. Rebuild the images locally with
 `python3 design-refs/fetch.py` (official oEmbed lookup, stdlib only; `--authors` refreshes the
-credits). `pinterest/user1/` holds 19 references shared directly by the project owner without
-pin links, so they can't be rebuilt from this repo.
+credits). The owner's own pins are rows with category `owner`. `pinterest/user1/` holds the
+same references as shared in chat (local only).
+
+`python3 design-refs/build_pins.py` writes `apps/web/lib/story/pins.json` (pin, author credit,
+Pinterest's oEmbed thumbnail URL, layouts). Per-pin layout links for the aesthetic/cover sets live in
+`pinterest/pin_layouts.json`; oEmbed answers are cached in `pinterest/oembed_cache.json`.
 
 ## What each template borrows
 

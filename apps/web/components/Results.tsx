@@ -7,6 +7,8 @@ import { TEMPLATES, defaultState } from "../lib/story/templates";
 import { type StoryState, TEMPLATE_IDS, type TemplateId } from "../lib/story/types";
 import { inputFor } from "../lib/story/input";
 import { useCoverImage } from "./CoverPanel";
+import { PinSource } from "./PinSource";
+import { pinsFor } from "../lib/story/pins";
 import { useMasks } from "./useMasks";
 import { StoryCanvas } from "./StoryCanvas";
 import s from "./maker.module.css";
@@ -105,6 +107,7 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
             <p className={s.optionNo}>No. {(page % pages) * 3 + i + 1}{page % pages === 0 && i === 0 ? " · best match" : ""}</p>
             <h3 className={s.optionName}>{layout.name}</h3>
             <p className={s.small}>{layout.reason}</p>
+            {pinsFor(layout.id)[0] && <PinSource pin={pinsFor(layout.id)[0]!} />}
             {analysis && (
               <details className={s.details}>
                 <summary>Why this ranking</summary>

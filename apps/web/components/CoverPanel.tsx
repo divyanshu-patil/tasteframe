@@ -40,10 +40,9 @@ export function useCoverImage(trackId: number | undefined, uploaded: Photo | nul
 }
 
 const STYLES: { id: CoverStyle; label: string }[] = [
-  { id: "sticker", label: "Music sticker" },
-  { id: "plain", label: "Plain square" },
-  { id: "card", label: "Player card" },
-  { id: "bubble", label: "Speech bubble" },
+  { id: "ig", label: "Album art" },
+  { id: "igpill", label: "Pill" },
+  { id: "igart", label: "Art only" },
 ];
 
 interface Props {
@@ -141,6 +140,15 @@ export function CoverPanel({ cover, onChange, onUpload, focus, hasImage }: Props
               </button>
             ))}
           </div>
+          {cover.style === "ig" && (
+            <div className={s.segment} role="group" aria-label="Title colour">
+              {[["#ffffff", "White text"], ["#111111", "Black text"]].map(([c, l]) => (
+                <button key={c} aria-pressed={(cover.textColor ?? "#ffffff") === c} className={(cover.textColor ?? "#ffffff") === c ? s.segOn : ""} onClick={() => onChange({ textColor: c })}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
           <div className={s.grid2}>
             <label className={s.field}>
               <span>Size</span>
@@ -153,7 +161,7 @@ export function CoverPanel({ cover, onChange, onUpload, focus, hasImage }: Props
           </div>
           <p className={s.small}>
             Drag the cover on the Story to move it ·{" "}
-            <button className={s.linkBtn} onClick={() => onChange({ style: "plain", x: focus.x, y: Math.max(0.1, focus.y - 0.04), rotate: 0, scale: 1.3 })}>
+            <button className={s.linkBtn} onClick={() => onChange({ style: "ig", x: focus.x, y: Math.max(0.1, focus.y - 0.04), rotate: 0, scale: 1.3 })}>
               Place over face
             </button>
           </p>
@@ -164,4 +172,25 @@ export function CoverPanel({ cover, onChange, onUpload, focus, hasImage }: Props
       )}
     </fieldset>
   );
+}
+
+/** Album art for several tracks (playlist panel), keyed by track id. */
+export function useTrackArt(trackIds: number[]): Map<number, Photo> {
+  const [art, setArt] = useState<Map<number, Photo>>(() => new Map());
+  const key = trackIds.join(",");
+  useEffect(() => {
+    if (!key) return;
+    let live = true;
+    const ids = key.split(",").map(Number);
+    void Promise.all(ids.map((id) => artworkFor(id).then((img) => [id, img] as const))).then((pairs) => {
+      if (!live) return;
+      const m = new Map<number, Photo>();
+      for (const [id, img] of pairs) if (img) m.set(id, img);
+      setArt(m);
+    });
+    return () => {
+      live = false;
+    };
+  }, [key]);
+  return art;
 }

@@ -24,7 +24,7 @@ export function tile(ctx: Ctx, photo: Photo, r: Rect, base: StoryState["crop"], 
 /** Tile i: its own photo when the Story has one for this slot, else a shifted crop of photo 1. */
 export function slotTile(ctx: Ctx, slots: Slots, i: number, r: Rect, radius: number, shift: { x: number; y: number; zoom: number }) {
   if (slots.own(i)) tile(ctx, slots.photo(i), r, slots.crop(i), radius);
-  else tile(ctx, slots.photo(0), r, slots.crop(0), radius, shift);
+  else tile(ctx, slots.photo(0), r, slots.adjust(`slot${i}`, slots.crop(0)), radius, shift);
 }
 
 function barcode(ctx: Ctx, r: Rect, seed: number, color = "#1d1d1b") {

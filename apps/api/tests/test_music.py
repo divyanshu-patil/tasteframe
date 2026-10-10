@@ -57,6 +57,7 @@ def test_search_tracks_normalises():
             "artist": "JVKE",
             "album": "this is what ____ feels like",
             "has_artwork": True,
+            "explicit": False,
         }
     ]
 

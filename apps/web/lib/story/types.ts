@@ -37,6 +37,8 @@ export const TEMPLATE_IDS = [
   "polaroids",
   // From the owner's reference set (templates-refs.ts).
   "playlist",
+  "covermouth",
+  "camtilt",
   "playercut",
   "triptych",
   "cctv",
@@ -115,6 +117,8 @@ export interface Crop {
   x: number;
   y: number;
   fit: "cover" | "contain";
+  /** Clockwise quarter turns of the source photo (0/90/180/270). */
+  rot?: 0 | 90 | 180 | 270;
 }
 
 export interface StoryState {
@@ -139,6 +143,13 @@ export interface StoryState {
   focus?: { x: number; y: number };
   /** Draggable window (0..1 of the Story), e.g. the colour box over a B&W photo. */
   spot?: Rect;
+  /** Die-cut outline around a person cutout. */
+  outline?: { show: boolean; color: string; width: number; margin?: number };
+  /** Real tracks (Apple Music catalogue) shown in the playlist panel sticker. */
+  tracks?: { title: string; artist: string; explicit?: boolean; trackId?: number }[];
+  /** Per-box framing tweaks (drag/zoom inside a box that shows part of the photo), keyed by
+   *  box id ("slot2" for repeated slots, or a layout's named inset). Offsets add to the default. */
+  views?: Record<string, { dx: number; dy: number; zoom: number }>;
   /** Short words from the photo (image reasoning elements) for checklist/receipt layouts. */
   tags?: string[];
 }
