@@ -404,3 +404,10 @@ textarea.input { width: 100%; resize: vertical; }
 .status:hover .statusTip, .statusDot:focus-visible + .statusTip, .statusTipOpen { opacity: 1; transform: none; }
 .statusLabel { margin-left: 7px; font-size: 13px; color: var(--color-charcoal); font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .status_connecting { animation: none; } .statusTip { transition: none; } }
+
+/* ---- cutout refiner ---- */
+.refiner { width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+.refinerTitle { font-family: var(--font-display); font-weight: 600; font-size: 29px; line-height: 1; letter-spacing: -0.03em; }
+.refinerCanvas { display: block; margin: 0 auto; max-width: 100%; touch-action: none; cursor: crosshair; border-radius: var(--radius-sm); background: var(--color-ink-black); }
+.refinerTools { display: grid; gap: var(--spacing-10); }
+.refiner kbd { font-family: var(--font-mono); font-size: 12px; padding: 0 4px; border: 1px solid currentColor; border-radius: 4px; }

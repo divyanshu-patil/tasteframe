@@ -13,6 +13,7 @@ import { STICKER_KINDS, type Sticker, newSticker } from "../lib/story/stickers";
 import { TEMPLATES, layoutBoxes, slotRectsFor } from "../lib/story/templates";
 import type { Align, Crop, FontRole, StoryState, TemplateId, TemplateInput, TextKey } from "../lib/story/types";
 import { CoverPanel, useCoverImage, useTrackArt } from "./CoverPanel";
+import { CutoutRefiner } from "./CutoutRefiner";
 import { ColorField, Section, Segmented, Slider, Toggle, deg, pct, px, times } from "./controls";
 import { MusicCard } from "./Results";
 import { PinSource } from "./PinSource";
@@ -78,7 +79,11 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
   const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
   const [uploadedCover, setUploadedCover] = useState<Photo | null>(null);
   const coverImg = useCoverImage(story.cover?.trackId, uploadedCover);
-  const masks = useMasks(photos, Boolean(tpl.needsMask));
+  const autoMasks = useMasks(photos, Boolean(tpl.needsMask));
+  // Hand-refined cutouts per photo (CutoutRefiner); they override the automatic ones.
+  const [maskEdits, setMaskEdits] = useState<ReadonlyMap<Photo, HTMLCanvasElement>>(() => new Map());
+  const [refining, setRefining] = useState<number | null>(null);
+  const masks = useMemo(() => autoMasks?.map((m, i) => maskEdits.get(photos[i]!) ?? m), [autoMasks, maskEdits, photos]);
   const art = useTrackArt((story.tracks ?? []).flatMap((t) => (t.trackId ? [t.trackId] : [])));
   const order = story.order?.length ? story.order : [0, 1, 2, 3];
   const boxes = slotRectsFor(story, photos.length);
@@ -282,7 +287,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
         />
         <p className={s.small}>Tap to select · drag to move · scroll or pinch to zoom · arrow keys nudge</p>
         {tpl.needsMask && !masks && <p className={s.small} role="status">Cutting you out of the photo on your device (the first time loads a small model)…</p>}
-        {tpl.needsMask && masks && !masks[0] && <p className={s.small} role="status">No person found to cut out, so this layout shows the whole photo.</p>}
+        {tpl.needsMask && masks && !masks[0] && <p className={s.small} role="status">No person found to cut out, so this layout shows the whole photo. Use Refine cutout to paint one in.</p>}
       </div>
 
       <div className={s.panel}>
@@ -307,6 +312,22 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
 
         <Section title="This layout" hint={tpl.blurb} open>
           {pins.length > 0 && <PinSource pin={pins[0]!} more={pins.length - 1} moreHref={`/gallery?layout=${story.templateId}`} />}
+          {tpl.needsMask && (
+            <div className={s.subgroup}>
+              <p className={s.subhead}>Cutout</p>
+              <p className={s.small}>Paint to add anything the automatic cutout missed, or erase what it caught by mistake.</p>
+              <div className={s.row}>
+                {photos.map((p, i) => (
+                  <button key={i} type="button" className={s.secondary} disabled={!autoMasks} onClick={() => setRefining(i)}>
+                    {photos.length > 1 ? `Refine photo ${i + 1}` : "Refine cutout"}
+                  </button>
+                ))}
+                {photos.some((p) => maskEdits.has(p)) && (
+                  <button type="button" className={s.linkBtn} onClick={() => setMaskEdits(new Map())}>Use the automatic cutout</button>
+                )}
+              </div>
+            </div>
+          )}
           {tpl.outline && (
             <div className={s.subgroup}>
               <p className={s.subhead}>Cutout outline</p>
@@ -495,6 +516,20 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
         </div>
         {music && music.kind !== "none" && <MusicCard music={music} />}
       </div>
+      {refining !== null && autoMasks && photos[refining] && (
+        <CutoutRefiner
+          photo={photos[refining]}
+          start={maskEdits.get(photos[refining]) ?? autoMasks[refining] ?? null}
+          auto={autoMasks[refining] ?? null}
+          title={photos.length > 1 ? `Refine photo ${refining + 1}` : "Refine your cutout"}
+          onApply={(m) => {
+            const photo = photos[refining]!;
+            setMaskEdits((cur) => new Map(cur).set(photo, m));
+            setRefining(null);
+          }}
+          onClose={() => setRefining(null)}
+        />
+      )}
     </section>
   );
 

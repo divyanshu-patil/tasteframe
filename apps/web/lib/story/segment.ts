@@ -49,6 +49,15 @@ function load(): Promise<Segmenter | null> {
   return segmenter;
 }
 
+/** An empty canvas the size of `photo`'s mask (same aspect ratio, ≤640px). */
+export function maskCanvas(photo: Photo): HTMLCanvasElement {
+  const k = Math.min(1, MAX_SIDE / Math.max(photo.width, photo.height));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(photo.width * k));
+  c.height = Math.max(1, Math.round(photo.height * k));
+  return c;
+}
+
 /**
  * Alpha mask of the person in `photo` (same aspect ratio, ≤640px), or null when segmentation
  * is unavailable. Cached per photo.
@@ -59,18 +68,13 @@ export function personMask(photo: Photo): Promise<HTMLCanvasElement | null> {
     p = (async () => {
       const seg = await load();
       if (!seg) return null;
-      const k = Math.min(1, MAX_SIDE / Math.max(photo.width, photo.height));
-      const src = document.createElement("canvas");
-      src.width = Math.max(1, Math.round(photo.width * k));
-      src.height = Math.max(1, Math.round(photo.height * k));
+      const src = maskCanvas(photo);
       src.getContext("2d")?.drawImage(photo, 0, 0, src.width, src.height);
       const res = await quietInfo(() => seg.segment(src));
       const conf = res.confidenceMasks?.[0]?.getAsFloat32Array();
       res.close();
       if (!conf) return null;
-      const out = document.createElement("canvas");
-      out.width = src.width;
-      out.height = src.height;
+      const out = maskCanvas(photo);
       const ctx = out.getContext("2d");
       if (!ctx) return null;
       const img = ctx.createImageData(out.width, out.height);
