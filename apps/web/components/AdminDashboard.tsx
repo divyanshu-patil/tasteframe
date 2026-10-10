@@ -168,6 +168,8 @@ function Overview({ stats, days }: { stats: AdminStats; days: number }) {
     ["Downloads", t.exports],
     ["Saves", t.saves],
     ["Requests", t.requests],
+    ["Accounts", stats.accounts.users],
+    ["New accounts", stats.accounts.new],
   ];
   const deviceTotal = Object.values(stats.devices).reduce((a, b) => a + b, 0) || 1;
   return (

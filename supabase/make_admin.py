@@ -1,4 +1,4 @@
-"""Grant (or revoke) the admin role for an existing Tasteframe account.
+"""Set an existing Tasteframe account's role in public.users: admin, or back to user.
 
     uv run --no-project --with "psycopg[binary]==3.2.10" python supabase/make_admin.py you@example.com
     ... make_admin.py you@example.com --revoke
@@ -24,12 +24,13 @@ def main() -> None:
         row = conn.execute("select id from auth.users where lower(email) = %s", (email,)).fetchone()
         if not row:
             sys.exit(f"No account with email {email}. Sign up in the app first.")
-        if revoke:
-            conn.execute("delete from public.admins where user_id = %s", (row[0],))
-            print(f"Revoked admin: {email}")
-        else:
-            conn.execute("insert into public.admins (user_id) values (%s) on conflict do nothing", (row[0],))
-            print(f"Granted admin: {email}")
+        role = "user" if revoke else "admin"
+        conn.execute(
+            "insert into public.users (id, email, role) values (%s, %s, %s)"
+            " on conflict (id) do update set role = excluded.role",
+            (row[0], email, role),
+        )
+        print(f"{email} is now: {role}")
 
 
 if __name__ == "__main__":

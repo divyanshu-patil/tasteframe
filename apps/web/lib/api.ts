@@ -563,6 +563,7 @@ export interface AdminStats {
   pages: { name: string; count: number }[];
   layouts: { name: string; opens: number; exports: number }[];
   devices: Record<string, number>;
+  accounts: Record<"users" | "admins" | "new", number>;
   requests: Record<RequestStatus, number>;
 }
 
@@ -618,6 +619,7 @@ export async function adminStats(days: number): Promise<AdminStats> {
     pages: arr(v.pages, (i) => isStr(i.name) && isNum(i.count)),
     layouts: arr(v.layouts, (i) => isStr(i.name)),
     devices: isObj(v.devices) ? (v.devices as Record<string, number>) : {},
+    accounts: (isObj(v.accounts) ? v.accounts : { users: 0, admins: 0, new: 0 }) as AdminStats["accounts"],
     requests: (isObj(v.requests) ? v.requests : { pending: 0, accepted: 0, rejected: 0, done: 0 }) as AdminStats["requests"],
   };
 }

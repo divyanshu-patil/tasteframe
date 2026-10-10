@@ -40,7 +40,7 @@ if __name__ == "__main__":
         with conn.transaction():
             conn.execute((ROOT / "supabase/schema.sql").read_text())
             conn.execute("notify pgrst, 'reload schema'")
-        for table in ("stories", "events", "layout_requests", "admins"):
+        for table in ("stories", "events", "layout_requests", "users"):
             policies = [r[0] for r in conn.execute(
                 "select policyname from pg_policies where tablename = %s order by 1", (table,)).fetchall()]
             rls, anon_sel, auth_upd = conn.execute(
@@ -48,5 +48,6 @@ if __name__ == "__main__":
                 " has_table_privilege('authenticated', c.oid, 'update')"
                 " from pg_class c where c.oid = %s::regclass", (f"public.{table}",)).fetchone()
             print(f"{table}: rls={rls} anon_select={anon_sel} auth_update={auth_upd} policies={policies}")
-        admins = conn.execute("select count(*) from public.admins").fetchone()[0]
-        print("admins:", admins)
+        users, admins = conn.execute(
+            "select count(*), count(*) filter (where role = 'admin') from public.users").fetchone()
+        print(f"users: {users} (admins: {admins})")

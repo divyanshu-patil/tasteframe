@@ -331,13 +331,15 @@ Creating and downloading never need an account. **Saving a Story to the backend 
   - the referring site's host only;
   - a coarse device class.
   - Do Not Track / Global Privacy Control turn it off, and `/admin` is never tracked.
-- **Admin role**: Supabase RLS + `is_admin()` gate everything, so a non-admin token gets
-  nothing even when calling PostgREST directly. Grant it from the database only, after the account
-  has signed up in the app:
+- **Roles**: every account gets a row in `public.users` (`role` is `user` or `admin`), created by
+  a trigger on sign-up. Supabase RLS + `is_admin()` (checks `role = 'admin'`) gate everything, so
+  a non-admin token gets nothing even when calling PostgREST directly. Users can read only their
+  own row and nobody can change a role from the client. Promote an account from the database,
+  after it has signed up in the app:
 
   ```bash
   uv run --no-project --with "psycopg[binary]==3.2.10" python supabase/make_admin.py you@example.com
-  # … --revoke to remove
+  # … --revoke sets it back to user
   ```
 
   `/admin` shows:
@@ -366,8 +368,11 @@ Setup:
    on, new users must click the emailed link before logging in. Supabase's built-in mailer only
    delivers to your project team's addresses and is rate-limited, so for real users configure
    custom SMTP (**Authentication → Emails → SMTP**) or turn confirmation off for the demo.
-4. Add your site URL (e.g. `http://localhost:3000`, then your production origin) under
-   **Authentication → URL Configuration**, so confirmation links come back to `/create`.
+4. Under **Authentication → URL Configuration** set **Site URL** to `https://tasteframe.vercel.app`
+   and add `https://tasteframe.vercel.app/**` and `http://localhost:3000/**` to **Redirect URLs**.
+   Sign-up redirects to `NEXT_PUBLIC_SITE_URL` (set it on Vercel too); without an allowed match,
+   Supabase falls back to the Site URL. The confirmation link lands on `/`, which signs the user
+   in and shows a toast.
 
 Security model (standard Supabase RLS):
 - The browser logs in with supabase-js. For saved-Story calls it sends the user's access token to

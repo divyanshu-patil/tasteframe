@@ -266,8 +266,8 @@ it lands in the admin queue.
     <td valign="top">
       <h4>🛡️ An admin dashboard</h4>
       Traffic, referrers, devices, the most-downloaded layouts and the request queue, each
-      request opening with the pin, the note and where it came from. Access is enforced by
-      the database, not the page.
+      request opening with the pin, the note and where it came from. Accounts live in a users
+      table with a <code>user</code> or <code>admin</code> role, enforced by the database, not the page.
     </td>
     <td valign="top">
       <h4>🧭 Works when the API doesn't</h4>

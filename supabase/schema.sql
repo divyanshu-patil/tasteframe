@@ -103,27 +103,57 @@ create policy "stories_delete_own" on public.stories
     for delete to authenticated using (user_id = (select auth.uid()));
 
 -- =========================================================================================
--- Admins, analytics events and layout requests
+-- Users (roles), analytics events and layout requests
 -- =========================================================================================
--- Admins are granted only from the database (supabase/make_admin.py); no API can create one.
-create table if not exists public.admins (
-    user_id uuid primary key references auth.users (id) on delete cascade,
+-- One row per account with its role. Rows are created by a trigger when someone signs up;
+-- roles change only from the database (supabase/make_admin.py) — clients can't update them.
+create table if not exists public.users (
+    id uuid primary key references auth.users (id) on delete cascade,
+    email text,
+    role text not null default 'user' check (role in ('user', 'admin')),
     created_at timestamptz not null default now()
 );
-alter table public.admins enable row level security;
-revoke all on table public.admins from anon, authenticated;
-grant select on table public.admins to authenticated;
-drop policy if exists "admins_select_self" on public.admins;
-create policy "admins_select_self" on public.admins
-    for select to authenticated using (user_id = (select auth.uid()));
+create index if not exists users_role_idx on public.users (role);
+
+-- New sign-ups get a 'user' row (definer: runs with the table owner's rights, not the caller's).
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+    insert into public.users (id, email) values (new.id, new.email)
+    on conflict (id) do update set email = excluded.email;
+    return new;
+end;
+$$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert or update of email on auth.users
+    for each row execute function public.handle_new_user();
+
+-- Backfill accounts that existed before this table, and carry over the old admins table.
+insert into public.users (id, email)
+    select id, email from auth.users on conflict (id) do nothing;
+do $$
+begin
+    if to_regclass('public.admins') is not null then
+        update public.users u set role = 'admin' from public.admins a where a.user_id = u.id;
+        drop table public.admins;
+    end if;
+end
+$$;
 
 -- Definer so RLS policies can ask "is the caller an admin?" without exposing the table.
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
-    select exists (select 1 from public.admins where user_id = auth.uid())
+    select exists (select 1 from public.users where id = auth.uid() and role = 'admin')
 $$;
 revoke all on function public.is_admin() from public;
 grant execute on function public.is_admin() to anon, authenticated;
+
+alter table public.users enable row level security;
+revoke all on table public.users from anon, authenticated;
+grant select on table public.users to authenticated;  -- no insert/update/delete from clients
+drop policy if exists "users_select_self_or_admin" on public.users;
+create policy "users_select_self_or_admin" on public.users
+    for select to authenticated using (id = (select auth.uid()) or (select public.is_admin()));
 
 -- Anonymous usage analytics. No IPs, no user ids, no full URLs: a hashed visitor id (HMAC on
 -- the API), the referring site's host only, the page path and a coarse device class.
@@ -246,6 +276,11 @@ begin
             from public.events where created_at >= since and layout is not null group by 1 order by 3 desc, 2 desc limit 15) x),
         'devices', (select coalesce(jsonb_object_agg(coalesce(device, 'unknown'), n), '{}'::jsonb) from (
             select device, count(distinct visitor) as n from public.events where created_at >= since group by 1) x),
+        'accounts', (select jsonb_build_object(
+            'users', count(*),
+            'admins', count(*) filter (where role = 'admin'),
+            'new', count(*) filter (where created_at >= since))
+            from public.users),
         'requests', (select jsonb_build_object(
             'pending', count(*) filter (where status = 'pending'),
             'accepted', count(*) filter (where status = 'accepted'),

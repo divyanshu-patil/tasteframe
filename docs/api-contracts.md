@@ -232,10 +232,10 @@ sessions or expired Stories.
 - `POST /v1/layout-requests`: `{pin_url, note?, email?, visitor?, referrer?, device?}` returns
   201. The pin is verified first. 429 `REQUEST_LIMIT` after 10 per visitor per day.
 
-## Admin (Supabase login + admin role; RLS enforced)
+## Admin (Supabase login + `public.users.role = 'admin'`; RLS enforced)
 - `GET /v1/admin/me` returns `{admin}`.
 - `GET /v1/admin/stats?days=1..365` returns
-  `{totals, daily[], referrers[], pages[], layouts[], devices{}, requests{}}`.
+  `{totals, daily[], referrers[], pages[], layouts[], devices{}, accounts{users, admins, new}, requests{}}`.
 - `GET /v1/admin/requests?status=pending|accepted|rejected|done` returns `{requests[]}`.
 - `GET /v1/admin/requests/{id}` returns one request.
 - `PATCH /v1/admin/requests/{id}`: `{status, admin_note?}` returns the updated request (stamps

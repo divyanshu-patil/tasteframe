@@ -8,6 +8,7 @@ import {
   Space_Mono,
 } from "next/font/google";
 import { Analytics } from "../components/Analytics";
+import { AuthReturn } from "../components/AuthReturn";
 import "./globals.css";
 
 // DESIGN.md substitutes: Bodoni Moda (Canopee), Source Serif 4 (Editorial New).
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         {children}
         <Analytics />
+        <AuthReturn />
       </body>
     </html>
   );

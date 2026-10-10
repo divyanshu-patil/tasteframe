@@ -7,6 +7,13 @@ import { useEffect, useState } from "react";
 
 const URL_ = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+/** Where email-confirmation links send people (the public site), e.g. https://tasteframe.vercel.app. */
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
+
+/** The site's public origin: NEXT_PUBLIC_SITE_URL when set, else wherever the app is running. */
+export function siteUrl(): string {
+  return (SITE_URL || (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/+$/, "");
+}
 
 let client: SupabaseClient | null | undefined;
 
@@ -58,7 +65,9 @@ export async function signUp(email: string, password: string): Promise<AuthResul
   const { data, error } = await sb.auth.signUp({
     email,
     password,
-    options: { emailRedirectTo: `${window.location.origin}/create` },
+    // The landing page finishes sign-in from the link (components/AuthReturn.tsx). Supabase only
+    // honours this if the URL is in Authentication → URL Configuration → Redirect URLs.
+    options: { emailRedirectTo: `${siteUrl()}/` },
   });
   if (error) return { ok: false, error: error.message };
   // With "Confirm email" on, Supabase returns a user but no session until the link is clicked.
