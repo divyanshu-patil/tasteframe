@@ -1,0 +1,21 @@
+{
+  "title": "Qloo Story Maker Guidelines",
+  "files": [
+    ".env.example",
+    "AGENTS.md",
+    "README.md",
+    "acceptance-criteria.md",
+    "architecture.md",
+    "docs/api-contracts.md",
+    "docs/validation-matrix.md",
+    "plan.md",
+    "qloo_API.md",
+    "requirements.md",
+    "supabase/schema.sql"
+  ],
+  "notes": [
+    "Credentials are placeholders only.",
+    "Verify current Qloo schema and hackathon-key capabilities before relying on exact endpoint/query behavior.",
+    "Free-tier pricing and limits can change."
+  ]
+}

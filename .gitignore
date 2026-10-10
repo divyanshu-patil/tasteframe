@@ -36,3 +36,20 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Env files (keep .env.example)
+.env*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Local dev uploads
+apps/api/.uploads/
+
+# Pinterest reference images are third-party copyrighted; kept locally only (see SOURCES.tsv)
+design-refs/pinterest/**/*.jpg

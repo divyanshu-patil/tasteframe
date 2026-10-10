@@ -1,0 +1,135 @@
+"""Public request/response models (app contracts — not Qloo schemas)."""
+
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+# App-level taste types, mapped to Qloo URNs inside the Qloo adapter.
+TasteType = Literal["artist", "movie", "tv_show", "brand", "book", "podcast"]
+Mood = Literal[
+    "cinematic", "minimal", "nostalgic", "editorial", "warm", "cool", "moody", "bright", "playful",
+    "dreamy", "bold", "natural",
+]
+LayoutId = Literal[
+    "cinematic", "stills", "editorial", "journal", "scrapbook", "filmstrip", "vintage", "minimal"
+]
+UUID_PATTERN = r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+
+
+class SessionOut(BaseModel):
+    session_token: str
+
+
+class PresignIn(BaseModel):
+    content_type: Literal["image/jpeg", "image/png", "image/webp"]
+    size_bytes: int = Field(gt=0)
+
+
+class PresignOut(BaseModel):
+    upload_url: str
+    method: Literal["POST"] = "POST"
+    fields: dict[str, str]
+    object_key: str
+    expires_in: int
+    max_bytes: int
+
+
+class TasteCandidate(BaseModel):
+    provider: Literal["qloo"] = "qloo"
+    entity_id: str
+    name: str
+    entity_type: TasteType
+    disambiguation: str | None = None  # provider-returned descriptor (e.g. year, short description)
+    image_url: str | None = None
+
+
+class TasteSearchOut(BaseModel):
+    query: str
+    entity_type: TasteType
+    candidates: list[TasteCandidate]
+
+
+class TasteSeed(BaseModel):
+    """A user-confirmed entity the server previously returned from /v1/taste/search."""
+
+    entity_id: str = Field(pattern=UUID_PATTERN)
+    entity_type: TasteType
+    name: str = Field(min_length=1, max_length=120)
+
+
+class AnalysisIn(BaseModel):
+    object_key: str = Field(max_length=200)
+    taste_seeds: list[TasteSeed] = Field(default_factory=list, max_length=5)
+    manual_mood: list[Mood] = Field(default_factory=list, max_length=4)
+    locale: str = Field("en", pattern=r"^[a-z]{2}(-[A-Z]{2})?$")
+
+
+class VisualProfile(BaseModel):
+    palette: list[str]  # hex colors, dominant first
+    brightness: float  # 0..1 mean luminance
+    contrast: float  # 0..1 normalized luminance std-dev
+    saturation: float  # 0..1
+    warmth: float  # -1 (cool) .. 1 (warm)
+    composition: Literal["portrait", "landscape", "square"]
+    mood: list[Mood]
+    source: Literal["vision", "manual", "vision+manual"]
+    width: int
+    height: int
+
+
+class CulturalRecommendation(BaseModel):
+    provider: Literal["qloo"] = "qloo"
+    kind: TasteType
+    entity_id: str
+    name: str
+    tags: list[str] = Field(default_factory=list)  # provider-returned tag names
+    reason: str
+    evidence: list[str]  # names of the user seeds used as the signal
+
+
+class LayoutScore(BaseModel):
+    """Internal engineering heuristic — not a provider score and not a validated model."""
+
+    visual_fit: float
+    cultural_style_fit: float
+    readability_fit: float
+    total: float
+
+
+class LayoutSuggestion(BaseModel):
+    id: LayoutId
+    name: str
+    reason: str
+    style_tags: list[str]
+    score: LayoutScore
+    headline: str
+    caption: str
+    accent: str  # hex from the photo palette
+
+
+class MusicSuggestion(BaseModel):
+    kind: Literal["track", "artist", "none"]
+    artist: str | None = None
+    title: str | None = None
+    url: str | None = None
+    artist_source: Literal["qloo"] | None = None
+    track_source: Literal["itunes"] | None = None
+    explanation: str
+
+
+class Provenance(BaseModel):
+    qloo_used: bool
+    qloo_error: str | None = None  # safe error code only
+    visual_analysis_used: bool
+    track_level_result: bool
+    seeds: list[str]
+    layout_rule: str = "local heuristic: 0.45 visual + 0.35 cultural + 0.20 readability"
+
+
+class AnalysisOut(BaseModel):
+    analysis_id: str
+    visual_profile: VisualProfile
+    cultural_recommendations: list[CulturalRecommendation]
+    layouts: list[LayoutSuggestion]
+    music: MusicSuggestion
+    provenance: Provenance
