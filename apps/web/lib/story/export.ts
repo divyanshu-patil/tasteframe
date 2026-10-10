@@ -21,7 +21,7 @@ export function exportFilename(s: StoryState, now = new Date()): string {
   return `tasteframe-${s.templateId}-${day}.png`;
 }
 
-export async function exportPng(photo: Photo, s: StoryState): Promise<Blob> {
+export async function exportPng(photo: Photo | Photo[], s: StoryState): Promise<Blob> {
   if (!TEMPLATES[s.templateId]) throw new Error("Unknown template");
   await fontsReady();
   const canvas = document.createElement("canvas");

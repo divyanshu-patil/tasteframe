@@ -48,10 +48,22 @@ alter table public.stories add constraint stories_key_prefix check (
     s3_object_key ~ ('^saved/' || user_id::text || '/[A-Za-z0-9_-]{22}\.(jpg|png|webp)$')
 );
 alter table public.stories add constraint stories_template check (
-    template_id in ('cinematic','stills','editorial','journal','scrapbook','filmstrip','vintage','minimal')
+    -- Keep in sync with apps/api/app/services/recommendations/layouts.py (a test checks this).
+    template_id in ('cinematic','stills','editorial','journal','scrapbook','filmstrip','vintage','minimal','photodump','magazine','nowplaying','vinyl','moodboard','ticket','y2k','torn','note','newspaper','softfocus','duo','splitscreen','booth','torncollage','grid','mosaic','polaroids')
 );
 alter table public.stories add constraint stories_config_size check (pg_column_size(layout_config) < 16384);
 alter table public.stories add constraint stories_provenance_size check (pg_column_size(recommendation_provenance) < 2048);
+
+-- Multi-photo Stories (1–4 photos): every key must sit under the owner's saved/ prefix.
+alter table public.stories add column if not exists s3_object_keys text[] not null default '{}';
+create or replace function public.stories_keys_owned(keys text[], uid uuid) returns boolean
+language sql immutable set search_path = public, pg_temp as $$
+    select coalesce(array_length(keys, 1), 0) <= 4
+       and coalesce(bool_and(k ~ ('^saved/' || uid::text || '/[A-Za-z0-9_-]{22}\.(jpg|png|webp)$')), true)
+    from unnest(keys) as k
+$$;
+alter table public.stories drop constraint if exists stories_keys_owned;
+alter table public.stories add constraint stories_keys_owned check (public.stories_keys_owned(s3_object_keys, user_id));
 
 create index if not exists stories_user_created_idx on public.stories (user_id, created_at desc);
 

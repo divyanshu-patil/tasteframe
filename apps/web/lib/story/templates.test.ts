@@ -131,3 +131,63 @@ describe("filters, stickers, contain-fit", () => {
     expect(defaultState("cinematic", input).filter).toBe("none");
   });
 });
+
+describe("multi-photo slots", () => {
+  const ph = (w: number) => ({ width: w, height: 1200 }) as unknown as CanvasImageSource & { width: number; height: number };
+  const four = [ph(800), ph(900), ph(1000), ph(1100)];
+
+  it("maps slots to photos by order and cycles when there are fewer photos", async () => {
+    const { makeSlots } = await import("./templates");
+    const s = { ...defaultState("grid", input), order: [2, 0, 1, 3] };
+    const slots = makeSlots(four, s);
+    expect(slots.count).toBe(4);
+    expect(slots.photo(0)).toBe(four[2]);
+    expect(slots.photo(1)).toBe(four[0]);
+    const two = makeSlots(four.slice(0, 2), defaultState("grid", input));
+    expect(two.own(1)).toBe(true);
+    expect(two.own(2)).toBe(false);
+    expect(two.photo(2)).toBe(four[0]); // cycles
+  });
+
+  it("swap keeps each photo's own crop", async () => {
+    const { editorReducer } = await import("./editor");
+    let s = defaultState("duo", { ...input, focuses: [{ x: 0.2, y: 0.3 }, { x: 0.8, y: 0.6 }] });
+    expect(s.crop).toMatchObject({ x: 0.2, y: 0.3 });
+    expect(s.crops[0]).toMatchObject({ x: 0.8, y: 0.6 });
+    s = editorReducer(s, { type: "swap", a: 0, b: 1 });
+    expect(s.order.slice(0, 2)).toEqual([1, 0]);
+    expect(s.crop).toMatchObject({ x: 0.8, y: 0.6 });
+    expect(s.crops[0]).toMatchObject({ x: 0.2, y: 0.3 });
+    // Crop edits target one slot.
+    s = editorReducer(s, { type: "crop", slot: 1, patch: { zoom: 2 } });
+    expect(s.crops[0]!.zoom).toBe(2);
+    expect(s.crop.zoom).toBe(1);
+  });
+
+  it("every layout renders with 1–4 photos; slot rects stay on the canvas", async () => {
+    const { slotRectsFor } = await import("./templates");
+    for (const id of TEMPLATE_IDS) {
+      for (const n of [1, 2, 3, 4]) {
+        const s = defaultState(id, input);
+        const f = fakeCtx();
+        expect(() => renderStory(f.ctx, four.slice(0, n), s)).not.toThrow();
+        for (const r of slotRectsFor(s, n)) {
+          expect(r.x).toBeGreaterThanOrEqual(0);
+          expect(r.y).toBeGreaterThanOrEqual(0);
+          expect(r.x + r.w).toBeLessThanOrEqual(STORY_W);
+          expect(r.y + r.h).toBeLessThanOrEqual(STORY_H);
+        }
+      }
+    }
+  });
+
+  it("multi-photo layouts expose as many slots as their capacity", async () => {
+    const { slotRectsFor } = await import("./templates");
+    const caps: Record<string, number> = { duo: 2, splitscreen: 2, booth: 3, torncollage: 3, grid: 4, mosaic: 4, polaroids: 4 };
+    for (const [id, cap] of Object.entries(caps)) {
+      const s = defaultState(id as (typeof TEMPLATE_IDS)[number], input);
+      expect(slotRectsFor(s, 4)).toHaveLength(cap);
+      expect(TEMPLATES[id as (typeof TEMPLATE_IDS)[number]].capacity).toBe(cap);
+    }
+  });
+});

@@ -273,3 +273,18 @@ textarea.input { width: 100%; resize: vertical; }
 .swatchBtn:hover { border-color: var(--color-bone-cream); background: var(--color-paper); }
 .swatchOn { border-color: var(--color-ink-black) !important; background: var(--color-paper); }
 .stickerPanel { display: grid; gap: var(--spacing-10); padding: var(--spacing-14); background: var(--color-paper); border-radius: var(--radius-sm); }
+
+/* ---- multi-photo slots ---- */
+.slotRow { display: flex; flex-wrap: wrap; gap: var(--spacing-10); }
+.slotCard { display: grid; justify-items: center; gap: 4px; padding: 6px; border: 1px solid transparent; border-radius: var(--radius-sm); }
+.slotThumb { display: grid; justify-items: center; gap: 4px; background: none; border: 0; cursor: pointer; font-size: 12px; }
+.slotThumb canvas { border-radius: var(--radius-sm); }
+
+/* ---- multi-photo picker ---- */
+.photoGrid { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--spacing-14); }
+.photoTile { position: relative; }
+.photoTile .previewImg { width: 100%; height: 190px; }
+.photoNo { position: absolute; left: 8px; top: 8px; background: var(--color-ink-black); color: var(--color-parchment); font-family: var(--font-mono); font-size: 12px; padding: 2px 7px; border-radius: var(--radius-sm); }
+.photoRemove { position: absolute; right: 6px; top: 6px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(29,29,27,0.8); color: #fff; font-size: 18px; cursor: pointer; line-height: 1; }
+.photoAdd { width: 100%; height: 190px; border: 1px dashed var(--color-ink-black); background: var(--color-bone-cream); border-radius: var(--radius-sm); cursor: pointer; font-size: 16px; }
+.photoAdd:hover { background: #c4bcb2; }

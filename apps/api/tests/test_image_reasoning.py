@@ -119,7 +119,9 @@ def test_pipeline_survives_reasoning_outage(client, monkeypatch):
     h = new_session(client)
     key = upload(client, h, make_image())
     res = stream(client.post("/v1/analysis", headers=h, json={"object_key": key}))[-1]["result"]
-    assert res["image_reasoning"] is None and len(res["layouts"]) == 19
+    from app.services.recommendations.layouts import CATALOGUE
+
+    assert res["image_reasoning"] is None and len(res["layouts"]) == len(CATALOGUE)
     assert res["provenance"]["image_reasoning_error"] == "VISION_UNAVAILABLE"
 
 
@@ -185,3 +187,40 @@ def test_transient_failure_is_retried_once():
     calls.clear()
     assert run(lambda r: (calls.append(r), httpx.Response(401))[1])[1] == "VISION_AUTH_FAILED"
     assert len(calls) == 1  # auth errors aren't retried
+
+
+def test_topic_and_elements_are_normalised_and_neutral():
+    reply = """{"summary": "Two friends laughing at a birthday party.", "moods": ["playful"],
+      "about": "Celebration", "elements": ["Woman", "boy", "birthday cake", "Balloons",
+      "interracial couple", "pregnant woman", "fireworks", "unicorn hat", "people laughing"],
+      "headline_ideas": ["party mode"]}"""
+    r = parse_reply(reply, "gemma4:31b")
+    assert r and r.about == "celebration"
+    assert r.elements == [
+        "person",
+        "birthday cake",
+        "balloons",
+        "couple",
+        "fireworks",
+        "people laughing",
+    ]  # neutral words; sensitive/unknown terms dropped
+    assert "Never" in __import__("app.services.vision.ollama", fromlist=["x"]).build_prompt(1)
+
+
+def test_topic_steers_ranking():
+    from app.services.recommendations.layouts import TEMPLATES_BY_ID, TOPIC_LAYOUTS, rank_layouts
+    from tests.test_services import profile
+
+    for topic, ids in TOPIC_LAYOUTS.items():
+        assert all(i in TEMPLATES_BY_ID for i in ids), topic
+    p = profile(mood=["natural"])
+    pet = rank_layouts(p, [], None, topic="pet", scene=["dog", "tiled floor"])
+    music = rank_layouts(
+        profile(mood=["moody", "cinematic"]),
+        [],
+        None,
+        topic="music",
+        scene=["concert", "neon light"],
+    )
+    assert pet[0].id in TOPIC_LAYOUTS["pet"][:3] and music[0].id in TOPIC_LAYOUTS["music"][:3]
+    assert "Made for pet photos" in pet[0].reason

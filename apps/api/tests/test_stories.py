@@ -33,6 +33,8 @@ CONFIG = {
     },
     "crop": {"zoom": 1, "x": 0.5, "y": 0.5, "fit": "cover"},
     "filter": "film",
+    "order": [],
+    "crops": [],
     "stickers": [
         {
             "id": "star-1",
@@ -83,7 +85,8 @@ class FakeSupabase:
         params = dict(req.url.params)
         if req.method == "POST":
             body = json.loads(req.content)
-            if body["user_id"] != uid or not body["s3_object_key"].startswith(f"saved/{uid}/"):
+            keys = body.get("s3_object_keys") or [body["s3_object_key"]]
+            if body["user_id"] != uid or not all(k.startswith(f"saved/{uid}/") for k in keys):
                 return httpx.Response(403, json={"message": "violates row-level security"})
             if len(mine) >= self.LIMIT:
                 return httpx.Response(400, json={"code": "P0001", "message": "STORY_LIMIT"})
@@ -257,3 +260,43 @@ def test_delete_that_silently_fails_is_reported_and_keeps_the_photo(setup, tmp_p
     fake.ignore_deletes = False
     assert client.delete(f"/v1/stories/{sid}", headers=h).status_code == 204  # retry works
     assert fake.rows == [] and not list((tmp_path / "uploads").glob("saved/**/*.jpg"))
+
+
+def test_multi_photo_story_saves_every_photo(setup, tmp_path):
+    client, fake = setup
+    h = headers(client)
+    keys = [
+        upload(client, h, make_image(color=c))
+        for c in ((200, 40, 40), (40, 200, 40), (40, 40, 200))
+    ]
+    r = client.post(
+        "/v1/stories",
+        headers=h,
+        json={"object_keys": keys, "config": {**CONFIG, "templateId": "booth", "order": [2, 0, 1]}},
+    )
+    assert r.status_code == 201, r.text
+    story = r.json()
+    assert story["photo_count"] == 3 and story["config"]["order"] == [2, 0, 1]
+    saved = fake.rows[0]["s3_object_keys"]
+    assert len(saved) == 3 and all(k.startswith(f"saved/{ALICE[1]}/") for k in saved)
+    photos = [
+        client.get(f"/v1/stories/{story['id']}/photo", params={"index": i}, headers=h)
+        for i in range(3)
+    ]
+    assert all(p.status_code == 200 for p in photos) and len({p.content for p in photos}) == 3
+    assert (
+        client.get(f"/v1/stories/{story['id']}/photo", params={"index": 3}, headers=h).status_code
+        == 404
+    )
+    assert client.delete(f"/v1/stories/{story['id']}", headers=h).status_code == 204
+    assert not list((tmp_path / "uploads").glob("saved/**/*.jpg"))
+
+
+def test_multi_photo_save_rolls_back_copies_when_one_upload_is_gone(setup, tmp_path):
+    client, _ = setup
+    h = headers(client)
+    keys = [upload(client, h, make_image()) for _ in range(2)]
+    client.delete(f"/v1/uploads/{keys[1]}", headers=h)
+    r = client.post("/v1/stories", headers=h, json={"object_keys": keys, "config": CONFIG})
+    assert r.status_code == 404
+    assert not list((tmp_path / "uploads").glob("saved/**/*.jpg"))

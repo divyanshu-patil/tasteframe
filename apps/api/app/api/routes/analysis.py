@@ -26,7 +26,8 @@ async def analysis(
     storage: Storage = Depends(get_storage),
     qloo: QlooClient = Depends(get_qloo),
 ) -> StreamingResponse:
-    assert_owns_key(body.object_key, session_id)
+    for key in body.object_keys:
+        assert_owns_key(key, session_id)
 
     async def lines():
         async for event in run_analysis(body, settings, storage, qloo):

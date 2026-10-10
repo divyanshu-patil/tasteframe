@@ -19,7 +19,7 @@ import {
 } from "../lib/api";
 import { authConfigured, signOut, useAuth } from "../lib/auth";
 import { sampleFile } from "../lib/sample";
-import { defaultState } from "../lib/story/templates";
+import { TEMPLATES, defaultState } from "../lib/story/templates";
 import { inputFor } from "../lib/story/input";
 import type { StoryState, TemplateId } from "../lib/story/types";
 import { MAX_BYTES, checkFile } from "../lib/upload";
@@ -40,7 +40,10 @@ export interface PhotoFile {
   img: HTMLImageElement;
 }
 
-const LOCAL_LAYOUTS: TemplateId[] = ["cinematic", "editorial", "scrapbook"];
+const MAX_PHOTOS = 4;
+// Offline fallback order (no analysis): single-photo vs multi-photo friendly layouts first.
+const LOCAL_SINGLE: TemplateId[] = ["cinematic", "editorial", "scrapbook", "vintage", "journal", "minimal"];
+const LOCAL_MULTI: TemplateId[] = ["grid", "polaroids", "booth", "duo", "splitscreen", "mosaic"];
 
 async function loadImage(url: string): Promise<HTMLImageElement> {
   const img = new Image();
@@ -51,7 +54,9 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 
 export function StoryMaker() {
   const [phase, setPhase] = useState<Phase>("setup");
-  const [photo, setPhoto] = useState<PhotoFile | null>(null);
+  // 1–4 photos for one Story (order = upload order; layouts can rearrange them per slot).
+  const [photos, setPhotos] = useState<PhotoFile[]>([]);
+  const photo = photos[0] ?? null;
   const [fileError, setFileError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [moods, setMoods] = useState<Mood[]>([]);
@@ -62,7 +67,8 @@ export function StoryMaker() {
   }>({ upload: 0, stage: null });
   const [runError, setRunError] = useState<ApiError | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [objectKey, setObjectKey] = useState<string | null>(null);
+  // Uploaded keys, aligned with `photos`; null when the current photos aren't uploaded yet.
+  const [objectKeys, setObjectKeys] = useState<string[] | null>(null);
   const [story, setStory] = useState<StoryState | null>(null);
   const [storyDate, setStoryDate] = useState(() => new Date());
   const [features, setFeatures] = useState<Features | null>(null);
@@ -88,50 +94,71 @@ export function StoryMaker() {
     void getFeatures().then(setFeatures);
   }, []);
 
-  // Revoke the preview object URL whenever the photo changes or the page unmounts.
-  useEffect(
-    () => () => {
-      if (photo) URL.revokeObjectURL(photo.url);
-    },
-    [photo],
-  );
+  // Revoke preview object URLs when the page unmounts (removals revoke their own).
+  const urls = useRef<string[]>([]);
+  urls.current = photos.map((p) => p.url);
+  useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), []);
 
-  const cleanupUpload = useCallback((key: string | null) => {
-    if (key) deleteUpload(key).catch(() => undefined); // best effort; lifecycle rule expires it anyway
+  const cleanupUploads = useCallback((keys: string[] | null) => {
+    // Best effort; the bucket lifecycle rule expires temporary uploads anyway.
+    for (const k of keys ?? []) deleteUpload(k).catch(() => undefined);
   }, []);
 
-  const choose = async (file: File | undefined) => {
-    if (!file) return;
+  /** Any change to the photo set invalidates uploads and results derived from them. */
+  const invalidate = () => {
+    cleanupUploads(objectKeys);
+    setObjectKeys(null);
+    setAnalysis(null);
+  };
+
+  const choose = async (files: File[] | FileList | undefined | null) => {
+    const list = Array.from(files ?? []);
+    if (!list.length) return;
     setFileError(null);
-    const check = await checkFile(file);
-    if (!check.ok) return setFileError(check.error);
-    const url = URL.createObjectURL(file);
-    try {
-      const img = await loadImage(url);
-      // A replaced photo invalidates the previous upload and any results derived from it.
-      cleanupUpload(objectKey);
-      setObjectKey(null);
-      setAnalysis(null);
-      setPhoto({ file, type: check.type, url, img });
-    } catch {
-      URL.revokeObjectURL(url);
-      setFileError("That image could not be decoded. Try another photo.");
+    const room = MAX_PHOTOS - photos.length;
+    if (room <= 0) return setFileError(`Up to ${MAX_PHOTOS} photos per Story.`);
+    const added: PhotoFile[] = [];
+    for (const file of list.slice(0, room)) {
+      const check = await checkFile(file);
+      if (!check.ok) {
+        setFileError(`${file.name}: ${check.error}`);
+        continue;
+      }
+      const url = URL.createObjectURL(file);
+      try {
+        added.push({ file, type: check.type, url, img: await loadImage(url) });
+      } catch {
+        URL.revokeObjectURL(url);
+        setFileError(`${file.name} could not be decoded. Try another photo.`);
+      }
     }
+    if (list.length > room) setFileError(`Only ${MAX_PHOTOS} photos per Story — extra ones were skipped.`);
+    if (!added.length) return;
+    invalidate();
+    setPhotos((cur) => [...cur, ...added].slice(0, MAX_PHOTOS));
+  };
+
+  const removeOne = (i: number) => {
+    const p = photos[i];
+    if (p) URL.revokeObjectURL(p.url);
+    invalidate();
+    setPhotos((cur) => cur.filter((_, k) => k !== i));
   };
 
   const removePhoto = () => {
     abort.current?.abort();
     runId.current++;
-    cleanupUpload(objectKey);
-    setObjectKey(null);
-    setPhoto(null);
+    cleanupUploads(objectKeys);
+    setObjectKeys(null);
+    photos.forEach((p) => URL.revokeObjectURL(p.url));
+    setPhotos([]);
     setAnalysis(null);
     setStory(null);
     setPhase("setup");
   };
 
   const generate = async () => {
-    if (!photo) return;
+    if (!photos.length) return;
     abort.current?.abort();
     const ctrl = new AbortController();
     abort.current = ctrl;
@@ -141,21 +168,25 @@ export function StoryMaker() {
     setProgress({ upload: 0, stage: null });
     setPhase("working");
     try {
-      let key = objectKey;
-      if (!key) {
-        key = await uploadPhoto(
-          photo.file,
-          photo.type,
-          (f) => live() && setProgress((p) => ({ ...p, upload: f })),
-          ctrl.signal,
-        );
-        if (!live()) return;
-        setObjectKey(key);
+      let keys = objectKeys;
+      if (!keys) {
+        keys = [];
+        for (const [i, ph] of photos.entries()) {
+          const k = await uploadPhoto(
+            ph.file,
+            ph.type,
+            (f) => live() && setProgress((p) => ({ ...p, upload: (i + f) / photos.length })),
+            ctrl.signal,
+          );
+          if (!live()) return;
+          keys.push(k);
+        }
+        setObjectKeys(keys);
       }
       setProgress((p) => ({ ...p, upload: 1 }));
       const result = await analyze(
         {
-          object_key: key,
+          object_keys: keys,
           manual_mood: moods,
           taste_seeds: seeds.map(({ entity_id, entity_type, name }) => ({
             entity_id,
@@ -176,7 +207,7 @@ export function StoryMaker() {
         e instanceof ApiError &&
         (e.code === "OBJECT_NOT_FOUND" || e.code === "SESSION_INVALID")
       ) {
-        setObjectKey(null); // re-upload on retry
+        setObjectKeys(null); // re-upload on retry
       }
       setRunError(
         e instanceof ApiError
@@ -216,35 +247,39 @@ export function StoryMaker() {
     setSeeds([]);
   };
 
-  /** Re-open a saved Story: photo comes back through the API (same-origin, canvas-safe). */
+  /** Re-open a saved Story: photos come back through the API (same-origin, canvas-safe). */
   const openSaved = async (saved: SavedStory) => {
-    const blob = await storyPhoto(saved.id);
-    const file = new File([blob], `saved-${saved.config.templateId}`, { type: blob.type });
-    const url = URL.createObjectURL(file);
+    const loaded: PhotoFile[] = [];
     try {
-      const img = await loadImage(url);
-      runId.current++;
-      cleanupUpload(objectKey);
-      setObjectKey(null);
-      setAnalysis(null);
-      setPhoto({ file, type: blob.type, url, img });
-      setStory(saved.config);
-      setPhase("edit");
+      for (let i = 0; i < Math.max(1, saved.photo_count); i++) {
+        const blob = await storyPhoto(saved.id, i);
+        const file = new File([blob], `saved-${saved.config.templateId}-${i + 1}`, { type: blob.type });
+        const url = URL.createObjectURL(file);
+        loaded.push({ file, type: blob.type, url, img: await loadImage(url) });
+      }
     } catch (e) {
-      URL.revokeObjectURL(url);
+      loaded.forEach((p) => URL.revokeObjectURL(p.url));
       throw e;
     }
+    runId.current++;
+    cleanupUploads(objectKeys);
+    setObjectKeys(null);
+    setAnalysis(null);
+    photos.forEach((p) => URL.revokeObjectURL(p.url));
+    setPhotos(loaded);
+    setStory(saved.config);
+    setPhase("edit");
   };
 
   const save =
-    canSave && objectKey && story
+    canSave && objectKeys && story
       ? async () => {
           // Saving to our backend needs an account: ask the guest to log in, then continue.
           if (!user && !(await requestLogin("Log in to save this Story to your account — creating and downloading never need one."))) {
             throw new ApiError("LOGIN_CANCELLED", "");
           }
           const m = analysis?.music;
-          await saveStory(objectKey, story, {
+          await saveStory(objectKeys, story, {
             qloo_used: analysis?.provenance.qloo_used ?? false,
             music_artist: m?.artist ?? null,
             music_title: m?.kind === "track" ? m.title : null,
@@ -281,9 +316,9 @@ export function StoryMaker() {
     if (phase === "results" && photo) {
       const suggestions: LayoutSuggestion[] =
         analysis?.layouts ??
-        LOCAL_LAYOUTS.map((id) => ({
+        (photos.length > 1 ? LOCAL_MULTI : LOCAL_SINGLE).map((id) => ({
           id,
-          name: id[0]!.toUpperCase() + id.slice(1),
+          name: TEMPLATES[id].name,
           reason: "Local default — personalised analysis was unavailable.",
           style_tags: [],
           score: {
@@ -297,11 +332,13 @@ export function StoryMaker() {
           accent: "#c03f13",
           focus_x: 0.5,
           focus_y: 0.5,
-          filter: "none",
+          filter: "none" as const,
+          focuses: [],
+          photo_slots: Math.min(photos.length, 4),
         }));
       return (
         <Results
-          photo={photo.img}
+          photo={photos.map((p) => p.img)}
           analysis={analysis}
           suggestions={suggestions}
           date={storyDate}
@@ -319,7 +356,7 @@ export function StoryMaker() {
         null;
       return (
         <Editor
-          photo={photo.img}
+          photos={photos.map((p) => p.img)}
           story={story}
           setStory={setStory}
           input={(id) =>
@@ -329,9 +366,9 @@ export function StoryMaker() {
               storyDate,
             )
           }
-          suggested={analysis?.layouts.map((l) => l.id) ?? LOCAL_LAYOUTS}
+          suggested={analysis?.layouts.slice(0, 3).map((l) => l.id) ?? (photos.length > 1 ? LOCAL_MULTI : LOCAL_SINGLE).slice(0, 3)}
           music={analysis?.music ?? null}
-          onBack={analysis || objectKey ? () => setPhase("results") : undefined}
+          onBack={analysis || objectKeys ? () => setPhase("results") : undefined}
           onStartOver={startOver}
           onSave={save}
           signedIn={Boolean(user)}
@@ -350,34 +387,36 @@ export function StoryMaker() {
         )}
 
         <div className={s.step}>
-          <p className={s.stepNo}>01 — Photo</p>
-          {photo ? (
-            <div className={s.previewRow}>
-              {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
-              <img
-                src={photo.url}
-                alt="Your selected photo"
-                className={s.previewImg}
-              />
-              <div className={s.previewMeta}>
-                <p className={s.fileName}>{photo.file.name}</p>
-                <p className={s.muted}>
-                  {photo.img.naturalWidth}×{photo.img.naturalHeight} ·{" "}
-                  {(photo.file.size / 1048576).toFixed(1)} MB
-                </p>
-                <div className={s.row}>
-                  <button
-                    className={s.secondary}
-                    onClick={() => inputRef.current?.click()}
-                  >
-                    Replace
-                  </button>
-                  <button className={s.linkBtn} onClick={removePhoto}>
-                    Remove
-                  </button>
-                </div>
-              </div>
-            </div>
+          <p className={s.stepNo}>
+            01 — Photos <span className={s.muted}>(1–{MAX_PHOTOS})</span>
+          </p>
+          {photos.length > 0 ? (
+            <>
+              <ul className={s.photoGrid} aria-label="Selected photos">
+                {photos.map((p, i) => (
+                  <li key={p.url} className={s.photoTile}>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
+                    <img src={p.url} alt={`Photo ${i + 1}`} className={s.previewImg} />
+                    <span className={s.photoNo}>{i + 1}</span>
+                    <button className={s.photoRemove} aria-label={`Remove photo ${i + 1}`} onClick={() => removeOne(i)}>
+                      ×
+                    </button>
+                  </li>
+                ))}
+                {photos.length < MAX_PHOTOS && (
+                  <li>
+                    <button className={s.photoAdd} onClick={() => inputRef.current?.click()}>
+                      + Add photo
+                    </button>
+                  </li>
+                )}
+              </ul>
+              <p className={s.muted}>
+                {photos.length === 1
+                  ? "Add up to 3 more for collage layouts — Grid, Photo Booth, Polaroid Pile, Split and more."
+                  : `${photos.length} photos — we'll suggest layouts that show all of them. Drag them between slots in the editor.`}
+              </p>
+            </>
           ) : (
             <label
               className={`${s.drop} ${dragOver ? s.dropActive : ""}`}
@@ -389,34 +428,31 @@ export function StoryMaker() {
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOver(false);
-                void choose(e.dataTransfer.files[0]);
+                void choose(e.dataTransfer.files);
               }}
             >
-              <span className={s.dropTitle}>Drop a photo here</span>
+              <span className={s.dropTitle}>Drop up to 4 photos</span>
               <span className={s.muted}>
-                or click to choose · JPEG, PNG or WebP · up to{" "}
-                {Math.round(MAX_BYTES / 1048576)} MB
+                or click to choose · JPEG, PNG or WebP · up to {Math.round(MAX_BYTES / 1048576)} MB each
               </span>
-              <span className={s.primaryFake}>Choose photo</span>
+              <span className={s.primaryFake}>Choose photos</span>
             </label>
           )}
           <input
             ref={inputRef}
             id="photo-input"
             type="file"
+            multiple
             accept="image/jpeg,image/png,image/webp"
             className={s.srOnly}
             onChange={(e) => {
-              void choose(e.target.files?.[0]);
+              void choose(e.target.files);
               e.target.value = "";
             }}
-            aria-label="Choose a photo"
+            aria-label="Choose photos"
           />
           {!photo && (
-            <button
-              className={s.linkBtn}
-              onClick={() => void sampleFile().then(choose)}
-            >
+            <button className={s.linkBtn} onClick={() => void sampleFile().then((f) => choose([f]))}>
               No photo handy? Use a sample dusk landscape.
             </button>
           )}

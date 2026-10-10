@@ -122,3 +122,32 @@ def merge_manual(profile: VisualProfile, manual: list[Mood]) -> VisualProfile:
         return profile
     merged = list(dict.fromkeys([*manual, *profile.mood]))[:5]
     return profile.model_copy(update={"mood": merged, "source": "vision+manual"})
+
+
+def merge_profiles(profiles: list[VisualProfile]) -> VisualProfile:
+    """One read for a multi-photo Story: blended palette, mean measurements, consensus moods."""
+    if len(profiles) == 1:
+        return profiles[0]
+    palette: list[str] = []
+    for rank in range(2):  # the two strongest colours of each photo, interleaved
+        for p in profiles:
+            if rank < len(p.palette) and p.palette[rank] not in palette:
+                palette.append(p.palette[rank])
+    votes: dict[str, float] = {}
+    for p in profiles:
+        for i, m in enumerate(p.mood):
+            votes[m] = votes.get(m, 0) + (4 - i)
+    moods = sorted(votes, key=lambda m: -votes[m])[:4]
+    n = len(profiles)
+    first = profiles[0]
+    return first.model_copy(
+        update={
+            "palette": palette[:5],
+            "brightness": round(sum(p.brightness for p in profiles) / n, 3),
+            "contrast": round(sum(p.contrast for p in profiles) / n, 3),
+            "saturation": round(sum(p.saturation for p in profiles) / n, 3),
+            "warmth": round(sum(p.warmth for p in profiles) / n, 3),
+            "mood": moods,
+            "photo_count": n,
+        }
+    )

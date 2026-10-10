@@ -3,7 +3,7 @@
 import asyncio
 import re
 
-from fastapi import APIRouter, Depends, Path, Response
+from fastapi import APIRouter, Depends, Path, Query, Response
 
 from app.core.auth import AuthUser, require_user
 from app.core.config import Settings, get_settings
@@ -36,7 +36,13 @@ def _out(row: dict) -> StoryOut:
         config=StoryConfig.model_validate(row["layout_config"]),
         provenance=StoryProvenance.model_validate(row.get("recommendation_provenance") or {}),
         created_at=row["created_at"],
+        photo_count=len(_keys(row)),
     )
+
+
+def _keys(row: dict) -> list[str]:
+    keys = row.get("s3_object_keys") or []
+    return keys if keys else [row["s3_object_key"]]
 
 
 def _not_found() -> AppError:
@@ -58,20 +64,27 @@ async def save_story(
 ) -> StoryOut:
     """Requires login. The upload must belong to this browser session; the copy belongs to the
     user. The per-user limit is enforced in SQL (STORY_LIMIT → 409; the copy is rolled back)."""
-    assert_owns_key(body.object_key, session_id)
-    dst = saved_object_key(user.id, body.object_key.rsplit(".", 1)[1])
-    if not await asyncio.to_thread(storage.copy, body.object_key, dst):
-        raise AppError("OBJECT_NOT_FOUND", "That upload has expired. Re-upload to save.", 404)
+    for key in body.object_keys:
+        assert_owns_key(key, session_id)
+    copies: list[str] = []
+    for key in body.object_keys:
+        dst = saved_object_key(user.id, key.rsplit(".", 1)[1])
+        if not await asyncio.to_thread(storage.copy, key, dst):
+            for c in copies:
+                await asyncio.to_thread(storage.delete, c)
+            raise AppError("OBJECT_NOT_FOUND", "An upload has expired. Re-upload to save.", 404)
+        copies.append(dst)
     try:
         row = await repo.insert(
             user,
-            dst,
+            copies,
             body.config.templateId,
             body.config.model_dump(),
             body.provenance.model_dump(),
         )
     except AppError:
-        await asyncio.to_thread(storage.delete, dst)  # don't leave an orphaned photo copy
+        for c in copies:  # don't leave orphaned photo copies
+            await asyncio.to_thread(storage.delete, c)
         raise
     return _out(row)
 
@@ -90,6 +103,7 @@ async def list_stories(
 )
 async def story_photo(
     story_id: str = StoryId,
+    index: int = Query(0, ge=0, le=3),
     user: AuthUser = Depends(require_user),
     storage: Storage = Depends(get_storage),
     repo: SupabaseStories = Depends(get_repo),
@@ -100,8 +114,11 @@ async def story_photo(
         raise _not_found()
     # Defence in depth: only ever read from this user's own prefix.
     pattern = rf"^saved/{re.escape(user.id)}/[A-Za-z0-9_-]{{22}}\.(jpg|png|webp)$"
-    m = re.match(pattern, row["s3_object_key"])
-    data = await asyncio.to_thread(storage.get, row["s3_object_key"]) if m else None
+    keys = _keys(row)
+    if index >= len(keys):
+        raise _not_found()
+    m = re.match(pattern, keys[index])
+    data = await asyncio.to_thread(storage.get, keys[index]) if m else None
     if not m or not data:
         raise _not_found()
     return Response(
@@ -128,7 +145,7 @@ async def delete_story(
         raise AppError(
             "PERSISTENCE_UNAVAILABLE", "Couldn't delete that Story. Please try again.", 503, True
         )
-    key = str(row.get("s3_object_key", ""))
-    if key.startswith(f"saved/{user.id}/"):
-        await asyncio.to_thread(storage.delete, key)
+    for key in _keys(row):
+        if str(key).startswith(f"saved/{user.id}/"):
+            await asyncio.to_thread(storage.delete, key)
     return Response(status_code=204)

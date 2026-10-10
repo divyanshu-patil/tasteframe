@@ -17,10 +17,11 @@ import {
   star,
 } from "./draw";
 import { type FilterId, filteredPhoto } from "./filters";
-import { type Template, decos, fmtDate, on, pad, stamp, subjectHigh, subjectLow, t, tape, tornRect } from "./kit";
+import { type Slots, type Template, decos, fmtDate, on, pad, stamp, subjectHigh, subjectLow, t, tape, tornRect } from "./kit";
 import { drawSticker } from "./stickers";
 import { MORE_TEMPLATES } from "./templates-more";
-import type { Rect, StoryState, TemplateId, TemplateInput } from "./types";
+import { MULTI_TEMPLATES } from "./templates-multi";
+import type { Crop, Rect, StoryState, TemplateId, TemplateInput } from "./types";
 import { STORY_H as H, STORY_W as W } from "./types";
 
 export type { Template } from "./kit";
@@ -82,12 +83,16 @@ const stills: Template = {
     overlay: { strength: 0.12, color: "#000000" },
     decorations: { timecode: true, grain: true },
   }),
-  draw(ctx, photo, s) {
+  capacity: 3,
+  slotRects: () => [150, 698, 1246].map((y) => ({ x: 0, y, w: W, h: 524 })),
+  draw(ctx, _photo, s, slots) {
     ctx.fillStyle = "#050505";
     ctx.fillRect(0, 0, W, H);
     const h = 524;
     [150, 698, 1246].forEach((y, i) => {
-      drawPhoto(ctx, photo, { x: 0, y, w: W, h }, s.crop, (i - 1) * 0.28);
+      // Own photo per still when there are several; otherwise shifted crops of one photo.
+      if (slots.own(i)) drawPhoto(ctx, slots.photo(i), { x: 0, y, w: W, h }, slots.crop(i));
+      else drawPhoto(ctx, slots.photo(0), { x: 0, y, w: W, h }, s.crop, (i - 1) * 0.28);
       ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength);
       ctx.fillRect(0, y, W, h);
     });
@@ -311,7 +316,9 @@ const filmstrip: Template = {
     overlay: { strength: 0.35, color: "#141210" },
     decorations: { tilt: true, codes: true, label: true },
   }),
-  draw(ctx, photo, s) {
+  capacity: 3,
+  slotRects: () => [230, 650, 1070].map((y) => ({ x: 250, y, w: 580, h: 390 })),
+  draw(ctx, photo, s, slots) {
     ctx.fillStyle = s.overlay.color;
     ctx.fillRect(0, 0, W, H);
     drawGrain(ctx, s.overlay.strength * 0.3, 9);
@@ -329,7 +336,9 @@ const filmstrip: Template = {
       roundRect(ctx, { x: 854, y, w: 34, h: 24 }, 5); ctx.fill();
     }
     [230, 650, 1070].forEach((y, i) =>
-      drawPhoto(ctx, photo, { x: 250, y, w: 580, h: 390 }, s.crop, (i - 1) * 0.3),
+      slots.own(i)
+        ? drawPhoto(ctx, slots.photo(i), { x: 250, y, w: 580, h: 390 }, slots.crop(i))
+        : drawPhoto(ctx, slots.photo(0), { x: 250, y, w: 580, h: 390 }, s.crop, (i - 1) * 0.3),
     );
     if (on(s, "codes")) {
       ctx.fillStyle = "#e8a33d";
@@ -440,24 +449,31 @@ const minimal: Template = {
     overlay: { strength: 1, color: "#151413" },
     decorations: { border: true, offset: true },
   }),
-  draw(ctx, photo, s) {
+  capacity: 2,
+  slotRects: (s) => [
+    { x: 150, y: 440, w: 780, h: 960 },
+    ...(on(s, "offset") ? [{ x: 610, y: 320, w: 380, h: 300 }] : []),
+  ],
+  draw(ctx, _photo, s, slots) {
     ctx.fillStyle = s.overlay.color;
     ctx.fillRect(0, 0, W, H);
-    const frame = (r: Rect, shift: number) => {
+    const frame = (r: Rect, i: number, shift: number) => {
       if (on(s, "border")) {
         ctx.fillStyle = "#f4efe6";
         ctx.fillRect(r.x - 10, r.y - 10, r.w + 20, r.h + 20);
       }
-      drawPhoto(ctx, photo, r, s.crop, shift);
+      if (slots.own(i)) drawPhoto(ctx, slots.photo(i), r, slots.crop(i));
+      else drawPhoto(ctx, slots.photo(0), r, s.crop, shift);
     };
-    frame({ x: 150, y: 440, w: 780, h: 960 }, 0);
-    if (on(s, "offset")) frame({ x: 610, y: 320, w: 380, h: 300 }, -0.3);
+    frame({ x: 150, y: 440, w: 780, h: 960 }, 0, 0);
+    if (on(s, "offset")) frame({ x: 610, y: 320, w: 380, h: 300 }, 1, -0.3);
   },
 };
 
 export const TEMPLATES: Record<TemplateId, Template> = {
   cinematic, stills, editorial, journal, scrapbook, filmstrip, vintage, minimal,
   ...MORE_TEMPLATES,
+  ...MULTI_TEMPLATES,
 };
 
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
@@ -466,12 +482,21 @@ export function stampFor(date: Date): string {
   return `'${String(date.getFullYear()).slice(-2)} ${pad(date.getMonth() + 1)} ${pad(date.getDate())}`;
 }
 
+const focusCrop = (f?: { x: number; y: number }): Crop => ({
+  zoom: 1,
+  // Cover-crop alignment = subject position keeps that point inside the visible frame.
+  x: clamp01(f?.x ?? 0.5),
+  y: clamp01(f?.y ?? 0.5),
+  fit: "cover",
+});
+
 export function defaultState(id: TemplateId, input: TemplateInput): StoryState {
   const { filter, ...rest } = TEMPLATES[id].defaults(input);
   return {
     templateId: id,
-    // Cover-crop alignment = subject position keeps that point inside the visible frame.
-    crop: { zoom: 1, x: clamp01(input.focus?.x ?? 0.5), y: clamp01(input.focus?.y ?? 0.5), fit: "cover" },
+    crop: focusCrop(input.focuses?.[0] ?? input.focus),
+    order: [0, 1, 2, 3],
+    crops: [1, 2, 3].map((i) => focusCrop(input.focuses?.[i])),
     accent: input.accent,
     palette: input.palette.length ? input.palette : [input.accent],
     stamp: stampFor(input.date),
@@ -485,18 +510,44 @@ export function defaultState(id: TemplateId, input: TemplateInput): StoryState {
 export interface HitBoxes {
   headline: Rect;
   caption: Rect;
+  /** Photo slot rectangles (slot index = array index). */
+  slots: Rect[];
+}
+
+const DEFAULT_CROP: Crop = { zoom: 1, x: 0.5, y: 0.5, fit: "cover" };
+
+/** Slot accessor for a Story: order maps slots → photos; repeats cycle through the photos. */
+export function makeSlots(photos: Photo[], s: StoryState): Slots {
+  const n = Math.max(1, Math.min(4, photos.length));
+  const order = s.order?.length ? s.order : [0, 1, 2, 3];
+  const looks = photos.slice(0, 4).map((p) => filteredPhoto(p, s.filter ?? "none"));
+  return {
+    count: n,
+    photo: (i) => looks[(order[i] ?? i) % n] ?? looks[0]!,
+    crop: (i) => (i === 0 ? s.crop : (s.crops?.[i - 1] ?? DEFAULT_CROP)),
+    own: (i) => i < n,
+  };
+}
+
+/** Number of slots a template shows for `count` photos (for hit-testing and the Photos panel). */
+export function slotRectsFor(s: StoryState, count: number): Rect[] {
+  const tpl = TEMPLATES[s.templateId];
+  const rects = tpl.slotRects?.(s, count) ?? [{ x: 0, y: 0, w: W, h: H }];
+  return count > 1 ? rects.slice(0, Math.max(1, Math.min(rects.length, count))) : rects.slice(0, 1);
 }
 
 /** Render a story into a context already scaled to 1080×1920 units. Pure and deterministic. */
-export function renderStory(ctx: Ctx, photo: Photo, s: StoryState): HitBoxes {
+export function renderStory(ctx: Ctx, photos: Photo | Photo[], s: StoryState): HitBoxes {
   const tpl = TEMPLATES[s.templateId];
+  const list = Array.isArray(photos) ? photos : [photos];
+  const slots = makeSlots(list, s);
   ctx.save();
   ctx.clearRect(0, 0, W, H);
-  tpl.draw(ctx, filteredPhoto(photo, s.filter ?? "none"), s);
+  tpl.draw(ctx, slots.photo(0), s, slots);
   const headline = drawText(ctx, s.headline, tpl.text?.headline);
   const caption = drawText(ctx, s.caption, tpl.text?.caption);
   tpl.after?.(ctx, s);
   for (const st of s.stickers ?? []) drawSticker(ctx, st);
   ctx.restore();
-  return { headline, caption };
+  return { headline, caption, slots: slotRectsFor(s, slots.count) };
 }

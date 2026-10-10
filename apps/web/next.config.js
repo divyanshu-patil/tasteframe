@@ -3,6 +3,9 @@
 const apiBase = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig = {
+  // The /api proxy streams the analysis; 2–4 large photos + image reasoning can exceed the
+  // default 30 s proxy timeout.
+  experimental: { proxyTimeout: 120_000 },
   // Browser talks to same-origin /api; Next proxies to FastAPI. API_BASE_URL is server-only.
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${apiBase}/:path*` }];

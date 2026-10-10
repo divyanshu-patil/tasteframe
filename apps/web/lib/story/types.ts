@@ -27,6 +27,13 @@ export const TEMPLATE_IDS = [
   "note",
   "newspaper",
   "softfocus",
+  "duo",
+  "splitscreen",
+  "booth",
+  "torncollage",
+  "grid",
+  "mosaic",
+  "polaroids",
 ] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -44,14 +51,24 @@ export interface TextLayer {
   font: FontRole;
 }
 
+export interface Crop {
+  zoom: number;
+  x: number;
+  y: number;
+  fit: "cover" | "contain";
+}
+
 export interface StoryState {
   templateId: TemplateId;
   filter: FilterId;
   stickers: Sticker[];
   headline: TextLayer;
   caption: TextLayer;
-  /** zoom ≥ 1; x,y = cover alignment 0..1; fit "contain" shows the whole photo. */
-  crop: { zoom: number; x: number; y: number; fit: "cover" | "contain" };
+  /** Slot 1's crop. zoom ≥ 1; x,y = cover alignment 0..1; fit "contain" shows the whole photo. */
+  crop: Crop;
+  /** Multi-photo: photo index shown in each slot (drag to swap), and crops for slots 2–4. */
+  order: number[];
+  crops: Crop[];
   overlay: { strength: number; color: string };
   decorations: Record<string, boolean>;
   accent: string;
@@ -67,6 +84,8 @@ export interface TemplateInput {
   date: Date;
   /** Main subject position (0..1) from image reasoning: default crop focus + text placement. */
   focus?: { x: number; y: number };
+  /** Per-photo subject positions (multi-photo Stories). */
+  focuses?: { x: number; y: number }[];
   /** Suggested photo filter for this layout (from the API's mood rules). */
   filter?: FilterId;
   /** Recommended music, for the Now Playing / Vinyl layouts. */

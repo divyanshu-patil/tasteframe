@@ -1,23 +1,30 @@
 // Second wave of templates, modelled on design-refs/pinterest/{photodump,magazine,nowplaying,
 // moodboard,ticket,y2k,tornpaper,notes,newspaper,blurframe}. Vector-drawn; no logos or brands.
 import { type Ctx, type Photo, drawBlurred, drawGrain, drawPhoto, fontString, rgba, rng, roundRect, star } from "./draw";
-import { type Template, decos, fmtDate, on, subjectHigh, subjectLow, t, tornRect } from "./kit";
+import { type Slots, type Template, decos, fmtDate, on, subjectHigh, subjectLow, t, tornRect } from "./kit";
 import type { Rect, StoryState, TemplateId } from "./types";
+export type { Slots };
 import { STORY_H as H, STORY_W as W } from "./types";
 
 /** Photo clipped to a rounded rect; `shift` nudges the crop so repeated tiles differ. */
-function tile(ctx: Ctx, photo: Photo, r: Rect, s: StoryState, radius: number, shift = { x: 0, y: 0, zoom: 1 }) {
+export function tile(ctx: Ctx, photo: Photo, r: Rect, base: StoryState["crop"], radius: number, shift = { x: 0, y: 0, zoom: 1 }) {
   ctx.save();
   roundRect(ctx, r, radius);
   ctx.clip();
   const crop = {
-    ...s.crop,
-    zoom: s.crop.zoom * shift.zoom,
-    x: Math.min(1, Math.max(0, s.crop.x + shift.x)),
-    y: Math.min(1, Math.max(0, s.crop.y + shift.y)),
+    ...base,
+    zoom: base.zoom * shift.zoom,
+    x: Math.min(1, Math.max(0, base.x + shift.x)),
+    y: Math.min(1, Math.max(0, base.y + shift.y)),
   };
   drawPhoto(ctx, photo, r, crop);
   ctx.restore();
+}
+
+/** Tile i: its own photo when the Story has one for this slot, else a shifted crop of photo 1. */
+export function slotTile(ctx: Ctx, slots: Slots, i: number, r: Rect, radius: number, shift: { x: number; y: number; zoom: number }) {
+  if (slots.own(i)) tile(ctx, slots.photo(i), r, slots.crop(i), radius);
+  else tile(ctx, slots.photo(0), r, slots.crop(0), radius, shift);
 }
 
 function barcode(ctx: Ctx, r: Rect, seed: number, color = "#1d1d1b") {
@@ -70,6 +77,14 @@ const sparkle = (ctx: Ctx, x: number, y: number, r: number, color = "#ffffff") =
   ctx.restore();
 };
 
+const PHOTODUMP_TILES: Rect[] = [
+  { x: 70, y: 330, w: 470, h: 560 },
+  { x: 565, y: 330, w: 445, h: 330 },
+  { x: 565, y: 685, w: 445, h: 520 },
+  { x: 70, y: 915, w: 470, h: 290 },
+  { x: 70, y: 1230, w: 940, h: 230 },
+];
+
 // ---------------------------------------------------------------------------------------------
 const photodump: Template = {
   id: "photodump",
@@ -88,17 +103,17 @@ const photodump: Template = {
     decorations: { doodles: true, hearts: true, grain: true },
     filter: "film",
   }),
-  draw(ctx, photo, s) {
+  capacity: 4,
+  slotRects: () => PHOTODUMP_TILES.slice(0, 4),
+  draw(ctx, _photo, s, slots) {
     ctx.fillStyle = s.overlay.color;
     ctx.fillRect(0, 0, W, H);
-    const tiles: [Rect, { x: number; y: number; zoom: number }][] = [
-      [{ x: 70, y: 330, w: 470, h: 560 }, { x: 0, y: 0, zoom: 1 }],
-      [{ x: 565, y: 330, w: 445, h: 330 }, { x: 0.25, y: -0.2, zoom: 1.6 }],
-      [{ x: 565, y: 685, w: 445, h: 520 }, { x: -0.2, y: 0.15, zoom: 1.35 }],
-      [{ x: 70, y: 915, w: 470, h: 290 }, { x: 0.3, y: 0.3, zoom: 1.9 }],
-      [{ x: 70, y: 1230, w: 940, h: 230 }, { x: -0.1, y: 0.45, zoom: 1.2 }],
+    const shifts = [
+      { x: 0, y: 0, zoom: 1 }, { x: 0.25, y: -0.2, zoom: 1.6 }, { x: -0.2, y: 0.15, zoom: 1.35 },
+      { x: 0.3, y: 0.3, zoom: 1.9 }, { x: -0.1, y: 0.45, zoom: 1.2 },
     ];
-    tiles.forEach(([r, shift]) => tile(ctx, photo, r, s, 22, shift));
+    const tiles = PHOTODUMP_TILES.map((r, i) => [r, shifts[i]!] as const);
+    tiles.forEach(([r, shift], i) => slotTile(ctx, slots, i, r, 22, shift));
     if (on(s, "doodles")) {
       doodleArrow(ctx, 760, 300, 700, 345, "#f4efe6");
       hand(ctx, "core memory", 775, 288, 40, "#f4efe6", -0.06);
@@ -201,7 +216,7 @@ const nowplaying: Template = {
     roundRect(ctx, { x: 210, y: 390, w: 660, h: 660 }, 28);
     ctx.fill();
     ctx.restore();
-    tile(ctx, photo, { x: 210, y: 390, w: 660, h: 660 }, s, 28);
+    tile(ctx, photo, { x: 210, y: 390, w: 660, h: 660 }, s.crop, 28);
     // progress
     ctx.fillStyle = "rgba(255,255,255,0.3)";
     roundRect(ctx, { x: 216, y: 1262, w: 648, h: 8 }, 4);
@@ -336,7 +351,9 @@ const moodboard: Template = {
     overlay: { strength: 0.2, color: "#f1efea" },
     decorations: { chips: true, rules: true },
   }),
-  draw(ctx, photo, s) {
+  capacity: 4,
+  slotRects: () => [0, 1, 2, 3].map((k) => ({ x: 90 + (k % 2) * 459, y: 470 + Math.floor(k / 2) * 352, w: 441, h: 334 })),
+  draw(ctx, photo, s, slots) {
     ctx.fillStyle = s.overlay.color;
     ctx.fillRect(0, 0, W, H);
     if (on(s, "rules")) {
@@ -356,7 +373,8 @@ const moodboard: Template = {
     let k = 0;
     for (let row = 0; row < 3; row++) {
       for (let col = 0; col < 2; col++) {
-        tile(ctx, photo, { x: 90 + col * 459, y: 470 + row * 352, w: 441, h: 334 }, s, 0, shifts[k++]);
+        const i = k++;
+        slotTile(ctx, slots, i, { x: 90 + col * 459, y: 470 + row * 352, w: 441, h: 334 }, 0, shifts[i]!);
       }
     }
     if (on(s, "chips")) {
@@ -500,7 +518,7 @@ const y2k: Template = {
     ctx.fillStyle = chrome;
     roundRect(ctx, { x: r.x - 16, y: r.y - 16, w: r.w + 32, h: r.h + 32 }, 64);
     ctx.fill();
-    tile(ctx, photo, r, s, 50);
+    tile(ctx, photo, r, s.crop, 50);
     if (on(s, "glitter")) {
       const rand = rng(99);
       for (let i = 0; i < 140; i++) {

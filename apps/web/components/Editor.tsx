@@ -10,13 +10,15 @@ import type { Align, FontRole, StoryState, TemplateId, TemplateInput, TextKey } 
 import { TEMPLATE_IDS } from "../lib/story/types";
 import { FILTERS } from "../lib/story/filters";
 import { STICKER_KINDS, newSticker } from "../lib/story/stickers";
-import { FilterSwatch, StickerSwatch } from "./Swatches";
+import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
+import { slotRectsFor } from "../lib/story/templates";
 import { MusicCard } from "./Results";
 import { StoryCanvas } from "./StoryCanvas";
 import s from "./maker.module.css";
 
 interface Props {
-  photo: Photo;
+  /** 1–4 photos; multi-photo layouts place them by state.order. */
+  photos: Photo[];
   story: StoryState;
   setStory: React.Dispatch<React.SetStateAction<StoryState | null>>;
   input: (id: TemplateId) => TemplateInput;
@@ -53,7 +55,7 @@ function usePreviewWidth(): number {
   return w;
 }
 
-export function Editor({ photo, story, setStory, input, suggested, music, onBack, onStartOver, onSave, signedIn = false }: Props) {
+export function Editor({ photos, story, setStory, input, suggested, music, onBack, onStartOver, onSave, signedIn = false }: Props) {
   const [active, setActive] = useState<TextKey>("headline");
   const [exporting, setExporting] = useState<"idle" | "busy" | "error" | "done">("idle");
   const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
@@ -75,12 +77,19 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
   const tpl = TEMPLATES[story.templateId];
   const layer = story[active];
   const [selected, setSelected] = useState<string | null>(null);
+  // Which photo slot the Crop controls act on (multi-photo layouts).
+  const slotCount = Math.min(photos.length, slotRectsFor(story, photos.length).length);
+  const [slotRaw, setSlot] = useState(0);
+  const slot = Math.min(slotRaw, Math.max(0, slotCount - 1));
+  const cropOf = (i: number) => (i === 0 ? story.crop : (story.crops?.[i - 1] ?? story.crop));
+  const crop = cropOf(slot);
+  const order = story.order?.length ? story.order : [0, 1, 2, 3];
   const sticker = story.stickers.find((x) => x.id === selected) ?? null;
 
   const doExport = async () => {
     setExporting("busy");
     try {
-      const blob = await exportPng(photo, story);
+      const blob = await exportPng(photos, story);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -100,22 +109,27 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
       <div className={s.editorStage}>
         <StoryCanvas
           className={s.editorCanvas}
-          photo={photo}
+          photo={photos}
           state={story}
           width={width}
           label={`Editable ${tpl.name} Story. Drag text to move it, drag elsewhere to reposition the photo.`}
           onSelectText={setActive}
           onDragText={(key, dx, dy) => dispatch({ type: "move", key, x: story[key].x + dx, y: story[key].y + dy })}
-          onDragPhoto={(dx, dy) =>
-            dispatch({ type: "crop", patch: { x: story.crop.x - dx * 1.5, y: story.crop.y - dy * 1.5 } })
-          }
+          onDragPhoto={(dx, dy, slot) => {
+            const c = cropOf(slot);
+            setSlot(slot);
+            dispatch({ type: "crop", slot, patch: { x: c.x - dx * 1.5, y: c.y - dy * 1.5 } });
+          }}
+          onSetCrop={(slot, crop) => dispatch({ type: "crop", slot, patch: crop })}
+          onSwapSlots={photos.length > 1 ? (a, b) => dispatch({ type: "swap", a, b }) : undefined}
+          onSelectSlot={setSlot}
           onDragSticker={(id, dx, dy) => {
             const st = story.stickers.find((x) => x.id === id);
             if (st) dispatch({ type: "sticker", id, patch: { x: st.x + dx, y: st.y + dy } });
           }}
           onSelectSticker={setSelected}
           selectedSticker={selected}
-          onZoom={(d) => dispatch({ type: "crop", patch: { zoom: story.crop.zoom * (1 + d) } })}
+          onZoom={(d) => dispatch({ type: "crop", slot, patch: { zoom: crop.zoom * (1 + d) } })}
         />
         <p className={s.small}>Drag text, stickers or the photo · scroll/pinch to zoom · exports at 1080 × 1920</p>
       </div>
@@ -143,32 +157,57 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
           </div>
         </fieldset>
 
+        {photos.length > 1 && (
+          <fieldset className={s.group}>
+            <legend>Photos</legend>
+            <p className={s.small}>
+              {slotCount < photos.length
+                ? `This layout shows ${slotCount} of your ${photos.length} photos — switch layouts to show all.`
+                : "Drag a photo onto another on the Story to swap them, or use the arrows."}
+            </p>
+            <div className={s.slotRow}>
+              {Array.from({ length: slotCount }, (_, i) => (
+                <div key={i} className={`${s.slotCard} ${slot === i ? s.swatchOn : ""}`}>
+                  <button className={s.slotThumb} onClick={() => setSlot(i)} aria-label={`Edit crop of photo slot ${i + 1}`} aria-pressed={slot === i}>
+                    <PhotoThumb photo={photos[(order[i] ?? i) % photos.length]!} />
+                    <span>Slot {i + 1}</span>
+                  </button>
+                  <div className={s.row}>
+                    <button className={s.chipX} disabled={i === 0} aria-label={`Move slot ${i + 1} earlier`} onClick={() => { dispatch({ type: "swap", a: i, b: i - 1 }); setSlot(i - 1); }}>←</button>
+                    <button className={s.chipX} disabled={i === slotCount - 1} aria-label={`Move slot ${i + 1} later`} onClick={() => { dispatch({ type: "swap", a: i, b: i + 1 }); setSlot(i + 1); }}>→</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
         <fieldset className={s.group}>
-          <legend>Crop</legend>
+          <legend>Crop{slotCount > 1 ? ` · slot ${slot + 1}` : ""}</legend>
           <div className={s.segment} role="group" aria-label="Photo fit">
             {(["cover", "contain"] as const).map((fit) => (
-              <button key={fit} aria-pressed={story.crop.fit === fit} className={story.crop.fit === fit ? s.segOn : ""} onClick={() => dispatch({ type: "crop", patch: { fit } })}>
+              <button key={fit} aria-pressed={crop.fit === fit} className={crop.fit === fit ? s.segOn : ""} onClick={() => dispatch({ type: "crop", slot, patch: { fit } })}>
                 {fit === "cover" ? "Fill frame" : "Fit whole photo"}
               </button>
             ))}
           </div>
           <label className={s.field}>
-            <span>Zoom · {story.crop.zoom.toFixed(2)}×</span>
-            <input type="range" min={1} max={4} step={0.01} value={story.crop.zoom} onChange={(e) => dispatch({ type: "crop", patch: { zoom: Number(e.target.value) } })} />
+            <span>Zoom · {crop.zoom.toFixed(2)}×</span>
+            <input type="range" min={1} max={4} step={0.01} value={crop.zoom} onChange={(e) => dispatch({ type: "crop", slot, patch: { zoom: Number(e.target.value) } })} />
           </label>
           <div className={s.grid2}>
             <label className={s.field}>
               <span>Left ↔ right</span>
-              <input type="range" min={0} max={1} step={0.01} value={story.crop.x} onChange={(e) => dispatch({ type: "crop", patch: { x: Number(e.target.value) } })} />
+              <input type="range" min={0} max={1} step={0.01} value={crop.x} onChange={(e) => dispatch({ type: "crop", slot, patch: { x: Number(e.target.value) } })} />
             </label>
             <label className={s.field}>
               <span>Top ↕ bottom</span>
-              <input type="range" min={0} max={1} step={0.01} value={story.crop.y} onChange={(e) => dispatch({ type: "crop", patch: { y: Number(e.target.value) } })} />
+              <input type="range" min={0} max={1} step={0.01} value={crop.y} onChange={(e) => dispatch({ type: "crop", slot, patch: { y: Number(e.target.value) } })} />
             </label>
           </div>
           <p className={s.small}>
             Drag the photo to reframe · scroll or pinch to zoom ·{" "}
-            <button className={s.linkBtn} onClick={() => dispatch({ type: "crop", patch: { zoom: 1, x: 0.5, y: 0.5, fit: "cover" } })}>Reset crop</button>
+            <button className={s.linkBtn} onClick={() => dispatch({ type: "crop", slot, patch: { zoom: 1, x: 0.5, y: 0.5, fit: "cover" } })}>Reset crop</button>
           </p>
         </fieldset>
 
@@ -177,7 +216,7 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
           <div className={s.swatchGrid} role="group" aria-label="Photo filter">
             {FILTERS.map((f) => (
               <button key={f.id} className={`${s.swatchBtn} ${story.filter === f.id ? s.swatchOn : ""}`} aria-pressed={story.filter === f.id} onClick={() => dispatch({ type: "filter", id: f.id })}>
-                <FilterSwatch photo={photo} filter={f.id} />
+                <FilterSwatch photo={photos[order[0] ?? 0] ?? photos[0]!} filter={f.id} />
                 <span>{f.name}</span>
               </button>
             ))}

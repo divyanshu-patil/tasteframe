@@ -15,7 +15,9 @@ from app.core.config import Settings
 from app.core.errors import AppError
 
 log = logging.getLogger("tasteframe.supabase")
-COLUMNS = "id,template_id,layout_config,recommendation_provenance,created_at,s3_object_key"
+COLUMNS = (
+    "id,template_id,layout_config,recommendation_provenance,created_at,s3_object_key,s3_object_keys"
+)
 
 
 def _unavailable() -> AppError:
@@ -71,7 +73,12 @@ class SupabaseStories:
         return data
 
     async def insert(
-        self, user: AuthUser, object_key: str, template_id: str, config: dict, provenance: dict
+        self,
+        user: AuthUser,
+        object_keys: list[str],
+        template_id: str,
+        config: dict,
+        provenance: dict,
     ) -> dict:
         # user_id defaults to auth.uid() in SQL; sending it explicitly keeps the CHECK readable.
         rows = await self._request(
@@ -80,7 +87,8 @@ class SupabaseStories:
             {"select": COLUMNS},
             {
                 "user_id": user.id,
-                "s3_object_key": object_key,
+                "s3_object_key": object_keys[0],
+                "s3_object_keys": object_keys,
                 "template_id": template_id,
                 "layout_config": config,
                 "recommendation_provenance": provenance,

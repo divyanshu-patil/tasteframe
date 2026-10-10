@@ -183,7 +183,9 @@ def test_qloo_outage_degrades_without_breaking_layouts(client_with):
     res = stream(client.post("/v1/analysis", headers=h, json=body))[-1]["result"]
     assert res["provenance"]["qloo_error"] == "QLOO_UPSTREAM_ERROR"
     assert res["provenance"]["qloo_used"] is False
-    assert len(res["layouts"]) == 19 and res["music"]["kind"] == "none"
+    from app.services.recommendations.layouts import CATALOGUE
+
+    assert len(res["layouts"]) == len(CATALOGUE) and res["music"]["kind"] == "none"
 
 
 def test_seed_must_be_provider_id_not_free_text(client):
@@ -236,3 +238,23 @@ def test_rate_limit(client, monkeypatch):
         for _ in range(4)
     ]
     assert codes == [200, 200, 200, 429]
+
+
+def test_multi_photo_analysis_merges_and_ranks_for_photo_count(client):
+    from app.services.recommendations.layouts import TEMPLATES_BY_ID
+
+    h = new_session(client)
+    keys = [
+        upload(client, h, make_image(color=c))
+        for c in ((230, 120, 40), (40, 90, 200), (60, 160, 70))
+    ]
+    res = stream(client.post("/v1/analysis", headers=h, json={"object_keys": keys}))[-1]["result"]
+    assert res["visual_profile"]["photo_count"] == 3
+    assert len(res["visual_profile"]["palette"]) >= 3  # colours from all photos
+    top = res["layouts"][:3]
+    assert all(TEMPLATES_BY_ID[lay["id"]].capacity >= 3 for lay in top), [lay["id"] for lay in top]
+    assert all(lay["photo_slots"] == 3 for lay in top)
+    # Foreign / too many keys are rejected.
+    other = new_session(client)
+    assert client.post("/v1/analysis", headers=other, json={"object_keys": keys}).status_code == 404
+    assert client.post("/v1/analysis", headers=h, json={"object_keys": keys * 2}).status_code == 422

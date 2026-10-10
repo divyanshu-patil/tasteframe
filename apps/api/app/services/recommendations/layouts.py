@@ -18,7 +18,14 @@ apps/web/lib/story/templates*.ts; ids must match (a web test checks this).
 import hashlib
 from dataclasses import dataclass, field
 
-from app.schemas.api import LayoutId, LayoutScore, LayoutSuggestion, Mood, VisualProfile
+from app.schemas.api import (
+    LayoutId,
+    LayoutScore,
+    LayoutSuggestion,
+    Mood,
+    SubjectPos,
+    VisualProfile,
+)
 
 W_VISUAL, W_CULTURAL, W_READ = 0.45, 0.35, 0.20
 W_AI = {"visual": 0.30, "ai": 0.30, "cultural": 0.25, "read": 0.15}
@@ -40,6 +47,8 @@ class Template:
     text_on_photo: bool = False
     keywords: tuple[str, ...] = ()  # matched against Qloo tag names
     filter: str | None = None  # signature look, overrides the mood filter
+    capacity: int = 1  # distinct photos the layout shows (multi-photo Stories)
+    min_photos: int = 1  # below this it re-crops one photo to fill its slots
 
 
 CATALOGUE: tuple[Template, ...] = (
@@ -104,6 +113,7 @@ CATALOGUE: tuple[Template, ...] = (
         ("landscape", "square"),
         True,
         ("indie", "coming of age", "romance", "alternative", "lo-fi", "bedroom", "drama"),
+        capacity=3,
     ),
     Template(
         "filmstrip",
@@ -116,6 +126,7 @@ CATALOGUE: tuple[Template, ...] = (
         {"scene": 0.9, "object": 0.7, "people": 0.6, "person": 0.5},
         ("landscape", "square"),
         keywords=("rock", "punk", "grunge", "retro", "vintage", "hip hop", "90s", "80s"),
+        capacity=3,
     ),
     Template(
         "photodump",
@@ -139,6 +150,7 @@ CATALOGUE: tuple[Template, ...] = (
         {"people": 1.0, "object": 0.8, "person": 0.7, "scene": 0.6},
         keywords=("pop", "k-pop", "comedy", "dance", "indie pop"),
         filter="film",
+        capacity=4,
     ),
     Template(
         "editorial",
@@ -226,6 +238,7 @@ CATALOGUE: tuple[Template, ...] = (
         ("interior", "food", "outfit", "decor", "flower", "texture", "fabric"),
         {"object": 1.0, "scene": 0.8, "person": 0.6, "people": 0.5},
         keywords=("design", "fashion", "art", "aesthetic"),
+        capacity=4,
     ),
     Template(
         "torn",
@@ -251,6 +264,7 @@ CATALOGUE: tuple[Template, ...] = (
         ("museum", "gallery", "architecture", "shadow", "night", "street"),
         {"scene": 0.8, "object": 0.8, "person": 0.7, "people": 0.6},
         keywords=("ambient", "classical", "minimal", "techno", "documentary", "experimental"),
+        capacity=2,
     ),
     Template(
         "y2k",
@@ -312,6 +326,96 @@ CATALOGUE: tuple[Template, ...] = (
         {"scene": 0.9, "person": 0.8, "object": 0.8, "people": 0.7},
         keywords=("travel", "world", "reggae", "latin", "afrobeats"),
     ),
+    Template(
+        "duo",
+        "Duo Polaroids",
+        "polaroid",
+        ("two polaroids", "tape", "flowers"),
+        "two staggered polaroids taped to a coloured backdrop with flowers; pairs, then-and-now, "
+        "two moments",
+        {"playful": 0.8, "warm": 0.8, "dreamy": 0.7, "nostalgic": 0.7, "bright": 0.6},
+        ("friends", "couple", "trip", "cafe", "flowers", "outfit"),
+        {"person": 0.9, "people": 0.9, "object": 0.8, "scene": 0.7},
+        capacity=2,
+        min_photos=2,
+    ),
+    Template(
+        "polaroids",
+        "Polaroid Pile",
+        "polaroid",
+        ("scattered polaroids", "tape", "captions"),
+        "a pile of tilted polaroids with tape and handwritten captions on a dark backdrop; "
+        "memories, friends, nights out",
+        {"nostalgic": 1, "playful": 0.8, "warm": 0.7, "moody": 0.6, "dreamy": 0.6},
+        ("friends", "party", "night", "birthday", "trip", "beach", "memories"),
+        {"people": 1.0, "person": 0.9, "object": 0.7, "scene": 0.7},
+        capacity=4,
+        min_photos=2,
+    ),
+    Template(
+        "splitscreen",
+        "Split",
+        "grid",
+        ("split screen", "text band", "dots"),
+        "two photos stacked half and half with a slim text band; before/after, pairs, contrasts",
+        {"editorial": 0.9, "bold": 0.8, "minimal": 0.8, "cinematic": 0.6, "cool": 0.5},
+        ("city", "street", "outfit", "travel", "food", "architecture"),
+        {"scene": 0.9, "person": 0.9, "object": 0.9, "people": 0.8},
+        capacity=2,
+        min_photos=2,
+    ),
+    Template(
+        "grid",
+        "Grid",
+        "grid",
+        ("2×2 grid", "film frames", "squiggles"),
+        "four photos in a 2×2 film-frame grid on paper with doodle squiggles; recaps, outfits, "
+        "photo sets",
+        {"playful": 0.8, "editorial": 0.8, "bright": 0.7, "natural": 0.6, "minimal": 0.6},
+        ("outfit", "food", "friends", "trip", "day", "recap"),
+        {"people": 0.9, "person": 0.9, "object": 0.9, "scene": 0.8},
+        capacity=4,
+        min_photos=3,
+    ),
+    Template(
+        "mosaic",
+        "Mosaic",
+        "grid",
+        ("mosaic", "tall + small tiles", "clean gutters"),
+        "an asymmetric mosaic of tall and small tiles on linen; aesthetic recaps, travel, mood",
+        {"minimal": 0.9, "natural": 0.8, "dreamy": 0.7, "editorial": 0.7, "bright": 0.6},
+        ("travel", "nature", "interior", "food", "outfit", "garden"),
+        {"scene": 0.9, "object": 0.9, "person": 0.8, "people": 0.8},
+        capacity=4,
+        min_photos=3,
+    ),
+    Template(
+        "booth",
+        "Photo Booth",
+        "strip",
+        ("photobooth strip", "tape", "paper"),
+        "a vertical photo-booth strip of three frames taped to paper; friends, couples, silly "
+        "sequences",
+        {"playful": 1, "nostalgic": 0.8, "warm": 0.6, "bright": 0.6, "bold": 0.5},
+        ("friends", "selfie", "couple", "party", "booth", "night"),
+        {"people": 1.0, "person": 1.0, "object": 0.5, "scene": 0.4},
+        capacity=3,
+        min_photos=2,
+    ),
+    Template(
+        "torncollage",
+        "Torn Collage",
+        "collage",
+        ("torn bands", "paper edges", "layers"),
+        "three photos as full-width bands with torn paper edges between them; journeys, days out, "
+        "layered stories",
+        {"nostalgic": 0.9, "dreamy": 0.8, "natural": 0.7, "moody": 0.6, "warm": 0.6},
+        ("travel", "street", "mountain", "hill", "road", "trip", "city"),
+        {"scene": 1.0, "person": 0.8, "people": 0.8, "object": 0.7},
+        capacity=3,
+        min_photos=2,
+        filter="film",
+    ),
 )
 
 TEMPLATES_BY_ID = {t.id: t for t in CATALOGUE}
@@ -334,6 +438,45 @@ HEADLINES: dict[str, str] = {
 
 MOOD_WEIGHTS = (1.0, 0.8, 0.6, 0.45, 0.35)
 
+# What the photo is about (vision/taxonomy.py TOPICS) → layouts that suit it, best first.
+TOPIC_LAYOUTS: dict[str, tuple[str, ...]] = {
+    "portrait": ("magazine", "cinematic", "vintage", "torn", "y2k", "softfocus"),
+    "selfie": ("y2k", "magazine", "vintage", "booth", "polaroids", "scrapbook"),
+    "group": ("photodump", "polaroids", "booth", "scrapbook", "grid", "filmstrip"),
+    "couple": ("duo", "vintage", "softfocus", "polaroids", "cinematic", "note"),
+    "family": ("scrapbook", "polaroids", "journal", "duo", "mosaic", "note"),
+    "pet": ("note", "scrapbook", "polaroids", "softfocus", "duo", "grid"),
+    "animal": ("journal", "softfocus", "stills", "cinematic", "note"),
+    "sky": ("cinematic", "stills", "softfocus", "journal", "vintage"),
+    "landscape": ("journal", "stills", "torncollage", "cinematic", "mosaic", "softfocus"),
+    "beach": ("vintage", "stills", "ticket", "torncollage", "polaroids", "cinematic"),
+    "flowers": ("softfocus", "torn", "moodboard", "note", "journal"),
+    "city": ("newspaper", "editorial", "minimal", "splitscreen", "cinematic", "filmstrip"),
+    "architecture": ("editorial", "newspaper", "minimal", "splitscreen", "mosaic"),
+    "travel": ("ticket", "journal", "torncollage", "stills", "polaroids", "mosaic"),
+    "food": ("photodump", "moodboard", "grid", "note", "mosaic"),
+    "celebration": ("scrapbook", "photodump", "polaroids", "y2k", "booth", "grid"),
+    "wedding": ("softfocus", "duo", "vintage", "magazine", "polaroids", "journal"),
+    "music": ("nowplaying", "vinyl", "filmstrip", "y2k", "cinematic"),
+    "sport": ("magazine", "newspaper", "splitscreen", "grid", "filmstrip"),
+    "fashion": ("magazine", "moodboard", "y2k", "splitscreen", "editorial", "grid"),
+    "interior": ("moodboard", "editorial", "note", "mosaic", "minimal"),
+    "objects": ("moodboard", "note", "editorial", "grid", "minimal"),
+    "study_work": ("editorial", "newspaper", "note", "grid", "minimal"),
+    "night": ("y2k", "nowplaying", "cinematic", "filmstrip", "minimal"),
+    "details": ("minimal", "softfocus", "moodboard", "torn", "editorial"),
+}
+
+
+def _topic_fit(t: Template, topic: str | None) -> float:
+    if not topic or topic not in TOPIC_LAYOUTS:
+        return 0.5  # unknown: neutral
+    order = TOPIC_LAYOUTS[topic]
+    if t.id not in order:
+        return 0.35
+    i = order.index(t.id)
+    return 1.0 if i < 2 else 0.85 if i < 4 else 0.7
+
 
 def _mood_fit(t: Template, p: VisualProfile) -> float:
     if not p.mood:
@@ -351,10 +494,18 @@ def _scene_fit(t: Template, scene: list[str]) -> float:
     return 0.3 + 0.7 * min(1.0, hits / 2)
 
 
-def _visual_fit(t: Template, p: VisualProfile, scene: list[str], subject: str | None) -> float:
+def _visual_fit(
+    t: Template, p: VisualProfile, scene: list[str], subject: str | None, topic: str | None = None
+) -> float:
     comp = 1.0 if p.composition in t.compositions else 0.4
     subj = t.subjects.get(subject, 0.6) if subject else 0.6
-    fit = 0.55 * _mood_fit(t, p) + 0.2 * _scene_fit(t, scene) + 0.15 * subj + 0.10 * comp
+    fit = (
+        0.40 * _mood_fit(t, p)
+        + 0.20 * _topic_fit(t, topic)
+        + 0.15 * _scene_fit(t, scene)
+        + 0.15 * subj
+        + 0.10 * comp
+    )
     return round(min(fit, 1.0), 3)
 
 
@@ -379,6 +530,17 @@ def _ai_fit(t: Template, picks: list[str]) -> float:
         i = picks.index(t.id)
         return AI_RANK_FIT[min(i, len(AI_RANK_FIT) - 1)]
     return AI_UNPICKED
+
+
+def _count_fit(t: Template, n: int) -> float:
+    """How well a layout suits the number of photos (1 = ideal)."""
+    if n <= 1:
+        if t.capacity == 1:
+            return 1.0
+        return 0.9 if t.min_photos == 1 else 0.4  # multi-only layouts would repeat one photo
+    if t.capacity >= n:
+        return 1.0 if t.min_photos <= n else 0.85
+    return 0.7 if t.capacity > 1 else 0.3  # single-photo layouts would drop photos
 
 
 def _jitter(p: VisualProfile, template_id: str) -> float:
@@ -412,6 +574,7 @@ def score_all(
     scene: list[str] | None = None,
     subject: str | None = None,
     ai_picks: list[str] | None = None,
+    topic: str | None = None,
 ) -> list[tuple[Template, LayoutScore, list[str]]]:
     """Every template scored, best first (photo-specific tie-breaks)."""
     scene = scene or []
@@ -419,7 +582,7 @@ def score_all(
         subject = "person"
     scored = []
     for t in CATALOGUE:
-        v = _visual_fit(t, p, scene, subject)
+        v = _visual_fit(t, p, scene, subject, topic)
         if people and t.id in SPLITS_PHOTO:
             v = round(v * 0.7, 3)  # selfies/portraits: keep the person in one intact frame
         c, hits = _cultural_fit(t, qloo_tags)
@@ -429,6 +592,9 @@ def score_all(
             total = W_AI["visual"] * v + W_AI["ai"] * a + W_AI["cultural"] * c + W_AI["read"] * r
         else:
             total = W_VISUAL * v + W_CULTURAL * c + W_READ * r
+        # Photo-count fit scales the whole score so 2–4 photo Stories lead with layouts that
+        # actually show every photo (single-photo layouts stay available, just lower).
+        total = total * (0.55 + 0.45 * _count_fit(t, p.photo_count))
         total = round(total + _jitter(p, t.id), 3)
         score = LayoutScore(
             visual_fit=v, cultural_style_fit=c, readability_fit=r, total=total, ai_pick=a
@@ -472,16 +638,26 @@ def rank_layouts(
     subject: tuple[str, float, float] | None = None,
     scene: list[str] | None = None,
     ai_picks: list[str] | None = None,
+    subjects: list[tuple[str, float, float]] | None = None,
+    topic: str | None = None,
 ) -> list[LayoutSuggestion]:
     """All templates ranked for this photo (or the top `k`), families interleaved per 3.
 
     `headlines`: optional ideas from image reasoning; spread across the suggestions.
     `subject`: (kind, x, y) of the main subject from image reasoning — crop focus + ranking.
-    `ai_picks`: the vision model's ranked template ids for this photo."""
+    `ai_picks`: the vision model's ranked template ids for this photo.
+    `subjects`: per-photo (kind, x, y) for multi-photo Stories (crop focus per photo)."""
     people = bool(subject and subject[0] in ("person", "people"))
+    per_photo = subjects or ([subject] if subject else [])
+    focuses = [
+        SubjectPos(subject=k, x=round(x, 3), y=round(y, 3))  # type: ignore[arg-type]
+        if k != "scene"
+        else SubjectPos(subject="scene")
+        for k, x, y in per_photo
+    ]
     focus = (subject[1], subject[2]) if subject and subject[0] != "scene" else (0.5, 0.5)
     kind = subject[0] if subject else None
-    ordered = _interleave(score_all(p, qloo_tags, people, scene, kind, ai_picks))
+    ordered = _interleave(score_all(p, qloo_tags, people, scene, kind, ai_picks, topic))
     if k is not None:
         ordered = ordered[:k]
 
@@ -499,12 +675,21 @@ def rank_layouts(
         )
         if cues:
             reason += f" Fits the scene: {cues[0]}."
+        if topic and t.id in TOPIC_LAYOUTS.get(topic, ())[:3]:
+            reason += f" Made for {topic.replace('_', ' & ')} photos."
         if ai_picks and t.id in ai_picks[:3]:
             reason += " The image model picked it for this photo."
         if hits:
             reason += f" Qloo results tagged “{hits[0]}” point to this style."
         if t.text_on_photo and score.readability_fit < 0.6:
             reason += " Text sits on an overlay to stay readable."
+        n = p.photo_count
+        if n > 1 and t.capacity >= n:
+            reason += f" Shows all {n} of your photos."
+        elif n > 1 and t.capacity > 1:
+            reason += f" Shows {t.capacity} of your {n} photos."
+        elif n > 1:
+            reason += " Uses your first photo only."
         if people:
             reason += " Framed to keep the person in shot, with text placed away from them."
         out.append(
@@ -524,6 +709,8 @@ def rank_layouts(
                 focus_x=round(focus[0], 3),
                 focus_y=round(focus[1], 3),
                 filter=t.filter or base_filter,
+                focuses=focuses,
+                photo_slots=min(t.capacity, max(1, p.photo_count)),
             )
         )
     return out

@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # App-level taste types, mapped to Qloo URNs inside the Qloo adapter.
 TasteType = Literal["artist", "movie", "tv_show", "brand", "book", "podcast"]
@@ -40,6 +40,13 @@ LayoutId = Literal[
     "note",
     "newspaper",
     "softfocus",
+    "duo",
+    "splitscreen",
+    "booth",
+    "torncollage",
+    "grid",
+    "mosaic",
+    "polaroids",
 ]
 FilterId = Literal[
     "none", "film", "warm", "golden", "cool", "faded", "vivid", "sepia", "bw", "noir", "8mm"
@@ -105,10 +112,24 @@ class TasteSeed(BaseModel):
 
 
 class AnalysisIn(BaseModel):
-    object_key: str = Field(max_length=200)
+    # 1–4 photos for one Story. `object_key` is the original single-photo field (still accepted).
+    object_key: str | None = Field(None, max_length=200)
+    object_keys: list[str] = Field(default_factory=list, max_length=4)
     taste_seeds: list[TasteSeed] = Field(default_factory=list, max_length=5)
     manual_mood: list[Mood] = Field(default_factory=list, max_length=4)
     locale: str = Field("en", pattern=r"^[a-z]{2}(-[A-Z]{2})?$")
+
+    @model_validator(mode="after")
+    def _keys(self) -> "AnalysisIn":
+        keys = self.object_keys or ([self.object_key] if self.object_key else [])
+        if (
+            not 1 <= len(keys) <= 4
+            or len(set(keys)) != len(keys)
+            or any(len(k) > 200 for k in keys)
+        ):
+            raise ValueError("send 1-4 distinct object keys")
+        self.object_keys = keys
+        return self
 
 
 class VisualProfile(BaseModel):
@@ -122,6 +143,7 @@ class VisualProfile(BaseModel):
     source: Literal["vision", "manual", "vision+manual"]
     width: int
     height: int
+    photo_count: int = 1  # how many photos this Story uses (profile is merged across them)
 
 
 class CulturalRecommendation(BaseModel):
@@ -132,6 +154,12 @@ class CulturalRecommendation(BaseModel):
     tags: list[str] = Field(default_factory=list)  # provider-returned tag names
     reason: str
     evidence: list[str]  # names of the user seeds used as the signal
+
+
+class SubjectPos(BaseModel):
+    subject: Literal["person", "people", "object", "scene"] = "scene"
+    x: float = Field(0.5, ge=0, le=1)
+    y: float = Field(0.5, ge=0, le=1)
 
 
 class LayoutScore(BaseModel):
@@ -157,6 +185,8 @@ class LayoutSuggestion(BaseModel):
     focus_x: float = 0.5
     focus_y: float = 0.5
     filter: FilterId = "none"  # suggested photo filter (mood rules / template look)
+    focuses: list[SubjectPos] = Field(default_factory=list, max_length=4)  # crop focus per photo
+    photo_slots: int = 1  # distinct photos this layout shows
 
 
 class MusicSuggestion(BaseModel):
@@ -183,6 +213,10 @@ class ImageReasoning(BaseModel):
     subject_x: float = Field(0.5, ge=0, le=1)
     subject_y: float = Field(0.5, ge=0, le=1)
     layout_picks: list[LayoutId] = Field(default_factory=list, max_length=5)
+    subjects: list[SubjectPos] = Field(default_factory=list, max_length=4)  # one per photo
+    # What the photo is about (controlled vocabulary, sensitive terms neutralised).
+    about: str | None = None
+    elements: list[str] = Field(default_factory=list, max_length=8)
 
 
 class Provenance(BaseModel):
@@ -261,6 +295,8 @@ class StoryConfig(BaseModel):
     templateId: LayoutId  # noqa: N815 — matches the browser's JSON shape
     filter: FilterId = "none"
     stickers: list[StickerConfig] = Field(default_factory=list, max_length=24)
+    order: list[Annotated[int, Field(ge=0, le=3)]] = Field(default_factory=list, max_length=4)
+    crops: list[CropConfig] = Field(default_factory=list, max_length=3)  # slots 2-4
     headline: TextLayerConfig
     caption: TextLayerConfig
     crop: CropConfig
@@ -281,9 +317,22 @@ class StoryProvenance(BaseModel):
 
 
 class SaveStoryIn(BaseModel):
-    object_key: str = Field(max_length=200)
+    object_key: str | None = Field(None, max_length=200)
+    object_keys: list[str] = Field(default_factory=list, max_length=4)
     config: StoryConfig
     provenance: StoryProvenance = Field(default_factory=StoryProvenance)
+
+    @model_validator(mode="after")
+    def _keys(self) -> "SaveStoryIn":
+        keys = self.object_keys or ([self.object_key] if self.object_key else [])
+        if (
+            not 1 <= len(keys) <= 4
+            or len(set(keys)) != len(keys)
+            or any(len(k) > 200 for k in keys)
+        ):
+            raise ValueError("send 1-4 distinct object keys")
+        self.object_keys = keys
+        return self
 
 
 class StoryOut(BaseModel):
@@ -292,6 +341,7 @@ class StoryOut(BaseModel):
     config: StoryConfig
     provenance: StoryProvenance
     created_at: str
+    photo_count: int = 1
 
 
 class StoryListOut(BaseModel):

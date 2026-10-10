@@ -9,6 +9,7 @@ Verified 2026-10-10: qwen3-vl:235b is retired (HTTP 410); gemma4:31b accepts ima
 `format` returns empty content on gemma4, so we request `format: "json"` and validate ourselves.
 """
 
+import asyncio
 import base64
 import io
 import json
@@ -22,33 +23,83 @@ from PIL import Image
 from pydantic import ValidationError
 
 from app.core.config import Settings
-from app.schemas.api import ImageReasoning, Mood
+from app.schemas.api import ImageReasoning, Mood, SubjectPos
 from app.services.recommendations.layouts import CATALOGUE
+from app.services.vision.taxonomy import normalize_term, normalize_topic, prompt_vocabulary
 
 log = logging.getLogger("tasteframe.vision")
 MOODS: tuple[str, ...] = get_args(Mood)
 
-LAYOUT_MENU = "\n".join(f"- {t.id}: {t.blurb}" for t in CATALOGUE)
 LAYOUT_IDS = {t.id for t in CATALOGUE}
 
-PROMPT = f"""You are an art director reading a photo for an Instagram Story design.
-Describe only broad visual aesthetics: light, colour, composition, setting and atmosphere.
+
+def build_prompt(n: int) -> str:
+    multi = (
+        f"There are {n} photos (in order) that will share ONE Story. Read them together.\n"
+        if n > 1
+        else ""
+    )
+    subjects = (
+        f'  "subjects": [{n} objects, one per photo in order: '
+        '{"subject": "person"|"people"|"object"|"scene", "x": 0.0-1.0, "y": 0.0-1.0}],\n'
+        if n > 1
+        else ""
+    )
+    what = "photos" if n > 1 else "a photo"
+    these = f"these {n} photos" if n > 1 else "THIS photo"
+    count_hint = ", and how many photos each layout holds" if n > 1 else ""
+    return f"""You are an art director reading {what} for an Instagram Story design.
+{multi}Describe only broad visual aesthetics: light, colour, composition, setting and atmosphere.
 Never identify people, and never guess age, gender, ethnicity, health, religion or any other
 personal or sensitive attribute. If people appear, refer to them only as "a person" or "people".
 Reply with ONLY a JSON object, no prose, no code fences:
-{{"summary": "one sentence, max 160 chars, about the photo's look and feel",
+{{"summary": "one sentence, max 160 chars, about the look and feel",
   "moods": [up to 3 words chosen ONLY from {list(MOODS)}],
   "scene": [up to 4 short lowercase scene cues, e.g. "golden hour", "city street", "seaside"],
   "headline_ideas": [3 short lowercase Story headlines, max 32 chars, no hashtags/emoji],
-  "subject": one of "person", "people", "object", "scene" (the photo's main subject),
-  "subject_x": 0.0-1.0 horizontal centre of the main subject (0 = left edge),
-  "subject_y": 0.0-1.0 vertical centre of the main subject (0 = top edge),
-  "best_layouts": [the 5 layout ids below that best suit THIS photo's mood, subject and
-                   setting, best first — be specific to this photo, don't default to the same few]}}
-For a selfie or portrait, subject is "person" and subject_x/subject_y mark the centre of their
+  "subject": one of "person", "people", "object", "scene" (the first photo's main subject),
+  "subject_x": 0.0-1.0 horizontal centre of that subject (0 = left edge),
+  "subject_y": 0.0-1.0 vertical centre of that subject (0 = top edge),
+{subjects}  "about": the ONE topic id below that the image is mainly about,
+  "elements": [up to 8 major things visible, chosen from the element vocabulary below,
+               most important first: subjects, setting, sky, occasion, objects, light/style],
+  "best_layouts": [the 5 layout ids below that best suit {these}
+                   (mood, subject, setting{count_hint}), best first;
+                   be specific, don't default to the same few]}}
+For a selfie or portrait, the subject is "person" and the position marks the centre of the
 face area. Positions are for framing only — say nothing about who anyone is.
+For people use neutral words (person, people, friends, couple, family, group) — never gender,
+age, ethnicity, skin tone, disability, pregnancy or religion.
+{prompt_vocabulary()}
 Layouts:
-{LAYOUT_MENU}"""
+{layout_menu(n)}"""
+
+
+def layout_menu(n: int) -> str:
+    def holds(t) -> str:
+        return f" (holds {t.capacity} photos)" if t.capacity > 1 else " (1 photo)"
+
+    return "\n".join(f"- {t.id}: {t.blurb}{holds(t) if n > 1 else ''}" for t in CATALOGUE)
+
+
+PROMPT = build_prompt(1)
+
+
+def _subjects(raw: dict, n: int, first: str, unit) -> list[SubjectPos]:
+    """Per-photo subject positions; photo 1 falls back to the top-level subject fields."""
+    out: list[SubjectPos] = []
+    items = raw.get("subjects") if isinstance(raw.get("subjects"), list) else []
+    for i in range(n):
+        it = items[i] if i < len(items) and isinstance(items[i], dict) else {}
+        if i == 0 and not it:
+            it = {"subject": first, "x": raw.get("subject_x"), "y": raw.get("subject_y")}
+        kind = (
+            it.get("subject")
+            if it.get("subject") in ("person", "people", "object", "scene")
+            else "scene"
+        )
+        out.append(SubjectPos(subject=kind, x=unit(it.get("x")), y=unit(it.get("y"))))
+    return out
 
 
 def model_name(configured: str) -> str:
@@ -72,7 +123,7 @@ def _clean_text(value: object, limit: int) -> str | None:
     return text[:limit] if text else None
 
 
-def parse_reply(content: str, model: str) -> ImageReasoning | None:
+def parse_reply(content: str, model: str, n: int = 1) -> ImageReasoning | None:
     """Tolerates code fences / surrounding prose; keeps only valid, capped fields."""
     m = re.search(r"\{.*\}", content, re.DOTALL)
     if not m:
@@ -111,6 +162,13 @@ def parse_reply(content: str, model: str) -> ImageReasoning | None:
                     if isinstance(v, str) and v in LAYOUT_IDS
                 )
             )[:5],
+            subjects=_subjects(raw, n, subject, unit),
+            about=normalize_topic(raw.get("about")),
+            elements=list(
+                dict.fromkeys(
+                    t for v in (raw.get("elements") or [])[:16] if (t := normalize_term(v))
+                )
+            )[:8],
             summary=summary,
             moods=list(dict.fromkeys(w.lower() for w in moods))[:3],
             scene=list(dict.fromkeys(scene))[:4],
@@ -124,7 +182,9 @@ RETRYABLE = {"VISION_UNAVAILABLE", "VISION_BAD_RESPONSE"}
 
 
 async def reason_about_image(
-    im: Image.Image, settings: Settings, transport: httpx.AsyncBaseTransport | None = None
+    im: Image.Image | list[Image.Image],
+    settings: Settings,
+    transport: httpx.AsyncBaseTransport | None = None,
 ) -> tuple[ImageReasoning | None, str | None]:
     """Returns (reasoning, error_code). Never raises: the pipeline continues without it.
     One retry for transient failures (5xx, transport, unparseable reply); not for timeouts."""
@@ -136,8 +196,13 @@ async def reason_about_image(
 
 
 async def _reason_once(
-    im: Image.Image, settings: Settings, transport: httpx.AsyncBaseTransport | None
+    im: Image.Image | list[Image.Image],
+    settings: Settings,
+    transport: httpx.AsyncBaseTransport | None,
 ) -> tuple[ImageReasoning | None, str | None]:
+    images = im if isinstance(im, list) else [im]
+    # Downscale/encode off the event loop (large phone photos are CPU-heavy).
+    encoded = await asyncio.gather(*(asyncio.to_thread(_jpeg_for_model, x) for x in images))
     if not settings.ollama_enabled:
         return None, None
     model = model_name(settings.ollama_model)
@@ -147,13 +212,22 @@ async def _reason_once(
         "stream": False,
         "format": "json",
         "options": {"temperature": 0.3},
-        "messages": [{"role": "user", "content": PROMPT, "images": [_jpeg_for_model(im)]}],
+        "messages": [
+            {
+                "role": "user",
+                "content": build_prompt(len(images)),
+                "images": encoded,
+            }
+        ],
     }
     started = time.monotonic()
     try:
         async with httpx.AsyncClient(
             base_url=settings.ollama_base_url,
-            timeout=httpx.Timeout(settings.ollama_timeout_seconds, connect=5.0),
+            # More photos → more tokens to read; give each extra photo a little more time.
+            timeout=httpx.Timeout(
+                settings.ollama_timeout_seconds + 5 * (len(images) - 1), connect=5.0
+            ),
             transport=transport,
         ) as client:
             resp = await client.post(
@@ -179,6 +253,6 @@ async def _reason_once(
         content = resp.json().get("message", {}).get("content", "")
     except (ValueError, AttributeError):
         content = ""
-    result = parse_reply(content if isinstance(content, str) else "", model)
+    result = parse_reply(content if isinstance(content, str) else "", model, len(images))
     log.info("ollama ok=%s model=%s elapsed=%.1fs", bool(result), model, elapsed)
     return (result, None) if result else (None, "VISION_BAD_RESPONSE")

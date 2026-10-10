@@ -45,3 +45,12 @@ export function StickerSwatch({ kind, color }: { kind: StickerKind; color: strin
   }, [kind, color]);
   return <canvas ref={ref} style={{ width: SIZE, height: SIZE }} aria-hidden />;
 }
+
+/** Small centre-cropped thumbnail of a photo (Photos panel). */
+export function PhotoThumb({ photo }: { photo: Photo }) {
+  const ref = useSquareCanvas((ctx) => {
+    const side = Math.min(photo.width, photo.height);
+    ctx.drawImage(photo, (photo.width - side) / 2, (photo.height - side) / 2, side, side, 0, 0, SIZE, SIZE);
+  }, [photo]);
+  return <canvas ref={ref} style={{ width: SIZE, height: SIZE }} aria-hidden />;
+}

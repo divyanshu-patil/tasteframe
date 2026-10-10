@@ -7,7 +7,8 @@ import type { StoryState, TemplateId, TemplateInput, TextKey, TextLayer } from "
 export type EditorAction =
   | { type: "text"; key: TextKey; patch: Partial<TextLayer> }
   | { type: "move"; key: TextKey; x: number; y: number }
-  | { type: "crop"; patch: Partial<StoryState["crop"]> }
+  | { type: "crop"; patch: Partial<StoryState["crop"]>; slot?: number }
+  | { type: "swap"; a: number; b: number }
   | { type: "overlay"; patch: Partial<StoryState["overlay"]> }
   | { type: "decoration"; key: string; on: boolean }
   | { type: "filter"; id: FilterId }
@@ -29,11 +30,25 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
     case "move":
       return { ...s, [a.key]: { ...s[a.key], x: clamp(a.x, 0, 1), y: clamp(a.y, 0, 0.97) } };
     case "crop": {
-      const c = { ...s.crop, ...a.patch };
-      return {
-        ...s,
-        crop: { zoom: clamp(c.zoom, 1, 4), x: clamp(c.x, 0, 1), y: clamp(c.y, 0, 1), fit: c.fit === "contain" ? "contain" : "cover" },
-      };
+      const slot = a.slot ?? 0;
+      const cur = slot === 0 ? s.crop : (s.crops?.[slot - 1] ?? s.crop);
+      const c = { ...cur, ...a.patch };
+      const next = { zoom: clamp(c.zoom, 1, 4), x: clamp(c.x, 0, 1), y: clamp(c.y, 0, 1), fit: c.fit === "contain" ? "contain" : "cover" } as const;
+      if (slot === 0) return { ...s, crop: next };
+      const crops = [...(s.crops ?? [])];
+      while (crops.length < slot) crops.push({ zoom: 1, x: 0.5, y: 0.5, fit: "cover" });
+      crops[slot - 1] = next;
+      return { ...s, crops };
+    }
+    case "swap": {
+      // Swap the photos in two slots; each photo keeps its own crop.
+      if (a.a === a.b) return s;
+      const order = [...(s.order?.length ? s.order : [0, 1, 2, 3])];
+      const crops = [s.crop, ...(s.crops ?? [])];
+      while (crops.length < 4) crops.push({ zoom: 1, x: 0.5, y: 0.5, fit: "cover" });
+      [order[a.a], order[a.b]] = [order[a.b]!, order[a.a]!];
+      [crops[a.a], crops[a.b]] = [crops[a.b]!, crops[a.a]!];
+      return { ...s, order, crop: crops[0]!, crops: crops.slice(1) };
     }
     case "filter":
       return { ...s, filter: a.id };
@@ -62,6 +77,8 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
       return {
         ...fresh,
         crop: s.crop,
+        order: s.order,
+        crops: s.crops,
         stickers: s.stickers ?? [],
         headline: { ...fresh.headline, text: s.headline.text },
         caption: { ...fresh.caption, text: s.caption.text },

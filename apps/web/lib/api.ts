@@ -44,6 +44,10 @@ export interface LayoutSuggestion {
   focus_y: number;
   /** Suggested photo filter for this layout (mood rules). */
   filter: FilterId;
+  /** Crop focus per photo (multi-photo Stories). */
+  focuses: { x: number; y: number }[];
+  /** How many distinct photos this layout shows. */
+  photo_slots: number;
 }
 export interface CulturalRecommendation {
   provider: "qloo";
@@ -71,6 +75,9 @@ export interface ImageReasoning {
   scene: string[];
   headline_ideas: string[];
   subject: "person" | "people" | "object" | "scene";
+  /** What the image is about (taxonomy topic) and its major elements. */
+  about: string | null;
+  elements: string[];
 }
 export interface Analysis {
   analysis_id: string;
@@ -133,6 +140,10 @@ export function parseAnalysis(v: unknown): Analysis {
     l.focus_x = unit(l.focus_x);
     l.focus_y = unit(l.focus_y);
     l.filter = (FILTER_IDS as readonly unknown[]).includes(l.filter) ? l.filter : "none";
+    l.focuses = Array.isArray(l.focuses)
+      ? l.focuses.slice(0, 4).map((f) => ({ x: unit((f as { x?: unknown })?.x), y: unit((f as { y?: unknown })?.y) }))
+      : [];
+    l.photo_slots = isNum(l.photo_slots) ? Math.max(1, Math.min(4, Math.round(l.photo_slots))) : 1;
   }
   const m = v.music;
   if (!["track", "artist", "none"].includes(m.kind as string) || !isStr(m.explanation)) throw bad();
@@ -158,6 +169,8 @@ export function parseAnalysis(v: unknown): Analysis {
           scene: isStrArr(ir.scene) ? ir.scene : [],
           headline_ideas: isStrArr(ir.headline_ideas) ? ir.headline_ideas : [],
           subject: (["person", "people", "object", "scene"] as const).find((k) => k === ir.subject) ?? "scene",
+          about: isStr(ir.about) ? ir.about : null,
+          elements: isStrArr(ir.elements) ? ir.elements.slice(0, 8) : [],
         }
       : null;
   return { ...(v as unknown as Analysis), layouts, music, cultural_recommendations: recs, image_reasoning };
@@ -288,7 +301,8 @@ export async function searchTaste(q: string, type: TasteType, signal?: AbortSign
 }
 
 export interface AnalysisRequest {
-  object_key: string;
+  /** 1–4 uploaded photos for one Story. */
+  object_keys: string[];
   taste_seeds: { entity_id: string; entity_type: TasteType; name: string }[];
   manual_mood: Mood[];
 }
@@ -372,6 +386,7 @@ export interface SavedStory {
   id: string;
   config: StoryState;
   created_at: string;
+  photo_count: number;
   provenance: { qloo_used: boolean; music_artist: string | null; music_title: string | null };
 }
 
@@ -394,6 +409,7 @@ function parseSaved(v: unknown): SavedStory | null {
     id: v.id,
     config,
     created_at: v.created_at,
+    photo_count: isNum(v.photo_count) ? Math.max(1, Math.min(4, Math.round(v.photo_count))) : 1,
     provenance: {
       qloo_used: p.qloo_used === true,
       music_artist: isStr(p.music_artist) ? p.music_artist : null,
@@ -403,7 +419,7 @@ function parseSaved(v: unknown): SavedStory | null {
 }
 
 export async function saveStory(
-  objectKey: string,
+  objectKeys: string[],
   config: StoryState,
   provenance: SavedStory["provenance"] & { track_source: "itunes" | null },
 ): Promise<SavedStory> {
@@ -412,7 +428,7 @@ export async function saveStory(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ object_key: objectKey, config, provenance }),
+      body: JSON.stringify({ object_keys: objectKeys, config, provenance }),
     },
     true,
   );
@@ -432,8 +448,8 @@ export async function listStories(): Promise<SavedStory[]> {
   return v.stories.map(parseSaved).filter((x): x is SavedStory => x !== null);
 }
 
-export async function storyPhoto(id: string): Promise<Blob> {
-  const res = await authed(`/v1/stories/${encodeURIComponent(id)}/photo`, {}, true);
+export async function storyPhoto(id: string, index = 0): Promise<Blob> {
+  const res = await authed(`/v1/stories/${encodeURIComponent(id)}/photo?index=${index}`, {}, true);
   if (!res.ok) throw await errorFrom(res);
   return res.blob();
 }

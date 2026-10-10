@@ -158,3 +158,14 @@ def test_mood_filter_rules():
     assert mood_filter(profile(mood=["natural"])) == "none"
     out = rank_layouts(profile(mood=["natural"]), [], None)
     assert {o.id: o.filter for o in out}["newspaper"] == "bw"  # template look overrides
+
+
+def test_sql_template_check_matches_catalogue():
+    import re
+    from pathlib import Path
+
+    sql = (Path(__file__).resolve().parents[3] / "supabase" / "schema.sql").read_text()
+    block = re.search(r"stories_template check \((.*?)\);", sql, re.S)
+    assert block, "stories_template constraint missing"
+    ids = set(re.findall(r"'([a-z0-9]+)'", block.group(1)))
+    assert ids == {t.id for t in CATALOGUE}

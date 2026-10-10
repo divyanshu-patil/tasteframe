@@ -19,7 +19,12 @@ from app.services.music.itunes import find_track
 from app.services.qloo.client import QlooClient, QlooEntity
 from app.services.recommendations.layouts import rank_layouts
 from app.services.storage.store import Storage
-from app.services.vision.analyzer import analyze, decode_and_sanitize, merge_manual
+from app.services.vision.analyzer import (
+    analyze,
+    decode_and_sanitize,
+    merge_manual,
+    merge_profiles,
+)
 from app.services.vision.ollama import reason_about_image
 
 log = logging.getLogger("tasteframe.analysis")
@@ -61,20 +66,26 @@ async def run_analysis(
 ) -> AsyncIterator[dict]:
     try:
         yield {"stage": "photo"}
-        data = await asyncio.to_thread(storage.get, req.object_key)
-        if data is None:
-            raise AppError("OBJECT_NOT_FOUND", "That upload was not found or has expired.", 404)
-        im, clean, ctype = await asyncio.to_thread(
-            decode_and_sanitize, data, settings.s3_upload_max_bytes, settings.max_image_pixels
-        )
-        # Replace the original with the metadata-stripped copy (drops EXIF/GPS at rest).
-        await asyncio.to_thread(storage.put, req.object_key, clean, ctype)
+        images = []
+        for key in req.object_keys:
+            data = await asyncio.to_thread(storage.get, key)
+            if data is None:
+                raise AppError("OBJECT_NOT_FOUND", "That upload was not found or has expired.", 404)
+            im, clean, ctype = await asyncio.to_thread(
+                decode_and_sanitize, data, settings.s3_upload_max_bytes, settings.max_image_pixels
+            )
+            # Replace each original with the metadata-stripped copy (drops EXIF/GPS at rest).
+            await asyncio.to_thread(storage.put, key, clean, ctype)
+            images.append(im)
 
         yield {"stage": "mood"}
-        # Local pixel statistics and (optional) vision-LLM reasoning run concurrently.
-        measured, (reasoning, reasoning_error) = await asyncio.gather(
-            asyncio.to_thread(analyze, im), reason_about_image(im, settings, vision_transport)
+        # Local pixel statistics (per photo, then merged) and the optional vision-LLM read of all
+        # photos together run concurrently.
+        measured_each, (reasoning, reasoning_error) = await asyncio.gather(
+            asyncio.gather(*(asyncio.to_thread(analyze, im) for im in images)),
+            reason_about_image(images, settings, vision_transport),
         )
+        measured = merge_profiles(list(measured_each))
         # Mood priority: the user's picks, then the model's read, then measured rules.
         model_moods = reasoning.moods if reasoning else []
         profile: VisualProfile = merge_manual(measured, [*req.manual_mood, *model_moods])
@@ -145,8 +156,10 @@ async def run_analysis(
             subject=(reasoning.subject, reasoning.subject_x, reasoning.subject_y)
             if reasoning
             else None,
-            scene=reasoning.scene if reasoning else None,
+            scene=[*reasoning.scene, *reasoning.elements] if reasoning else None,
+            topic=reasoning.about if reasoning else None,
             ai_picks=reasoning.layout_picks if reasoning else None,
+            subjects=[(x.subject, x.x, x.y) for x in reasoning.subjects] if reasoning else None,
         )
 
         result = AnalysisOut(

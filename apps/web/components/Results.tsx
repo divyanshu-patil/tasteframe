@@ -10,7 +10,7 @@ import { StoryCanvas } from "./StoryCanvas";
 import s from "./maker.module.css";
 
 interface Props {
-  photo: Photo;
+  photo: Photo | Photo[];
   analysis: Analysis | null;
   suggestions: LayoutSuggestion[];
   date: Date;
@@ -145,7 +145,19 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
           {analysis.image_reasoning && (
             <article>
               <p className={s.kicker}>Image reasoning · {analysis.image_reasoning.model} via Ollama</p>
+              {analysis.image_reasoning.about && (
+                <p className={s.small}>
+                  About: <strong>{analysis.image_reasoning.about.replace("_", " & ")}</strong>
+                </p>
+              )}
               <p>{analysis.image_reasoning.summary}</p>
+              {analysis.image_reasoning.elements.length > 0 && (
+                <ul className={s.chips} aria-label="Main elements">
+                  {analysis.image_reasoning.elements.map((e) => (
+                    <li key={e} className={s.chip}>{e}</li>
+                  ))}
+                </ul>
+              )}
               {analysis.image_reasoning.scene.length > 0 && (
                 <p className={s.tags}>{analysis.image_reasoning.scene.join(" · ")}</p>
               )}

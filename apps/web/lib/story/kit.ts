@@ -3,6 +3,16 @@ import { type Ctx, type Photo, type TextOpts, fontString, rgba, rng, roundRect, 
 import type { FilterId } from "./filters";
 import type { Rect, StoryState, TemplateId, TemplateInput, TextKey, TextLayer } from "./types";
 
+/** Photos as the template sees them: slot i → (photo, crop). Cycles when slots > photos. */
+export interface Slots {
+  /** Distinct photos in this Story (1–4). */
+  count: number;
+  photo(i: number): Photo;
+  crop(i: number): StoryState["crop"];
+  /** True when slot i shows its own photo (not a repeat of an earlier one). */
+  own(i: number): boolean;
+}
+
 export interface Template {
   id: TemplateId;
   name: string;
@@ -11,9 +21,13 @@ export interface Template {
   decorations: { key: string; label: string; on: boolean }[];
   defaults(input: TemplateInput): Omit<
     StoryState,
-    "templateId" | "crop" | "palette" | "stamp" | "accent" | "filter" | "stickers"
+    "templateId" | "crop" | "palette" | "stamp" | "accent" | "filter" | "stickers" | "order" | "crops"
   > & { filter?: FilterId };
-  draw(ctx: Ctx, photo: Photo, s: StoryState): void;
+  draw(ctx: Ctx, photo: Photo, s: StoryState, slots: Slots): void;
+  /** Photo slot rectangles (story units) for drag-to-reframe / drag-to-swap in the editor. */
+  slotRects?(s: StoryState, count: number): Rect[];
+  /** Distinct photos the layout shows. */
+  capacity?: number;
   after?(ctx: Ctx, s: StoryState): void;
   text?: Partial<Record<TextKey, TextOpts>>;
 }
