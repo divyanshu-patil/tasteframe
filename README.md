@@ -1,391 +1,443 @@
-# Tasteframe — Qloo-powered Instagram Story maker
+<a id="top"></a>
 
-**One photo. Three Stories. Your taste.**
+<div align="center">
 
-Upload a photo, optionally confirm a few favourite artists / films / brands, and get three
-distinct 9:16 Story layouts ranked by your photo's visual mood and real Qloo cultural
-recommendations — plus an artist (and, when verifiable, song) to pair with it. Edit text, crop,
-overlay and decorations, then download an exact **1080 × 1920 PNG**.
+<img src="https://capsule-render.vercel.app/api?type=waving&height=220&color=0:ECE8E4,55:CDC6BE,100:C03F13&text=Tasteframe&fontColor=1D1D1B&fontSize=78&fontAlignY=38&desc=one%20photo.%20three%20Stories.%20your%20taste.&descAlignY=60&descSize=18&animation=fadeIn" alt="Tasteframe: one photo, three Stories, your taste" width="100%" />
 
-**Boundaries.** Qloo is the cultural-intelligence layer only. It does not analyse pixels or
-render layouts. Visual analysis runs locally with Pillow on the API. Layouts are drawn by a
-deterministic Canvas renderer in the browser. Qloo has no track entity type, so song titles come
-from Apple's iTunes Search API, are clearly labelled, and are only shown on an exact
-artist-name match.
+<img src="apps/web/public/icon-512.png" width="104" alt="Tasteframe icon" />
+<br/>
+<a href="#what-tasteframe-does">
+  <img src="https://readme-typing-svg.demolab.com?font=Bodoni+Moda&weight=600&size=24&duration=2200&pause=900&color=C03F13&center=true&vCenter=true&width=520&lines=Upload+a+photo.;Add+your+taste.;Get+three+Stories.;Make+it+yours.;Download+at+1080+%C3%97+1920." alt="Upload a photo. Add your taste. Get three Stories. Make it yours. Download at 1080 × 1920." />
+</a>
 
-## Monorepo
+<p>
+  <b>Tasteframe turns one photo into Instagram Stories that look like you.</b> It reads your
+  photo's light, colour and subject, asks <a href="https://www.qloo.com/">Qloo</a> what your
+  favourite artists and films say about your taste, and hands you three Story layouts ranked
+  for both. Then everything on the Story is yours to move, crop and restyle.
+</p>
 
-```text
-apps/web            Next.js 16 App Router + TypeScript (UI, Canvas templates, editor, export)
-apps/api            FastAPI (uploads, vision, Qloo adapter, ranking, music fallback)
-packages/ui         shared React primitives (starter; unused by the app so far)
-packages/*-config   shared ESLint / TypeScript config
-design-refs/        Pinterest reference index that shaped the templates
-docs/               API contracts, validation matrix, AWS policy templates
-supabase/schema.sql optional persistence schema (not used by the guest MVP)
+<p>
+  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" />
+  <img alt="React 19" src="https://img.shields.io/badge/React-19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
+  <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
+  <br />
+  <img alt="Powered by Qloo" src="https://img.shields.io/badge/taste-Qloo-C03F13?style=for-the-badge" />
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-1D1D1B?style=for-the-badge" />
+  <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-C03F13?style=for-the-badge" /></a>
+  <a href="https://github.com/divyanshu-patil/tasteframe/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/divyanshu-patil/tasteframe?style=for-the-badge&color=1D1D1B" /></a>
+</p>
+
+<p>
+  <a href="#what-tasteframe-does"><kbd>&nbsp;Features&nbsp;</kbd></a>&nbsp;
+  <a href="#screenshots"><kbd>&nbsp;Screenshots&nbsp;</kbd></a>&nbsp;
+  <a href="#the-mvp"><kbd>&nbsp;The MVP&nbsp;</kbd></a>&nbsp;
+  <a href="#under-the-hood"><kbd>&nbsp;Stack&nbsp;</kbd></a>&nbsp;
+  <a href="#credits"><kbd>&nbsp;Credits&nbsp;</kbd></a>&nbsp;
+  <a href="CONTRIBUTING.md"><kbd>&nbsp;Contributing&nbsp;</kbd></a>
+</p>
+
+</div>
+
+<br />
+
+## Why we built Tasteframe
+
+Most Instagram Stories start the same way: a good photo, then twenty minutes of scrolling
+Pinterest for a layout, then giving up and posting it plain. The look you wanted exists. It's
+just scattered across a thousand pins, none of them made for your photo.
+
+The tools that exist each solve a third of the problem:
+
+<table>
+  <tr>
+    <td align="center" width="33%">🧩<br /><b>Template apps</b><br /><sub>hand you the same twenty layouts everyone else is using, whatever the photo</sub></td>
+    <td align="center" width="33%">📌<br /><b>Pinterest</b><br /><sub>shows you the look, then leaves you to rebuild it by hand in five other apps</sub></td>
+    <td align="center" width="33%">🎨<br /><b>Design tools</b><br /><sub>can make anything, if you have an hour and already know what you want</sub></td>
+  </tr>
+</table>
+
+> [!IMPORTANT]
+> **Nobody starts from the photo and the person.** A sunset and a selfie shouldn't get the same
+> layout, and neither should someone who lives on indie folk and someone who lives on drill.
+
+That is Tasteframe. It looks at the photo (light, colour, who or what is in it), listens to
+your taste through Qloo, and picks from 83 layouts modelled on real Pinterest Stories. Then it
+gets out of the way: every word, sticker, strip and photo box on the Story can be moved and
+tuned until it's yours.
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center" width="20%"><h3>📷</h3><b>Upload</b><br /><sub>1 to 4 photos</sub></td>
+    <td align="center">→</td>
+    <td align="center" width="20%"><h3>🔎</h3><b>Read the mood</b><br /><sub>light, colour, subject</sub></td>
+    <td align="center">→</td>
+    <td align="center" width="20%"><h3>🎧</h3><b>Add your taste</b><br /><sub>artists, films, brands via Qloo</sub></td>
+    <td align="center">→</td>
+    <td align="center" width="20%"><h3>🗂️</h3><b>Three Stories</b><br /><sub>ranked for you, shuffle for more</sub></td>
+    <td align="center">→</td>
+    <td align="center" width="20%"><h3>✂️</h3><b>Make it yours</b><br /><sub>edit, then a 1080 × 1920 PNG</sub></td>
+  </tr>
+</table>
+</div>
+
+<br />
+
+## Screenshots
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="docs/screenshots/landing.jpg" alt="Landing page" /></td>
+    <td align="center" width="50%"><img src="docs/screenshots/results.jpg" alt="Three suggested Stories" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Landing</b>, with the server-status dot and Request a layout</sub></td>
+    <td align="center"><sub><b>Three Stories</b>, each with the Pinterest pin it came from</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/editor.jpg" alt="Editor with the inspector" /></td>
+    <td align="center"><img src="docs/screenshots/gallery.jpg" alt="Layout gallery" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Editor</b>: tap anything, tune it in the inspector</sub></td>
+    <td align="center"><sub><b>Gallery</b>: pick a layout first, then add your photo</sub></td>
+  </tr>
+</table>
+</div>
+
+**Stories it makes** (one photo, ten layouts)
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center" width="20%"><img src="docs/screenshots/story-cutout.jpg" alt="Sticker Cutout" /></td>
+    <td align="center" width="20%"><img src="docs/screenshots/story-tornstrip.jpg" alt="Torn Strip" /></td>
+    <td align="center" width="20%"><img src="docs/screenshots/story-playercut.jpg" alt="Player Cutout" /></td>
+    <td align="center" width="20%"><img src="docs/screenshots/story-cctv.jpg" alt="CCTV" /></td>
+    <td align="center" width="20%"><img src="docs/screenshots/story-vinyl.jpg" alt="Vinyl" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Sticker Cutout</b></sub></td>
+    <td align="center"><sub><b>Torn Strip</b></sub></td>
+    <td align="center"><sub><b>Player Cutout</b></sub></td>
+    <td align="center"><sub><b>CCTV</b></sub></td>
+    <td align="center"><sub><b>Vinyl</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/story-yearbook.jpg" alt="Yearbook" /></td>
+    <td align="center"><img src="docs/screenshots/story-viewfinder.jpg" alt="Camera Screen" /></td>
+    <td align="center"><img src="docs/screenshots/story-redblock.jpg" alt="Red Block" /></td>
+    <td align="center"><img src="docs/screenshots/story-kissmark.jpg" alt="Kiss Mark" /></td>
+    <td align="center"><img src="docs/screenshots/story-xerox.jpg" alt="Xerox Poster" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Yearbook</b></sub></td>
+    <td align="center"><sub><b>Camera Screen</b></sub></td>
+    <td align="center"><sub><b>Red Block</b></sub></td>
+    <td align="center"><sub><b>Kiss Mark</b></sub></td>
+    <td align="center"><sub><b>Xerox Poster</b></sub></td>
+  </tr>
+</table>
+<sub>Demo photo: <a href="https://www.flickr.com/photos/35034347371@N01/15904093">"Goddess_Spiral's awesome photos…"</a> by roland, CC0. Pinterest thumbnails are blurred in these captures.</sub>
+</div>
+
+<br />
+
+## What Tasteframe does
+
+The heart of Tasteframe is two steps: **pick the right layouts for this photo and this person,
+then let you shape every part of the Story.** Around that core sit the gallery, saved Stories
+and a way to ask for the layout you want next.
+
+### 🔎 1. Reads your photo, not your face
+
+The API measures palette, brightness, contrast, saturation and warmth with Pillow, and maps
+them to broad moods: warm, moody, dreamy, bold and so on. With a vision model switched on
+(Gemma 4 on Ollama Cloud), it also names the scene ("golden hour", "airport"), the main
+subject and where it sits, and pose cues like *face close-up*, *pout* or *mirror selfie*.
+
+- **Subject-aware framing.** The crop starts on the subject, and text moves to the half of
+  the frame away from their face.
+- **Never identity.** The prompt forbids identifying anyone or guessing age, gender,
+  ethnicity or anything sensitive; replies are filtered again on the way in.
+- **Privacy on upload.** Photos go straight to a private bucket through short-lived upload
+  links, are re-encoded without EXIF/GPS, and expire after a day unless you save the Story.
+
+### 🎧 2. Listens to your taste through Qloo
+
+Name a few favourite artists, films or brands. [Qloo](https://www.qloo.com/) returns the
+culture that sits around them, and Tasteframe uses those tags ("indie", "funk", "noir") to lean
+the ranking toward layouts that fit. The top artist becomes the music suggestion, and Apple's
+catalogue supplies a real song title, never an invented one.
+
+### 🗂️ 3. Picks three of 83 layouts, and shows where each came from
+
+Every layout was rebuilt from real Pinterest Story references, from Torn Strip magazine
+covers to sideways Spotify players, CCTV frames, yearbook sheets and photocopied lyric posters.
+
+```
+score = 0.30 visual + 0.30 AI pick + 0.25 cultural + 0.15 readability
 ```
 
-| Tool | Version used |
-|---|---|
-| Node | ≥ 24 (tested 24.10) |
-| pnpm | 11.25 (`packageManager`) |
-| Python | ≥ 3.11 (tested 3.12) |
+- **Ranked for this photo.** Different photos get different sets; *Shuffle* moves through the
+  rest of the ranked list three at a time, each set from different layout families.
+- **The original is one tap away.** Every suggestion shows the pin it was modelled on, with
+  the creator credited and a link to Pinterest.
+- **One to four photos.** Multi-photo layouts suggest themselves when you upload more, and
+  photos can be added later.
 
-## Quick start (local, no cloud accounts)
+### ✂️ 4. Lets you move everything
 
-```bash
-pnpm install
-pnpm api:setup                  # creates apps/api/.venv and pip-installs requirements-dev.txt
-cp apps/api/.env.example apps/api/.env        # set SESSION_SECRET; STORAGE_BACKEND=local if no AWS yet
-cp apps/web/.env.example apps/web/.env.local
-pnpm dev                        # Turbo runs Next.js (:3000) and FastAPI (:8000) together
+Tap anything on the Story and the inspector shows exactly its controls, with sliders, −/+
+nudges and arrow keys for fine work.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>🖼️ Every photo box</h4>
+      Drag inside any box that shows part of a photo (repeated bands, collage tiles, the
+      CCTV callout, the vinyl label) to choose what it shows; zoom, fit or turn it 90°.
+    </td>
+    <td width="50%" valign="top">
+      <h4>📦 Every frame and strip</h4>
+      CCTV boxes, the torn strip, the colour box, the red block and the cut-out you all move
+      by their frame and resize in the inspector. The red block can sit behind you or in front.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>🧍 Cutouts on your device</h4>
+      MediaPipe segments the person in the browser (nothing is uploaded for it), with a
+      die-cut outline whose thickness, colour and gap from you are all adjustable.
+    </td>
+    <td valign="top">
+      <h4>🎵 A real song sticker</h4>
+      Instagram-style music stickers with the song's actual album art, found by search or
+      suggested from your taste, or your own image.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>💋 Stickers &amp; elements</h4>
+      Paper stickers plus transparent elements (lipstick kiss, focus brackets, REC, torn
+      paper, a Spotify-style playlist panel). The layout's own elements are stickers too.
+    </td>
+    <td valign="top">
+      <h4>🎞️ Twelve filters</h4>
+      Film, Golden hour, Faded, Sepia, Noir, 8mm, Xerox and more, computed per pixel so the
+      preview is exactly the export.
+    </td>
+  </tr>
+</table>
+
+### 📥 5. Export, save, come back
+
+Download a 1080 × 1920 PNG and post it, then add the song with Instagram's own music sticker.
+Log in to keep up to 20 Stories in your account and reopen them on any device.
+
+### 📌 6. Ask for the layout you want next
+
+The gallery shows every layout and every reference pin. If yours isn't there, paste a
+Pinterest link into **Request a layout**: an instant preview confirms it's the right pin, and
+it lands in the admin queue.
+
+<div align="right"><a href="#top"><sub>↑ back to top</sub></a></div>
+
+## Also in the app
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>🟢 Honest server status</h4>
+      A small dot in the navbar breathes yellow while the free-tier API wakes up (about
+      50 seconds), turns green when it answers and red if it can't, so a cold start never
+      looks like a broken site.
+    </td>
+    <td width="50%" valign="top">
+      <h4>📊 Analytics without tracking people</h4>
+      Page views, Stories made, downloads and referring sites, with no cookies, no IPs and
+      no accounts attached. Do Not Track and Global Privacy Control switch it off.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>🛡️ An admin dashboard</h4>
+      Traffic, referrers, devices, the most-downloaded layouts and the request queue, each
+      request opening with the pin, the note and where it came from. Access is enforced by
+      the database, not the page.
+    </td>
+    <td valign="top">
+      <h4>🧭 Works when the API doesn't</h4>
+      If analysis or Qloo is down, you still get standard layouts, and the editor and export
+      never need the network at all.
+    </td>
+  </tr>
+</table>
+
+<br />
+
+## The MVP
+
+A complete loop, not a demo. Everything marked shipped is built, tested and running.
+
+| Area | Status |
+| :-- | :--: |
+| **Core:** upload 1–4 photos, visual mood, subject-aware framing | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
+| **Core:** Qloo taste search and insights, cultural ranking, music suggestion | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
+| **Core:** 83 layouts ranked per photo, with Shuffle and Pinterest originals | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
+| **Core:** editor with inspector, movable boxes, cutouts, filters, stickers, song sticker | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
+| 1080 × 1920 PNG export | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
+| Vision reasoning (Gemma 4 on Ollama Cloud) | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
+| Accounts and saved Stories (Supabase, row-level security) | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
+| Gallery, Request a layout, admin dashboard, analytics | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
+| Live Qloo calls verified against a hackathon key | ![Next](https://img.shields.io/badge/needs%20a%20key-E8A33D?style=flat-square) |
+| Hosted deployment | ![Next](https://img.shields.io/badge/next-E8A33D?style=flat-square) |
+| Video and animated Stories | ![Planned](https://img.shields.io/badge/planned-8A8580?style=flat-square) |
+
+> [!NOTE]
+> **Tasteframe never posts for you.** It makes the image; you post it with Instagram's own
+> tools, which is also the only legitimate way to attach licensed music to a Story.
+
+<div align="right"><a href="#top"><sub>↑ back to top</sub></a></div>
+
+## Under the hood
+
+The short version. Setup, architecture and conventions live in **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+<table>
+  <tr>
+    <td width="20%"><b>Web</b></td>
+    <td><img src="https://cdn.simpleicons.org/nextdotjs/000000" width="20" align="middle" />&nbsp;Next.js 16&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" />&nbsp;React 19&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/typescript/3178C6" width="20" align="middle" />&nbsp;TypeScript&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/html5/E34F26" width="20" align="middle" />&nbsp;Canvas renderer</td>
+  </tr>
+  <tr>
+    <td><b>On-device AI</b></td>
+    <td><img src="https://cdn.simpleicons.org/google/4285F4" width="20" align="middle" />&nbsp;MediaPipe selfie segmentation (person cutouts, in the browser)</td>
+  </tr>
+  <tr>
+    <td><b>API</b></td>
+    <td><img src="https://cdn.simpleicons.org/fastapi/009688" width="20" align="middle" />&nbsp;FastAPI&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/python/3776AB" width="20" align="middle" />&nbsp;Python 3.12&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/pydantic/E92063" width="20" align="middle" />&nbsp;Pydantic&nbsp;&nbsp;&nbsp;&nbsp;Pillow&nbsp;&nbsp;&nbsp;&nbsp;httpx</td>
+  </tr>
+  <tr>
+    <td><b>Taste &amp; music</b></td>
+    <td>Qloo Taste AI (insights, search)&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/apple/000000" width="20" align="middle" />&nbsp;iTunes Search (song titles, album art)</td>
+  </tr>
+  <tr>
+    <td><b>Vision</b></td>
+    <td><img src="https://cdn.simpleicons.org/ollama/000000" width="20" align="middle" />&nbsp;Ollama Cloud, Gemma 4 (optional)</td>
+  </tr>
+  <tr>
+    <td><b>Data &amp; auth</b></td>
+    <td><img src="https://cdn.simpleicons.org/supabase/3FCF8E" width="20" align="middle" />&nbsp;Supabase Postgres + Auth, row-level security&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://github.com/aws.png?size=64" width="20" align="middle" />&nbsp;AWS S3 (private, presigned)</td>
+  </tr>
+  <tr>
+    <td><b>Tooling</b></td>
+    <td><img src="https://cdn.simpleicons.org/turborepo/EF4444" width="20" align="middle" />&nbsp;Turborepo&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/pnpm/F69220" width="20" align="middle" />&nbsp;pnpm&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/vitest/6E9F18" width="20" align="middle" />&nbsp;Vitest&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/pytest/0A9EDC" width="20" align="middle" />&nbsp;pytest&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/ruff/D7FF64" width="20" align="middle" />&nbsp;Ruff&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.simpleicons.org/googlechrome/4285F4" width="20" align="middle" />&nbsp;Playwright e2e</td>
+  </tr>
+</table>
+
+> [!TIP]
+> **Runs with no cloud accounts at all.** Leave the keys out and uploads go to a local folder,
+> layouts are ranked on visual signals only, and the UI says so plainly. Add a Qloo key,
+> an S3 bucket, Supabase or Ollama one at a time as you need them.
+
+<details open>
+<summary><b>Three things worth knowing about the shape of it</b></summary>
+<br />
+
+- **Rendering is a pure function.** `renderStory(ctx, photos, state)` draws the Story from a
+  serializable state and nothing else, so the preview, the thumbnails and the 1080 × 1920
+  export are the same pixels, and every layout is covered by deterministic tests.
+- **Secrets never reach the browser.** Qloo, AWS and Ollama calls happen on the API; the browser
+  only talks to same-origin `/api` and short-lived upload links. Saved Stories, requests and
+  analytics are guarded by Postgres row-level security as well as the API.
+- **One monorepo.** The web app in `apps/web`, the FastAPI service in `apps/api`, wired
+  together with Turborepo.
+
+```
+tasteframe/
+├── apps/
+│   ├── web/        Next.js app: studio, editor, Canvas layouts, gallery, admin
+│   └── api/        FastAPI: uploads, vision, Qloo, ranking, music, stories, insights
+├── design-refs/    Pinterest reference index (links and credits only)
+├── docs/           API contracts, validation matrix, AWS templates, screenshots
+└── supabase/       schema, apply and admin scripts
 ```
 
-Open http://localhost:3000 (landing) or http://localhost:3000/create (studio). With no AWS bucket, `STORAGE_BACKEND=local` stores uploads in
-`apps/api/.uploads/` behind HMAC-signed, expiring upload URLs that mimic S3 presigned POSTs.
-With no `QLOO_API_KEY`, the app still works: taste search says it's unavailable, and layouts
-are ranked on visual signals only (shown honestly in the UI).
+</details>
 
-`apps/web/.env.local` is optional locally. `API_BASE_URL` defaults to `http://127.0.0.1:8000`.
+<div align="right"><a href="#top"><sub>↑ back to top</sub></a></div>
 
-## Commands
+## Credits
 
-| Command | What it does |
-|---|---|
-| `pnpm dev` | Next.js + FastAPI with reload (Turbo) |
-| `pnpm build` | Production build of the web app |
-| `pnpm lint` | ESLint (web, ui) + Ruff check/format-check (api) |
-| `pnpm typecheck` | `next typegen && tsc --noEmit` |
-| `pnpm test` | Vitest (web) + pytest (api) |
-| `pnpm api:test -- -m integration` | Optional live Qloo test (needs `QLOO_API_KEY`) |
+<table>
+<tr>
+<td align="center" width="33%">
+  <a href="https://www.qloo.com/"><b>Qloo</b></a><br />
+  <sub>The taste layer: cultural insights behind the ranking and the music pick</sub>
+</td>
+<td align="center" width="33%">
+  <a href="https://www.pinterest.com/"><b>Pinterest creators</b></a><br />
+  <sub>Every reference pin is linked and credited in the app and in <code>design-refs/</code>; no pin images are stored</sub>
+</td>
+<td align="center" width="33%">
+  <a href="https://ai.google.dev/edge/mediapipe"><b>MediaPipe</b></a><br />
+  <sub>The selfie segmenter behind every cutout (Apache-2.0)</sub>
+</td>
+</tr>
+<tr>
+<td align="center">
+  <a href="https://ollama.com/"><b>Ollama</b></a><br />
+  <sub>Gemma 4 for scene and subject reasoning</sub>
+</td>
+<td align="center">
+  <a href="https://openverse.org/"><b>Openverse</b></a><br />
+  <sub>Openly licensed prop photos for the Playlist layout, credited in the app</sub>
+</td>
+<td align="center">
+  <a href="https://www.apple.com/apple-music/"><b>Apple Music</b></a><br />
+  <sub>Song titles and album artwork via the iTunes Search API</sub>
+</td>
+</tr>
+</table>
 
-The API scripts go through `apps/api/scripts/py.mjs`, a small cross-platform wrapper that runs
-the venv's Python. Python packages are never installed through pnpm.
+<br />
 
-## How it works
+## The team
 
-1. The browser checks type (magic bytes) and size, gets a guest session token, asks the API for a
-   presigned POST and uploads directly to private storage.
-2. `POST /v1/analysis` streams NDJSON stage events (`photo → mood → taste → layouts`) and then
-   the result:
-   - **photo**: the API decodes the real bytes (JPEG/PNG/WebP only, pixel cap) and re-encodes them
-     without EXIF/GPS.
-   - **mood**: Pillow measures palette, brightness, contrast, saturation, warmth and orientation.
-     Deterministic rules map these to broad mood words. Optionally, a vision model on Ollama adds
-     moods, scene cues and headline ideas (see below). Everything is merged after the user's picks.
-   - **taste**: for user-confirmed Qloo entity IDs, two `GET /v2/insights` calls run, with
-     `filter.type` = artist and movie.
-   - **layouts**: `score = 0.45·visual + 0.35·cultural + 0.20·readability`, then the top 3 from
-     different template families. Cultural fit matches Qloo-returned tag names (e.g. "Funk",
-     "Indie") to each template's style keywords.
-3. Music: the top Qloo artist is the suggestion. An exact-artist iTunes Search lookup adds a song
-   title and Apple Music link, labelled as iTunes metadata.
-4. The editor is a pure reducer over a serializable `StoryState`. Rendering is
-   `renderStory(ctx, photo, state)`, shared by previews and the 1080×1920 export, with fonts
-   preloaded first.
+<table>
+<tr>
+<td align="center" width="100%">
+  <a href="https://github.com/divyanshu-patil"><img src="https://github.com/divyanshu-patil.png?size=120" width="80" alt="Divyanshu Patil" /><br /><b>Divyanshu Patil</b></a><br />
+  <sub>Creator</sub>
+</td>
+</tr>
+</table>
 
-If the API or Qloo is down, the UI says so and lets you continue with standard layouts. The
-editor and export never need the network.
+<br />
 
-## Configuration
+## Contributing
 
-Templates (placeholders only): `apps/api/.env.example` → `apps/api/.env` and
-`apps/web/.env.example` → `apps/web/.env.local`. The root `.env.example` points to both. Real env
-files are gitignored. Turbo passes the API variables through `pnpm dev` (`passThroughEnv`).
+Contributions are welcome, from a typo to a whole new layout. Everything a developer needs
+(prerequisites, environment variables, running the web app and the API, the architecture,
+adding a layout, the conventions we hold to and how to open a good pull request) lives in
+**[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
-- **API (`apps/api/.env`)**: `SESSION_SECRET`, `QLOO_API_KEY`, `QLOO_BASE_URL`, `STORAGE_BACKEND`,
-  `AWS_*`, `S3_*`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `CORS_ORIGINS`, `PUBLIC_API_URL`, `MUSIC_METADATA_PROVIDER`, `RATE_LIMIT_*`.
-- **Web (`apps/web/.env.local`)**: `API_BASE_URL` (server-only, used by the `/api` rewrite),
-  `NEXT_PUBLIC_UPLOAD_MAX_MB` (non-secret hint), and `NEXT_PUBLIC_SUPABASE_URL` plus
-  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (public, for login).
-
-The API refuses to start in `ENVIRONMENT=production` without a real `SESSION_SECRET` and S3.
-Errors list variable names only, never values.
-
-## Qloo setup
-
-1. Get a hackathon key ([guide](https://docs.qloo.com/reference/qloo-llm-hackathon-developer-guide#getting-your-api-key)).
-2. Set `QLOO_API_KEY` in `apps/api/.env`. Hackathon keys only work against
-   `https://hackathon.api.qloo.com`.
-3. Verify with `pnpm api:test -- -m integration -s`.
-
-Details, verified endpoints and the fallback policy are in [`qloo_API.md`](qloo_API.md).
-
-## AWS S3 setup (production)
-
-1. Create a bucket and keep **Block Public Access** on (all four settings). Default SSE-S3
-   encryption is fine. Set `AWS_REGION` to the bucket's **actual** region (check
-   `aws s3api get-bucket-location`). Presigned POSTs go to the regional endpoint.
-2. CORS: apply `docs/aws/cors.json` with your web origin. Only `POST` from that origin is allowed.
-3. Lifecycle: apply `docs/aws/lifecycle.json`. It expires `tmp/` after 1 day. Account-owned
-   `saved/` photos persist until the user deletes the Story.
-4. IAM: attach `docs/aws/iam-policy.json` (Put/Get/Delete on `tmp/*` and `saved/*` only) to the
-   API's role or user. Prefer an instance/task role over static keys.
-5. Set `STORAGE_BACKEND=s3`, `AWS_S3_BUCKET`, `AWS_REGION` and credentials if no role.
-
-```bash
-aws s3api put-public-access-block --bucket $B --public-access-block-configuration \
-  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
-aws s3api put-bucket-cors --bucket $B --cors-configuration file://docs/aws/cors.json
-aws s3api put-bucket-lifecycle-configuration --bucket $B --lifecycle-configuration file://docs/aws/lifecycle.json
-```
-
-Presigned POST policies enforce `Content-Type` and `content-length-range` (≤ `S3_UPLOAD_MAX_BYTES`)
-and expire after `S3_PRESIGNED_URL_TTL_SECONDS` (default 300 s). Keys are
-`tmp/<session-id>/<random>.<ext>`, never derived from filenames. The API verifies the session
-prefix on every read and delete.
-
-## Layouts, filters, stickers
-
-- **83 layouts**, grouped in the editor (Cutouts & posters, Screens & cameras, Song cover &
-  music, Multi-photo, Type & notes, Film & mood, Paper & scrapbook). Each was modelled on Pinterest
-  references (`design-refs/pinterest`; see `design-refs/README.md`):
-  - 26 hand-drawn ones in `templates.ts`, `templates-more.ts` and `templates-multi.ts`.
-  - 36 declarative ones in `layouts-aesthetic.ts`, built by the spec engine in `spec.ts`. The
-    flat-colour ones were removed for quality.
-  - 21 from the owner's own pins in `templates-refs.ts`, each matched to its pin:
-    - **Playlist** uses the owner's sideways Instagram/Spotify screen template (green-screen
-      keyed). It has your photo in the top window and, in the bottom one, either a prop shot or
-      your own second photo. The 10 prop shots (can, matcha, iced latte, turntable…) are
-      shuffleable, openly licensed, and credited in the app; see `public/props` and
-      `lib/story/props.json`.
-    - **Player Cutout** turns the whole Story sideways like its pin. You're a high-contrast B&W
-      die-cut over a sepia collage, with the song running down the side.
-    - **Red Block** is a translucent block you can put behind or in front of you, with opacity,
-      move and resize.
-    - **Torn Strip** has real ripped-paper edges over a darker B&W layer with a ghost masthead.
-    - **Vinyl** is a release poster.
-    - Also: CCTV, Triptych, Colour Box, Sticker Cutout, Focus, Camera Screen, Camcorder, Night
-      Cam, Sepia Prints, Desktop, WhatsApp Screen, Kiss Mark, Xerox Poster, Yearbook, Song on
-      Lips, Sepia + Song and Song Corner.
-- **Pinterest originals**: every suggestion, the editor and the gallery show the pin a layout was
-  modelled on. This uses Pinterest's own oEmbed thumbnail, linked to the pin with the creator
-  credited (`lib/story/pins.json`, built by `design-refs/build_pins.py`). No pin images are stored
-  or served.
-- **Gallery** (`/gallery`): every layout rendered live, plus every reference pin. "Use this
-  layout" opens `/create?layout=<id>`, which goes straight into that layout after upload.
-- **Person cutouts** (Sticker Cutout, Player Cutout, Colour Box, Yearbook) use MediaPipe's selfie
-  segmenter in the browser.
-  - The model (Apache-2.0, 250 KB) is vendored in `public/models`. The wasm runtime (pinned) loads
-    on first use only.
-  - Free, no server load; the photo isn't sent anywhere for this step.
-  - The die-cut outline has adjustable thickness, gap from the person and colour.
-- **Song sticker** (Instagram music-sticker looks): album art with the playing bars and
-  title/artist (white or black), the white pill, or art only.
-  - Artwork comes from the suggested song, a song search (`GET /v1/music/search`, Apple Music
-    catalogue), or your own image.
-  - Apple artwork is proxied same-origin by `GET /v1/music/artwork/{track_id}` (only
-    `*.mzstatic.com`, decoded and validated), so the canvas stays exportable.
-  - Saved Stories keep the track id and refetch the artwork.
-- **Playlist panel**: a Spotify-style table filled with real tracks by the song's artist (Apple
-  Music catalogue, never invented). You can drag, rotate or delete it like any sticker.
-- **WhatsApp Screen** uses the owner's green-screen template. `apps/api/scripts/key_template.py`
-  keys out the green, keeps the white UI and finds the photo windows.
-- **Filters**: Original, Film, Warm, Golden hour, Cool, Faded, Vivid, Sepia, B&W, Noir, 8mm and
-  Xerox. They are deterministic per-pixel looks, so preview equals export.
-- **Stickers & elements**: paper stickers (tape, stars, flowers, notes, mini player…) plus
-  transparent-PNG elements (lipstick kiss, focus brackets, REC, torn strip, folder, cursor, warning,
-  cat doodle, cheek heart, barcode, playlist panel).
-  - The PNGs in `public/elements` are generated by `apps/api/scripts/make_elements.py`; the
-    lipstick kiss is the owner's PNG.
-  - A layout's own elements are regular stickers, so they can be dragged, resized, rotated,
-    recoloured, reordered, duplicated or deleted, and "Bring back removed elements" restores them.
-- **Editing**: tap anything on the Story to select it. The inspector then shows only that
-  element's fine controls: sliders with −/+ nudges, and arrow keys (Shift for bigger steps).
-  - Photo boxes support fill/fit, zoom, pan and rotate in 90° steps.
-  - **Every box that shows part of a photo** (repeated bands, collage tiles, CCTV callouts, insets)
-    can be dragged or zoomed to choose what it shows.
-  - Strips and windows (Torn Strip, Focus, Colour Box) drag, or move and resize with sliders.
-  - Layout boxes (CCTV's subject, detail and callout frames, Xerox's inset, Red Block's block)
-    move by dragging their frame and resize in the inspector. Inside a picture box, dragging pans
-    the picture.
-  - The "This layout" section shows only the controls that layout uses.
-
-### How layouts are ranked
-
-`score = 0.30 visual + 0.30 AI pick + 0.25 cultural + 0.15 readability` (with image reasoning),
-otherwise `0.45 visual + 0.35 cultural + 0.20 readability`.
-- **Visual** combines moods (yours, then the vision model's, then measured), the vision model's
-  scene cues ("airport", "birthday"…), the main subject and orientation.
-- **AI pick** is Gemma ranking the whole catalogue for this photo.
-- **Readability** penalises text over busy photos. Off-photo text is neutral rather than a free
-  win; the old 0.95 made paper layouts win every time.
-- A tiny photo-specific tie-breaker separates near-equal scores.
-
-On real photos (2026-10-10) the top sets were: birthday → Scrapbook, Photo Dump, Y2K; dog at
-home → Paper Note, Scrapbook, Photo Dump; airport → Ticket, Journal, Film Strip; street collage →
-Newspaper first. Previously all of these got Editorial/Minimal/Journal.
-
-## Image reasoning (optional, Ollama)
-
-With `OLLAMA_API_KEY` set, the "mood" stage also sends a downscaled (≤768px), EXIF-stripped JPEG
-to a vision model on Ollama Cloud (`OLLAMA_MODEL`, default `gemma4:31b`). It runs concurrently
-with the local Pillow measurements and returns:
-- a one-line aesthetic summary and up to 4 scene cues ("golden hour", "city street"),
-- up to 3 moods from the app's fixed list, which come after the user's own picks and before
-  measured moods,
-- 3 headline ideas, spread across the suggested layouts,
-- the main subject's kind (person / people / object / scene) and rough position, used only for
-  framing, never identity:
-  - The default crop is aimed at the subject, which is guaranteed to stay in frame.
-  - Text drawn over the photo (Cinematic, Vintage) moves to the half away from the subject.
-  - Cinematic's shadow gradient follows the headline.
-  - For photos of people, Film Stills and Film Strip (which split one photo into three shifted
-    crops) are ranked lower.
-
-Selfies and portraits, the most common Stories, were checked on 12 real photos (2026-10-10):
-people were recognized and described only as "a person"/"people" (no age, gender or ethnicity
-words), positions landed on the face or body, and Stories kept faces clear of text.
-
-Safeguards:
-- The prompt forbids identifying people or inferring sensitive traits.
-- Replies are parsed defensively (code fences stripped, unknown moods dropped, emoji and markup
-  removed, lengths capped).
-- Any failure (timeout, retired model, auth, junk) is skipped with a safe code in
-  `provenance.image_reasoning_error`. The rest of the analysis is unaffected.
-- The UI discloses the Ollama step before upload, and shows the result in an
-  "Image reasoning" panel.
-
-Model check (2026-10-10): `qwen3-vl:235b` returns HTTP 410 (retired 2026-06-16) under every name
-variant. `gemma4:31b` accepts images. JSON-schema `format` returns empty content on gemma4, so we
-request `format: "json"` and validate ourselves. `gemma4:31b:cloud` is accepted too (the
-`:cloud` suffix is stripped for the direct API).
-
-## Routes
-
-| Route | What it is |
-|---|---|
-| `/` | Landing page: pitch, example Stories, how it works, link to the studio |
-| `/create` | The MVP studio: upload → mood → taste → three Stories → editor → PNG export |
-| `/create?layout=<id>` | Same, but opens straight in a chosen layout after upload |
-| `/gallery` | Every layout and every Pinterest reference (credited, linked); pick one to start |
-| `/admin` | Admins only: analytics (visits, usage, referrers, devices, layouts) and the layout-request queue |
-
-Creating and downloading never need an account. **Saving a Story to the backend requires login.**
-
-## Requests, analytics and the admin dashboard
-
-- **Request a layout**: the landing navbar opens a form.
-  - Paste a Pinterest pin (`pinterest.com/pin/…` or a `pin.it/…` share link) and an instant
-    preview appears. The API verifies it through Pinterest's oEmbed and contacts Pinterest hosts
-    only; share links are followed hop by hop and must stay on Pinterest.
-  - Add an optional note and email, then send. Requests are rate-limited, and the database caps
-    them at 10 per visitor per day.
-- **Server status dot** (landing navbar):
-  - yellow and breathing while the API wakes up (the free Render plan can take about 50 s);
-  - green when it answers;
-  - red if it can't be reached after 90 s (click to retry).
-  - The tooltip explains the wait, and tapping shows it on phones.
-- **Analytics** cover page views, Stories made, layouts opened, downloads, saves, requests and
-  gallery picks. They're privacy-friendly:
-  - no cookies, IPs, account ids or full URLs;
-  - a random browser id that the API hashes with the server secret;
-  - the referring site's host only;
-  - a coarse device class.
-  - Do Not Track / Global Privacy Control turn it off, and `/admin` is never tracked.
-- **Admin role**: Supabase RLS + `is_admin()` gate everything, so a non-admin token gets
-  nothing even when calling PostgREST directly. Grant it from the database only, after the account
-  has signed up in the app:
-
-  ```bash
-  uv run --no-project --with "psycopg[binary]==3.2.10" python supabase/make_admin.py you@example.com
-  # … --revoke to remove
-  ```
-
-  `/admin` shows:
-  - totals and a daily traffic chart for 7, 30 or 90 days;
-  - referrers, pages, devices and layout downloads;
-  - the request queue (pending, accepted, built, rejected). Each request opens with the pin,
-    creator, note, email, source and device, and can be accepted, marked built or rejected with an
-    internal note.
-
-## Supabase — accounts & saved Stories (optional)
-
-When a guest clicks **Log in to save**, a login dialog opens (email + password via Supabase
-Auth). Their editor state is kept, and the save continues automatically after login. Signed-in
-users see "Your saved Stories" on `/create` on any device, and can reopen or delete them.
-
-Setup:
-1. Create a Supabase project and apply `supabase/schema.sql` (re-runnable). Either paste it into
-   the **SQL editor**, or set `DATABASE_URL` in `apps/api/.env` and run
-   `uv run --no-project --with "psycopg[binary]==3.2.10" python supabase/apply.py`.
-2. Put the Project URL and **publishable** key (`sb_publishable_…`) in **both**
-   `apps/api/.env` (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`) and `apps/web/.env.local`
-   (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`). Publishable keys are
-   designed to be public. No secret or service-role key is used by the app.
-3. **Authentication → Providers → Email** must be enabled (the default). If **Confirm email** is
-   on, new users must click the emailed link before logging in. Supabase's built-in mailer only
-   delivers to your project team's addresses and is rate-limited, so for real users configure
-   custom SMTP (**Authentication → Emails → SMTP**) or turn confirmation off for the demo.
-4. Add your site URL (e.g. `http://localhost:3000`, then your production origin) under
-   **Authentication → URL Configuration**, so confirmation links come back to `/create`.
-
-Security model (standard Supabase RLS):
-- The browser logs in with supabase-js. For saved-Story calls it sends the user's access token to
-  our API. The API verifies it with Supabase (`GET /auth/v1/user`), then forwards the same
-  token to PostgREST, so queries run as role `authenticated` with `auth.uid()` = that user.
-- `public.stories` has RLS with select/insert/delete policies `user_id = auth.uid()` and no
-  updates. `anon` has no access.
-- A CHECK constraint requires `s3_object_key` to start with `saved/<user_id>/`, so even a direct
-  PostgREST call can't point a row at someone else's photo. The API also re-checks the prefix
-  before reading.
-- A trigger limits each user to 20 Stories (`STORY_LIMIT` → 409). Saved Stories persist until
-  deleted, and deleting the auth user cascades to their rows.
-- Verified with PGlite as `authenticated`/`anon`, and against the live project (anon denied;
-  invalid tokens → 401).
-
-How saving works:
-- Saving needs the current browser's upload (session token) **and** a logged-in user. The
-  EXIF-stripped photo is copied from `tmp/` to `saved/<user_id>/<random>.<ext>`. The row stores
-  only that key, the validated Story config (strict schema) and minimal provenance (`qloo_used`,
-  music artist/title). No seeds or image bytes are stored.
-- Photos come back through `GET /v1/stories/{id}/photo` (same-origin, canvas-safe, no public
-  URLs). Delete removes the row and the photo.
-
-## Deployment
-
-The web app and API deploy separately. Nothing has been deployed from this repository yet.
-
-**API** (any Python/Docker host, e.g. Render, Fly.io, Cloud Run):
-- Add the production web origin to the bucket's CORS `AllowedOrigins` and to `CORS_ORIGINS`.
-- Docker: `apps/api/Dockerfile` (listens on `$PORT`). Without Docker: `pip install -r
-  requirements.txt` then `uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers`.
-- Env: `ENVIRONMENT=production`, `SESSION_SECRET`, `QLOO_API_KEY`, `STORAGE_BACKEND=s3`,
-  `AWS_S3_BUCKET`, `AWS_REGION`, `CORS_ORIGINS=["https://your-web-origin"]`.
-- Health check: `GET /health`. OpenAPI docs at `/docs` are disabled in production.
-- Rate limiting is in-process. Run a single instance, or move it to Redis before scaling out.
-
-**Web** (Vercel or any Next.js host):
-- Root directory `apps/web`. Build `pnpm build`. Install `pnpm install`.
-- Env: `API_BASE_URL=https://your-api-host` (server-only rewrite target),
-  `NEXT_PUBLIC_UPLOAD_MAX_MB=10`.
-
-Free tiers change. Check current limits for your hosts, S3 (storage, requests, egress) and Qloo
-quota, and set billing alerts.
-
-## Security & privacy summary
-
-- Qloo/AWS/session secrets are server-only. Supabase uses only the publishable key (also kept server-side). The browser only sees same-origin `/api` and
-  short-lived upload URLs.
-- Uploads are validated three times: client magic bytes, presign type/size policy, and server
-  decode with format and pixel caps. SVG and other formats are rejected.
-- EXIF/GPS is stripped on the server copy. Objects are deleted on "Start over" and expire after
-  1 day.
-- No face recognition or sensitive-attribute inference.
-- Structured errors carry request IDs and never echo upstream bodies or keys. Logs record route
-  templates only; uvicorn access logs are off and httpx logging is set to WARNING.
-- Rate limits cover sessions, presign, search and analysis. Qloo calls have 8 s timeouts and
-  ≤ 2 retries, and only on 429, 5xx or timeouts.
-
-## Known limitations
-
-- Track titles depend on iTunes Search having the exact artist. Otherwise the card is an
-  explicit artist suggestion.
-- Vision is heuristic (colour/light statistics). There is no scene understanding.
-- Single-instance in-memory rate limiting. No caching of Qloo responses, because the terms
-  weren't verified for caching.
-- Live Qloo behaviour is verified only when a key is configured (see `qloo_API.md`).
+<p>
+  <a href="CONTRIBUTING.md"><img alt="Read the contributing guide" src="https://img.shields.io/badge/Read%20the%20guide-CONTRIBUTING.md-C03F13?style=for-the-badge&logo=github&logoColor=white" /></a>
+</p>
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. © 2026 Divyanshu Patil. See [LICENSE](LICENSE).
+
+<div align="center">
+<br />
+<sub>Built one Story at a time.</sub>
+<br /><br />
+<a href="#top"><sub>↑ back to top</sub></a>
+</div>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&height=120&section=footer&color=0:C03F13,45:CDC6BE,100:ECE8E4" alt="" width="100%" />

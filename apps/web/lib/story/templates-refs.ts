@@ -175,6 +175,9 @@ const toLand = (ctx: Ctx) => {
 };
 const PC_PAPER: Rect = { x: 90, y: 40, w: 560, h: 955 }; // landscape px
 const PC_CUT: Rect = { x: 30, y: -10, w: 680, h: 1100 };
+// Landscape px ↔ Story px for the turned layout ((lx, ly) lands at (W − ly, lx)).
+const landToStory = (r: Rect): Rect => ({ x: W - r.y - r.h, y: r.x, w: r.h, h: r.w });
+const storyToLand = (r: Rect): Rect => ({ x: r.y, y: W - r.x - r.w, w: r.h, h: r.w });
 function heartRings(ctx: Ctx, cx: number, cy: number, n: number) {
   ctx.save();
   ctx.lineWidth = 9;
@@ -198,6 +201,8 @@ const playercut: Template = {
   outline: true,
   slotTurn: 90,
   decorations: decos([["collage", "Collage clippings", true], ["controls", "Player controls", true]]),
+  // You (the cutout) are a movable, resizable box: frame = move, inside = choose the framing.
+  boxes: () => [{ key: "cutout", label: "You (cutout)", r: landToStory(PC_CUT), image: true }],
   // Story-space box of the photo area (for drag / selection).
   slotRects: () => [{ x: 0, y: PC_CUT.x, w: W, h: PC_CUT.w }],
   defaults: (i) => ({
@@ -254,7 +259,8 @@ const playercut: Template = {
     }
     ctx.restore();
     // You: high-contrast B&W with grain and a thin white die-cut edge, overflowing the paper.
-    const ok = drawCutout(ctx, slots.photo(0), slots.mask(0), PC_CUT, slots.crop(0), outlineOf(s, 6));
+    const cut = storyToLand(boxAt(s, "cutout", landToStory(PC_CUT)));
+    const ok = drawCutout(ctx, slots.photo(0), slots.mask(0), cut, slots.adjust("cutout", slots.crop(0)), outlineOf(s, 6));
     if (!ok) slotPhoto(ctx, slots, 0, PC_PAPER);
     else drawGrain(ctx, 0.06, 88);
     label(ctx, "Headphones", 720, 48, 30, "#e7a3a8", "sans");

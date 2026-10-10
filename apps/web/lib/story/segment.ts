@@ -11,17 +11,35 @@ type Segmenter = import("@mediapipe/tasks-vision").ImageSegmenter;
 let segmenter: Promise<Segmenter | null> | null = null;
 const masks = new WeakMap<object, Promise<HTMLCanvasElement | null>>();
 
+/**
+ * MediaPipe's wasm prints informational lines ("INFO: Created TensorFlow Lite XNNPACK delegate…")
+ * through console.error, which dev tools flag as errors. While it runs, route those INFO lines
+ * to console.info; anything else still reaches console.error untouched.
+ */
+async function quietInfo<T>(fn: () => Promise<T> | T): Promise<T> {
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && /^INFO: /.test(args[0])) console.info(...args);
+    else original(...args);
+  };
+  try {
+    return await fn();
+  } finally {
+    console.error = original;
+  }
+}
+
 function load(): Promise<Segmenter | null> {
   segmenter ??= (async () => {
     try {
       const { FilesetResolver, ImageSegmenter } = await import("@mediapipe/tasks-vision");
       const files = await FilesetResolver.forVisionTasks(WASM);
-      return await ImageSegmenter.createFromOptions(files, {
+      return await quietInfo(() => ImageSegmenter.createFromOptions(files, {
         baseOptions: { modelAssetPath: MODEL },
         runningMode: "IMAGE",
         outputConfidenceMasks: true,
         outputCategoryMask: false,
-      });
+      }));
     } catch (e) {
       console.warn("Person segmentation unavailable:", e instanceof Error ? e.message : e);
       segmenter = null; // let a later attempt retry
@@ -46,7 +64,7 @@ export function personMask(photo: Photo): Promise<HTMLCanvasElement | null> {
       src.width = Math.max(1, Math.round(photo.width * k));
       src.height = Math.max(1, Math.round(photo.height * k));
       src.getContext("2d")?.drawImage(photo, 0, 0, src.width, src.height);
-      const res = seg.segment(src);
+      const res = await quietInfo(() => seg.segment(src));
       const conf = res.confidenceMasks?.[0]?.getAsFloat32Array();
       res.close();
       if (!conf) return null;

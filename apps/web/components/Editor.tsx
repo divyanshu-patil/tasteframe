@@ -185,6 +185,8 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
       case "cover":
         return dispatch({ type: "cover-move", dx, dy });
       case "view":
+        // Turned layouts (Player Cutout) draw their pictures sideways: map the drag to match.
+        if (tpl.slotTurn === 90) [dx, dy] = [dy, -dx];
         return dispatch({ type: "view", key: target.key, dx: -dx * 1.5, dy: -dy * 1.5 });
       case "box": {
         const b = lboxes.find((x) => x.key === target.key);
