@@ -331,7 +331,7 @@ Creating and downloading never need an account. **Saving a Story to the backend 
   - the referring site's host only;
   - a coarse device class.
   - Do Not Track / Global Privacy Control turn it off, and `/admin` is never tracked.
-- **Roles**: every account gets a row in `public.users` (`role` is `user` or `admin`), created by
+- **Roles**: every account gets a row in `public.users` (`role` is the `user_role` enum: `user` or `admin`), created by
   a trigger on sign-up. Supabase RLS + `is_admin()` (checks `role = 'admin'`) gate everything, so
   a non-admin token gets nothing even when calling PostgREST directly. Users can read only their
   own row and nobody can change a role from the client. Promote an account from the database,

@@ -107,12 +107,31 @@ create policy "stories_delete_own" on public.stories
 -- =========================================================================================
 -- One row per account with its role. Rows are created by a trigger when someone signs up;
 -- roles change only from the database (supabase/make_admin.py) — clients can't update them.
+do $$
+begin
+    if to_regtype('public.user_role') is null then
+        create type public.user_role as enum ('user', 'admin');
+    end if;
+end
+$$;
 create table if not exists public.users (
     id uuid primary key references auth.users (id) on delete cascade,
     email text,
-    role text not null default 'user' check (role in ('user', 'admin')),
+    role public.user_role not null default 'user',
     created_at timestamptz not null default now()
 );
+-- Earlier versions stored role as text with a check constraint; convert in place.
+do $$
+begin
+    if (select data_type from information_schema.columns
+        where table_schema = 'public' and table_name = 'users' and column_name = 'role') = 'text' then
+        alter table public.users drop constraint if exists users_role_check;
+        alter table public.users alter column role drop default;
+        alter table public.users alter column role type public.user_role using role::public.user_role;
+        alter table public.users alter column role set default 'user';
+    end if;
+end
+$$;
 create index if not exists users_role_idx on public.users (role);
 
 -- New sign-ups get a 'user' row (definer: runs with the table owner's rights, not the caller's).
