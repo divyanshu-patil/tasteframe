@@ -1,0 +1,14 @@
+{
+  "name": "api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tasteframe FastAPI service. Python deps live in apps/api/.venv (see requirements.txt).",
+  "scripts": {
+    "setup": "node scripts/py.mjs setup",
+    "dev": "node scripts/py.mjs dev",
+    "start": "node scripts/py.mjs start",
+    "test": "node scripts/py.mjs test",
+    "lint": "node scripts/py.mjs lint",
+    "format": "node scripts/py.mjs format"
+  }
+}

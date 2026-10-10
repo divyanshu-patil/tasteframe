@@ -1,0 +1,15 @@
+{
+  "_note": "Shape derived from the documented /v2/insights response (results.entities[]). Placeholder data.",
+  "success": true,
+  "results": {
+    "entities": [
+      {"entity_id": "33333333-3333-4333-8333-333333333333", "name": "Related Artist One", "type": "urn:entity", "subtype": "urn:entity:artist",
+       "popularity": 0.91, "properties": {"image": {"url": "https://images.qloo.com/i/b.jpg"}},
+       "tags": [{"id": "urn:tag:genre:music:indie", "name": "Indie", "type": "urn:tag:genre:music"},
+                {"id": "urn:tag:genre:music:soul", "name": "Soul", "type": "urn:tag:genre:music"}]},
+      {"entity_id": "44444444-4444-4444-8444-444444444444", "name": "Related Artist Two", "type": "urn:entity", "subtype": "urn:entity:artist",
+       "tags": [{"id": "urn:tag:genre:music:funk", "name": "Funk", "type": "urn:tag:genre:music"}]}
+    ]
+  },
+  "duration": 0.12
+}

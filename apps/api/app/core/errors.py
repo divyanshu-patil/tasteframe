@@ -37,8 +37,13 @@ def install(app: FastAPI) -> None:
         response.headers["X-Request-ID"] = rid
         # Log path template only: object keys / queries can be sensitive.
         route = request.scope.get("route")
-        log.info("%s %s %s rid=%s", request.method, getattr(route, "path", "?"),
-                 response.status_code, rid)
+        log.info(
+            "%s %s %s rid=%s",
+            request.method,
+            getattr(route, "path", "?"),
+            response.status_code,
+            rid,
+        )
         return response
 
     @app.exception_handler(AppError)

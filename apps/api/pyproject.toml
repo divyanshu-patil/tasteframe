@@ -19,3 +19,4 @@ ignore = ["S101", "B008"]
 testpaths = ["tests"]
 markers = ["integration: hits real providers; needs credentials (deselected by default)"]
 addopts = "-m 'not integration'"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]

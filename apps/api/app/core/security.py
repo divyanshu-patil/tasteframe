@@ -55,7 +55,9 @@ def assert_owns_key(object_key: str, session_id: str) -> None:
 
 
 def sign_upload(settings: Settings, object_key: str, expires: int, content_type: str) -> str:
-    return _sign(settings.session_secret.get_secret_value(), f"{object_key}|{expires}|{content_type}")
+    return _sign(
+        settings.session_secret.get_secret_value(), f"{object_key}|{expires}|{content_type}"
+    )
 
 
 # ponytail: in-process sliding window; per-instance only. Move to Redis when running >1 replica.

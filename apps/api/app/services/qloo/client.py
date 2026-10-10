@@ -73,8 +73,14 @@ def normalize_entity(raw: Any, entity_type: str) -> QlooEntity | None:
         for t in (raw.get("tags") or [])
         if isinstance(t, dict) and isinstance(t.get("name"), str)
     ][:8]
-    return QlooEntity(eid, name.strip(), entity_type, descriptor,
-                      image_url if isinstance(image_url, str) else None, tags)
+    return QlooEntity(
+        eid,
+        name.strip(),
+        entity_type,
+        descriptor,
+        image_url if isinstance(image_url, str) else None,
+        tags,
+    )
 
 
 class QlooClient:
@@ -89,7 +95,9 @@ class QlooClient:
         timeout = httpx.Timeout(self.settings.qloo_timeout_seconds, connect=4.0)
         attempts = self.settings.qloo_max_retries + 1
         async with httpx.AsyncClient(
-            base_url=self.settings.qloo_base_url, timeout=timeout, transport=self._transport,
+            base_url=self.settings.qloo_base_url,
+            timeout=timeout,
+            transport=self._transport,
             headers={"X-Api-Key": key, "Accept": "application/json"},
         ) as client:
             for attempt in range(attempts):
@@ -129,7 +137,9 @@ class QlooClient:
                     raise _err("QLOO_UPSTREAM_ERROR", True) from None
         raise _err("QLOO_UPSTREAM_ERROR", True)  # unreachable; keeps type-checkers happy
 
-    async def search_entities(self, query: str, entity_type: str, take: int = 6) -> list[QlooEntity]:
+    async def search_entities(
+        self, query: str, entity_type: str, take: int = 6
+    ) -> list[QlooEntity]:
         data = await self._get("/search", {"query": query, "types": URN[entity_type], "take": take})
         if data is None:
             return []

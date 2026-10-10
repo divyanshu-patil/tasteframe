@@ -7,8 +7,18 @@ from pydantic import BaseModel, Field
 # App-level taste types, mapped to Qloo URNs inside the Qloo adapter.
 TasteType = Literal["artist", "movie", "tv_show", "brand", "book", "podcast"]
 Mood = Literal[
-    "cinematic", "minimal", "nostalgic", "editorial", "warm", "cool", "moody", "bright", "playful",
-    "dreamy", "bold", "natural",
+    "cinematic",
+    "minimal",
+    "nostalgic",
+    "editorial",
+    "warm",
+    "cool",
+    "moody",
+    "bright",
+    "playful",
+    "dreamy",
+    "bold",
+    "natural",
 ]
 LayoutId = Literal[
     "cinematic", "stills", "editorial", "journal", "scrapbook", "filmstrip", "vintage", "minimal"
