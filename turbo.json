@@ -48,8 +48,6 @@
         "AWS_*",
         "S3_*",
         "SUPABASE_*",
-        "STORY_RETENTION_DAYS",
-        "MAX_SAVED_STORIES",
         "CORS_ORIGINS",
         "PUBLIC_API_URL",
         "MUSIC_METADATA_PROVIDER",

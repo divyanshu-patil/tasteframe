@@ -93,8 +93,7 @@ Templates (placeholders only): `apps/api/.env.example` → `apps/api/.env` and
 files are gitignored. Turbo passes the API variables through `pnpm dev` (`passThroughEnv`).
 
 - **API (`apps/api/.env`)**: `SESSION_SECRET`, `QLOO_API_KEY`, `QLOO_BASE_URL`, `STORAGE_BACKEND`,
-  `AWS_*`, `S3_*`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STORY_RETENTION_DAYS`,
-  `MAX_SAVED_STORIES`, `CORS_ORIGINS`, `PUBLIC_API_URL`, `MUSIC_METADATA_PROVIDER`, `RATE_LIMIT_*`.
+  `AWS_*`, `S3_*`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `CORS_ORIGINS`, `PUBLIC_API_URL`, `MUSIC_METADATA_PROVIDER`, `RATE_LIMIT_*`.
 - **Web (`apps/web/.env.local`)**: `API_BASE_URL` (server-only, used by the `/api` rewrite) and
   `NEXT_PUBLIC_UPLOAD_MAX_MB` (non-secret hint).
 
@@ -137,26 +136,39 @@ prefix on every read and delete.
 ## Supabase — saved Stories (optional)
 
 Guests can **Save to my Stories** from the editor, then reopen or delete them from the start
-screen. The feature turns on automatically when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
-are set (`GET /v1/features` reports it). Otherwise the UI hides it.
+screen. The feature turns on automatically when `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are
+set (`GET /v1/features` reports it). Otherwise the UI hides it.
 
-1. Create a Supabase project. In **SQL editor**, run `supabase/schema.sql`. It creates
-   `public.stories` with RLS enabled and no anon policies.
-2. Under **Project Settings → API**, copy the Project URL and the **service_role** key into
-   `apps/api/.env`. They are API-only and never go in the web app or `NEXT_PUBLIC_*`.
-3. Optional: schedule `select public.purge_expired_stories()` daily with pg_cron. The API already
-   hides expired rows.
+1. Create a Supabase project. In **SQL editor**, run `supabase/schema.sql`. It can be re-run.
+2. Under **Project Settings → API Keys**, copy the Project URL and the **publishable** key
+   (`sb_publishable_…`) into `apps/api/.env`. No secret or service-role key is used.
+3. Optional: schedule `select public.purge_expired_stories()` daily with pg_cron (as a
+   privileged role). The functions already hide expired rows.
+
+Security model. The publishable key is public by design (role `anon`), so the database enforces
+everything:
+- RLS is on and `anon` has **no table privileges**. Direct reads and writes are denied.
+- `anon` can only execute four `SECURITY DEFINER` functions: `tf_save_story`, `tf_list_stories`,
+  `tf_get_story` and `tf_delete_story`. Each requires the owner hash
+  `sha256(SESSION_SECRET:session_id)`. The API computes it and never sends it to browsers, so even
+  a direct caller holding the publishable key can't enumerate or guess anyone's rows.
+- Limits are enforced in SQL so callers can't bypass them: 20 active Stories per owner
+  (serialized with an advisory lock) and 7-day expiry. Templates, storage-key format and JSON
+  sizes are checked by constraints.
+- Residual risk: someone holding the publishable key can create rows under made-up owners. They
+  are size-capped, expire in 7 days, and can't reference other users' data. Use Supabase's API
+  rate limits, or switch to a secret key if this matters.
+- Verified locally with PGlite as role `anon`: own rows are reachable, other owners' rows and
+  direct table access are denied, and the limit and constraints are enforced.
 
 How it works:
-- The API talks to PostgREST with the service-role key and filters every query by
-  `guest_session_hash = sha256(SESSION_SECRET:session_id)`. Raw session ids are never stored.
 - Saving copies the EXIF-stripped photo from `tmp/` to `saved/<session>/<random>.<ext>`. The row
   stores only that key, the validated Story config (strict schema, no extra fields) and minimal
   provenance (`qloo_used`, music artist/title). No seeds or image bytes are stored.
 - Photos are served back through `GET /v1/stories/{id}/photo`, which is same-origin, so the canvas
   is never tainted. There are no public or presigned GET URLs.
-- Delete removes both the row and the photo. Rows expire after `STORY_RETENTION_DAYS` (7), and
-  `saved/` objects after 8 days via S3 lifecycle.
+- Delete removes both the row and the photo. `saved/` objects also expire after 8 days via S3
+  lifecycle.
 - The session token lives in `localStorage`, so saved Stories belong to that browser.
 
 ## Deployment
@@ -182,7 +194,7 @@ quota, and set billing alerts.
 
 ## Security & privacy summary
 
-- Qloo/AWS/session secrets are server-only. The browser only sees same-origin `/api` and
+- Qloo/AWS/session secrets are server-only. Supabase uses only the publishable key (also kept server-side). The browser only sees same-origin `/api` and
   short-lived upload URLs.
 - Uploads are validated three times: client magic bytes, presign type/size policy, and server
   decode with format and pixel caps. SVG and other formats are rejected.

@@ -62,13 +62,10 @@ async def save_story(
     storage: Storage = Depends(get_storage),
     repo: SupabaseStories = Depends(get_repo),
 ) -> StoryOut:
-    """Save with explicit user intent: copies the (EXIF-stripped) photo and stores the config."""
+    """Save with explicit user intent: copies the (EXIF-stripped) photo and stores the config.
+    The per-owner limit is enforced in SQL (STORY_LIMIT → 409; the photo copy is rolled back)."""
     assert_owns_key(body.object_key, session_id)
     owner = session_hash(settings, session_id)
-    if await repo.count_active(owner) >= settings.max_saved_stories:
-        raise AppError(
-            "STORY_LIMIT", "You've reached the saved Story limit. Delete one first.", 409
-        )
     dst = saved_object_key(session_id, body.object_key.rsplit(".", 1)[1])
     if not await asyncio.to_thread(storage.copy, body.object_key, dst):
         raise AppError("OBJECT_NOT_FOUND", "That upload has expired. Re-upload to save.", 404)

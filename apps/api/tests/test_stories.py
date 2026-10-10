@@ -41,49 +41,58 @@ CONFIG = {
 
 
 class FakePostgrest:
-    """Just enough PostgREST: eq./gt. filters, order, limit, return=representation."""
+    """Emulates the tf_* RPC functions from supabase/schema.sql (limit lowered to 2)."""
+
+    LIMIT = 2
 
     def __init__(self):
         self.rows: list[dict] = []
         self.fail = False
         self.headers: list[httpx.Headers] = []
 
-    def _match(self, row, params):
-        for k, v in params.items():
-            if k in ("select", "order", "limit"):
-                continue
-            op, _, val = v.partition(".")
-            if op == "eq" and str(row.get(k)) != val:
-                return False
-            if op == "gt" and not (row.get(k) and row[k] > val):
-                return False
-        return True
+    @staticmethod
+    def _public(r: dict) -> dict:
+        return {k: v for k, v in r.items() if k != "guest_session_hash"}
 
     def handler(self, req: httpx.Request) -> httpx.Response:
         self.headers.append(req.headers)
-        assert req.url.path == "/rest/v1/stories"
         if self.fail:
-            return httpx.Response(500, json={"message": "boom"})
-        params = dict(req.url.params)
-        if req.method == "POST":
+            return httpx.Response(500, json={"message": "boom internal detail"})
+        fn = req.url.path.removeprefix("/rest/v1/rpc/")
+        a = json.loads(req.content)
+        owner = a["p_owner"]
+        assert len(owner) == 64 and all(c in "0123456789abcdef" for c in owner)
+        mine = [r for r in self.rows if r["guest_session_hash"] == owner]
+        if fn == "tf_save_story":
+            if len(mine) >= self.LIMIT:
+                return httpx.Response(400, json={"code": "P0001", "message": "STORY_LIMIT"})
             row = {
-                **json.loads(req.content),
                 "id": str(uuid.uuid4()),
+                "guest_session_hash": owner,
+                "s3_object_key": a["p_key"],
+                "template_id": a["p_template"],
+                "layout_config": a["p_config"],
+                "recommendation_provenance": a["p_provenance"],
                 "created_at": datetime.now(UTC).isoformat(),
+                "expires_at": "2099-01-01T00:00:00+00:00",
             }
             self.rows.append(row)
-            return httpx.Response(201, json=[row])
-        hits = [r for r in self.rows if self._match(r, params)]
-        if req.method == "DELETE":
-            self.rows = [r for r in self.rows if r not in hits]
-        return httpx.Response(200, json=hits[: int(params.get("limit", 1000))])
+            return httpx.Response(200, json=[self._public(row)])
+        if fn == "tf_list_stories":
+            return httpx.Response(200, json=[self._public(r) for r in reversed(mine)])
+        hit = [r for r in mine if r["id"] == a["p_id"]]
+        if fn == "tf_get_story":
+            return httpx.Response(200, json=[self._public(r) for r in hit])
+        if fn == "tf_delete_story":
+            self.rows = [r for r in self.rows if r not in hit]
+            return httpx.Response(200, json=[{"s3_object_key": r["s3_object_key"]} for r in hit])
+        return httpx.Response(404, json={"message": "function not found"})
 
 
 @pytest.fixture
 def setup(client_with, monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.co")
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-test-key")
-    monkeypatch.setenv("MAX_SAVED_STORIES", "2")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test")
     from app.api.routes.stories import get_repo
     from app.core.config import get_settings
     from app.services.stories.supabase import SupabaseStories
@@ -128,8 +137,9 @@ def test_save_list_photo_delete_roundtrip(setup, tmp_path):
     row = fake.rows[0]
     assert row["s3_object_key"].startswith("saved/") and "guest_session_hash" in row
     assert h["X-Session-Token"].split(".")[0] not in row["guest_session_hash"]  # hashed, not raw
-    assert fake.headers[0]["apikey"] == "service-role-test-key"
-    assert "service-role-test-key" not in r.text
+    assert fake.headers[0]["apikey"] == "sb_publishable_test"
+    assert "authorization" not in fake.headers[0]  # new keys go in `apikey` only
+    assert "sb_publishable_test" not in r.text
 
     listed = client.get("/v1/stories", headers=h).json()["stories"]
     assert [s["id"] for s in listed] == [story["id"]]
@@ -168,11 +178,13 @@ def test_rejects_invalid_config(setup):
     assert client.get("/v1/stories/not-a-uuid/photo", headers=h).status_code == 422
 
 
-def test_limit(setup):
+def test_limit_enforced_by_database_rolls_back_photo(setup, tmp_path):
     client, _ = setup
     h = new_session(client)
     key = upload(client, h, make_image())
-    assert [save(client, h, key).status_code for _ in range(3)] == [201, 201, 409]
+    codes = [save(client, h, key).status_code for _ in range(3)]
+    assert codes == [201, 201, 409]
+    assert len(list((tmp_path / "uploads").glob("saved/**/*.jpg"))) == 2  # 3rd copy removed
 
 
 def test_supabase_outage_cleans_up_photo_copy(setup, tmp_path):

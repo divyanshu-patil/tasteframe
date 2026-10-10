@@ -201,7 +201,7 @@ Record request ID, elapsed time by stage, Qloo status class, cache hit/miss, can
 | Web proxy | Next.js rewrite `/api/* → API_BASE_URL` keeps the browser same-origin; `API_BASE_URL` is server-only |
 | Renderer | `apps/web/lib/story/{types,draw,templates,editor,export}.ts` — pure, deterministic Canvas 2D; previews and export share `renderStory()` |
 | Templates | cinematic, stills, editorial, journal, scrapbook, filmstrip, vintage, minimal — modelled on `design-refs/` |
-| Persistence | Optional saved Stories: Supabase `public.stories` via PostgREST (service role, API-only), photo copy under `saved/`, 7-day expiry (`app/services/stories/supabase.py`, `app/api/routes/stories.py`) |
+| Persistence | Optional saved Stories: Supabase `public.stories` via PostgREST RPC (`tf_*` SECURITY DEFINER functions, publishable key / role `anon`), photo copy under `saved/`, 7-day expiry (`app/services/stories/supabase.py`, `app/api/routes/stories.py`) |
 
 Deviations from the original proposal: saved Stories are guest-scoped (no Supabase Auth yet), and the analysis
 response is streamed rather than returned as a single JSON body.

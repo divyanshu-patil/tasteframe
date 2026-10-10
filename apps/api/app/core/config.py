@@ -39,12 +39,11 @@ class Settings(BaseSettings):
     s3_upload_max_bytes: int = Field(10 * 1024 * 1024, ge=1024)
     local_storage_dir: str = ".uploads"
 
-    # Optional saved Stories (Supabase Postgres via PostgREST, server-side service role only).
+    # Optional saved Stories: Supabase PostgREST RPC with the publishable key (role `anon`).
+    # Limits (20 per owner) and retention (7 days) are enforced in supabase/schema.sql.
     supabase_url: str | None = None
-    supabase_service_role_key: SecretStr | None = None
+    supabase_publishable_key: SecretStr | None = None
     supabase_timeout_seconds: float = 6.0
-    story_retention_days: int = Field(7, ge=1, le=30)
-    max_saved_stories: int = Field(20, ge=1, le=100)
 
     max_image_pixels: int = 40_000_000
     music_metadata_provider: Literal["itunes", "none"] = "itunes"
@@ -60,7 +59,7 @@ class Settings(BaseSettings):
 
     @property
     def supabase_enabled(self) -> bool:
-        key = self.supabase_service_role_key
+        key = self.supabase_publishable_key
         return bool(self.supabase_url and key and key.get_secret_value())
 
     def missing_required(self) -> list[str]:
