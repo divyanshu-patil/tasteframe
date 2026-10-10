@@ -374,3 +374,33 @@ textarea.input { width: 100%; resize: vertical; }
 .propBtn { padding: 0; border: 2px solid transparent; border-radius: var(--radius-sm); background: none; cursor: pointer; aspect-ratio: 1; overflow: hidden; }
 .propBtn img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .propBtn:focus-visible { outline: 2px solid var(--color-ember-orange); outline-offset: 2px; }
+
+/* ---- Navbar: request button + backend status dot --------------------------------------- */
+.navButton { border: 1px solid var(--color-ink-black); background: transparent; color: inherit; border-radius: var(--radius-sm); padding: 6px 12px; font: inherit; font-size: 15px; cursor: pointer; }
+.navButton:hover { background: var(--color-bone-cream); }
+.navButton:focus-visible { outline: 2px solid var(--color-ember-orange); outline-offset: 2px; }
+.requestDialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; text-align: left; }
+.requestDialog .field { justify-items: stretch; text-align: left; }
+.pinPreview figure { display: grid; gap: var(--spacing-7); justify-items: start; }
+.pinPreview img { width: min(220px, 60vw); height: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); display: block; }
+
+.status { position: relative; display: inline-flex; align-items: center; }
+.statusDot { cursor: pointer; }
+.statusDot { width: 12px; height: 12px; border-radius: 50%; border: 0; padding: 0; cursor: default; }
+.statusDot:focus-visible { outline: 2px solid var(--color-ink-black); outline-offset: 3px; }
+.status_up { background: #2f9e5c; box-shadow: 0 0 0 3px rgba(47, 158, 92, 0.18); }
+.status_down { background: #d23b2c; box-shadow: 0 0 0 3px rgba(210, 59, 44, 0.18); cursor: pointer; }
+.status_connecting { background: #e2ad13; animation: breathe 1.8s ease-in-out infinite; }
+@keyframes breathe {
+  0%, 100% { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(226, 173, 19, 0.55); }
+  50% { transform: scale(1.1); box-shadow: 0 0 0 7px rgba(226, 173, 19, 0); }
+}
+.statusTip {
+  position: absolute; top: calc(100% + 10px); right: -8px; z-index: 5; width: 250px;
+  padding: var(--spacing-10) var(--spacing-14); background: var(--color-ink-black); color: var(--color-parchment);
+  font-size: 14px; line-height: 1.35; text-align: left; border-radius: var(--radius-sm);
+  opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity 140ms ease, transform 140ms ease;
+}
+.status:hover .statusTip, .statusDot:focus-visible + .statusTip, .statusTipOpen { opacity: 1; transform: none; }
+.statusLabel { margin-left: 7px; font-size: 13px; color: var(--color-charcoal); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .status_connecting { animation: none; } .statusTip { transition: none; } }

@@ -259,8 +259,45 @@ request `format: "json"` and validate ourselves. `gemma4:31b:cloud` is accepted 
 | `/create` | The MVP studio: upload → mood → taste → three Stories → editor → PNG export |
 | `/create?layout=<id>` | Same, but opens straight in a chosen layout after upload |
 | `/gallery` | Every layout and every Pinterest reference (credited, linked); pick one to start |
+| `/admin` | Admins only: analytics (visits, usage, referrers, devices, layouts) and the layout-request queue |
 
 Creating and downloading never need an account. **Saving a Story to the backend requires login.**
+
+## Requests, analytics and the admin dashboard
+
+- **Request a layout**: the landing navbar opens a form.
+  - Paste a Pinterest pin (`pinterest.com/pin/…` or a `pin.it/…` share link) and an instant
+    preview appears. The API verifies it through Pinterest's oEmbed and contacts Pinterest hosts
+    only; share links are followed hop by hop and must stay on Pinterest.
+  - Add an optional note and email, then send. Requests are rate-limited, and the database caps
+    them at 10 per visitor per day.
+- **Server status dot** (landing navbar):
+  - yellow and breathing while the API wakes up (the free Render plan can take about 50 s);
+  - green when it answers;
+  - red if it can't be reached after 90 s (click to retry).
+  - The tooltip explains the wait, and tapping shows it on phones.
+- **Analytics** cover page views, Stories made, layouts opened, downloads, saves, requests and
+  gallery picks. They're privacy-friendly:
+  - no cookies, IPs, account ids or full URLs;
+  - a random browser id that the API hashes with the server secret;
+  - the referring site's host only;
+  - a coarse device class.
+  - Do Not Track / Global Privacy Control turn it off, and `/admin` is never tracked.
+- **Admin role**: Supabase RLS + `is_admin()` gate everything, so a non-admin token gets
+  nothing even when calling PostgREST directly. Grant it from the database only, after the account
+  has signed up in the app:
+
+  ```bash
+  uv run --no-project --with "psycopg[binary]==3.2.10" python supabase/make_admin.py you@example.com
+  # … --revoke to remove
+  ```
+
+  `/admin` shows:
+  - totals and a daily traffic chart for 7, 30 or 90 days;
+  - referrers, pages, devices and layout downloads;
+  - the request queue (pending, accepted, built, rejected). Each request opens with the pin,
+    creator, note, email, source and device, and can be accepted, marked built or rejected with an
+    internal note.
 
 ## Supabase — accounts & saved Stories (optional)
 

@@ -492,3 +492,149 @@ export async function trackArtwork(trackId: number): Promise<Blob> {
   if (!res.ok) throw await errorFrom(res);
   return res.blob();
 }
+
+// ---- Layout requests (Pinterest pins) -------------------------------------------------------
+export interface PinPreview {
+  pin_id: string;
+  pin_url: string;
+  title: string | null;
+  author: string | null;
+  author_url: string | null;
+  thumbnail_url: string;
+  width: number;
+  height: number;
+}
+
+const isPin = (v: unknown): v is PinPreview =>
+  isObj(v) && isStr(v.pin_id) && isStr(v.pin_url) && isStr(v.thumbnail_url) && v.thumbnail_url.startsWith("https://i.pinimg.com/") && isNum(v.width) && isNum(v.height);
+
+/** Verified preview of a Pinterest pin link (pinterest.com/pin/… or pin.it/…). */
+export async function previewPin(url: string, signal?: AbortSignal): Promise<PinPreview> {
+  let res: Response;
+  try {
+    res = await fetch(`${API}/v1/pins/preview?url=${encodeURIComponent(url)}`, { signal });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new ApiError("NETWORK", "Can't reach the server. Check your connection.", true);
+  }
+  if (!res.ok) throw await errorFrom(res);
+  const v: unknown = await res.json();
+  if (!isPin(v)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  return v;
+}
+
+export async function requestLayout(body: { pin_url: string; note?: string; email?: string; visitor?: string; referrer?: string; device?: string }): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API}/v1/layout-requests`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch {
+    throw new ApiError("NETWORK", "Can't reach the server. Check your connection.", true);
+  }
+  if (!res.ok) throw await errorFrom(res);
+}
+
+// ---- Admin -----------------------------------------------------------------------------------
+export type RequestStatus = "pending" | "accepted" | "rejected" | "done";
+export interface LayoutRequest {
+  id: string;
+  created_at: string;
+  status: RequestStatus;
+  pin_id: string;
+  pin_url: string;
+  pin_title: string | null;
+  pin_author: string | null;
+  pin_author_url: string | null;
+  pin_thumb: string | null;
+  pin_width: number | null;
+  pin_height: number | null;
+  note: string | null;
+  email: string | null;
+  referrer: string | null;
+  device: string | null;
+  signed_in: boolean;
+  admin_note: string | null;
+  reviewed_at: string | null;
+}
+export interface AdminStats {
+  since: string;
+  totals: Record<"pageviews" | "visitors" | "analyses" | "layout_opens" | "exports" | "saves" | "requests", number>;
+  daily: { day: string; pageviews: number; visitors: number; exports: number }[];
+  referrers: { name: string; count: number }[];
+  pages: { name: string; count: number }[];
+  layouts: { name: string; opens: number; exports: number }[];
+  devices: Record<string, number>;
+  requests: Record<RequestStatus, number>;
+}
+
+const STATUSES: RequestStatus[] = ["pending", "accepted", "rejected", "done"];
+function parseRequest(v: unknown): LayoutRequest | null {
+  if (!isObj(v) || !isStr(v.id) || !isStr(v.pin_url) || !STATUSES.includes(v.status as RequestStatus)) return null;
+  const str = (k: string) => (isStr(v[k]) ? (v[k] as string) : null);
+  const num = (k: string) => (isNum(v[k]) ? (v[k] as number) : null);
+  const thumb = str("pin_thumb");
+  const authorUrl = str("pin_author_url");
+  return {
+    id: v.id,
+    created_at: str("created_at") ?? "",
+    status: v.status as RequestStatus,
+    pin_id: str("pin_id") ?? "",
+    pin_url: v.pin_url.startsWith("https://www.pinterest.com/pin/") ? v.pin_url : "https://www.pinterest.com/",
+    pin_title: str("pin_title"),
+    pin_author: str("pin_author"),
+    pin_author_url: authorUrl?.startsWith("https://www.pinterest.com/") ? authorUrl : null,
+    pin_thumb: thumb?.startsWith("https://i.pinimg.com/") ? thumb : null,
+    pin_width: num("pin_width"),
+    pin_height: num("pin_height"),
+    note: str("note"),
+    email: str("email"),
+    referrer: str("referrer"),
+    device: str("device"),
+    signed_in: v.signed_in === true,
+    admin_note: str("admin_note"),
+    reviewed_at: str("reviewed_at"),
+  };
+}
+
+async function adminGet(path: string, init: RequestInit = {}): Promise<unknown> {
+  const res = await authed(`/v1/admin${path}`, init, true);
+  if (!res.ok) throw await errorFrom(res);
+  return res.json();
+}
+
+export async function adminMe(): Promise<boolean> {
+  const v = await adminGet("/me");
+  return isObj(v) && v.admin === true;
+}
+
+export async function adminStats(days: number): Promise<AdminStats> {
+  const v = await adminGet(`/stats?days=${days}`);
+  if (!isObj(v) || !isObj(v.totals)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  const arr = <T,>(x: unknown, ok: (i: Record<string, unknown>) => boolean): T[] => (Array.isArray(x) ? (x.filter((i) => isObj(i) && ok(i)) as T[]) : []);
+  return {
+    since: isStr(v.since) ? v.since : "",
+    totals: v.totals as AdminStats["totals"],
+    daily: arr(v.daily, (i) => isStr(i.day)),
+    referrers: arr(v.referrers, (i) => isStr(i.name) && isNum(i.count)),
+    pages: arr(v.pages, (i) => isStr(i.name) && isNum(i.count)),
+    layouts: arr(v.layouts, (i) => isStr(i.name)),
+    devices: isObj(v.devices) ? (v.devices as Record<string, number>) : {},
+    requests: (isObj(v.requests) ? v.requests : { pending: 0, accepted: 0, rejected: 0, done: 0 }) as AdminStats["requests"],
+  };
+}
+
+export async function adminRequests(status?: RequestStatus): Promise<LayoutRequest[]> {
+  const v = await adminGet(`/requests${status ? `?status=${status}` : ""}`);
+  if (!isObj(v) || !Array.isArray(v.requests)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  return v.requests.map(parseRequest).filter((r): r is LayoutRequest => r !== null);
+}
+
+export async function updateRequest(id: string, status: RequestStatus, adminNote: string): Promise<LayoutRequest> {
+  const v = await adminGet(`/requests/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, admin_note: adminNote || null }),
+  });
+  const r = parseRequest(v);
+  if (!r) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  return r;
+}

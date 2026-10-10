@@ -217,3 +217,27 @@ Copies the photo to `saved/`, inserts a row, and returns a `StoryOut`:
 sessions or expired Stories.
 
 `DELETE /v1/stories/{id}` → 204 (idempotent). Removes the row and its `saved/` object.
+
+
+## Insights (public, rate-limited)
+- `POST /v1/events`: `{type: pageview|analysis|layout_open|export|save|request|gallery_pick,
+  visitor, path?, referrer?, layout?, device?}` returns 204. The visitor id is HMAC-hashed and the
+  referrer is reduced to its host. It's a no-op when Supabase isn't configured, and never fails
+  the app.
+- `GET /v1/pins/preview?url=` returns
+  `{pin_id, pin_url, title, author, author_url, thumbnail_url, width, height}`.
+  - Errors: 422 `PIN_INVALID` (not a Pinterest pin link), 404 `PIN_NOT_FOUND`, 503
+    `PIN_UNAVAILABLE`.
+  - Only Pinterest hosts are contacted, and `pin.it` redirects must stay on Pinterest.
+- `POST /v1/layout-requests`: `{pin_url, note?, email?, visitor?, referrer?, device?}` returns
+  201. The pin is verified first. 429 `REQUEST_LIMIT` after 10 per visitor per day.
+
+## Admin (Supabase login + admin role; RLS enforced)
+- `GET /v1/admin/me` returns `{admin}`.
+- `GET /v1/admin/stats?days=1..365` returns
+  `{totals, daily[], referrers[], pages[], layouts[], devices{}, requests{}}`.
+- `GET /v1/admin/requests?status=pending|accepted|rejected|done` returns `{requests[]}`.
+- `GET /v1/admin/requests/{id}` returns one request.
+- `PATCH /v1/admin/requests/{id}`: `{status, admin_note?}` returns the updated request (stamps
+  `reviewed_at`).
+- Non-admins get 403 `NOT_ADMIN`; missing or invalid tokens get 401.

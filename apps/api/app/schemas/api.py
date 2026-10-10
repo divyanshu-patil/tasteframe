@@ -535,3 +535,77 @@ class TrackOut(BaseModel):
 class TrackSearchOut(BaseModel):
     query: str
     tracks: list[TrackOut]
+
+
+# ---- Analytics, layout requests, admin ------------------------------------------------------
+EventType = Literal[
+    "pageview", "analysis", "layout_open", "export", "save", "request", "gallery_pick"
+]
+Device = Literal["mobile", "tablet", "desktop"]
+
+
+class EventIn(BaseModel):
+    """One anonymous usage event. `visitor` is a random id kept in the browser; it's hashed here."""
+
+    model_config = {"extra": "forbid"}
+
+    type: EventType
+    visitor: str = Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")
+    path: str | None = Field(None, pattern=r"^/[a-z0-9/_-]{0,60}$")
+    referrer: str | None = Field(None, max_length=300)
+    layout: LayoutId | None = None
+    device: Device | None = None
+
+
+class PinPreview(BaseModel):
+    pin_id: str
+    pin_url: str
+    title: str | None = None
+    author: str | None = None
+    author_url: str | None = None
+    thumbnail_url: str
+    width: int
+    height: int
+
+
+class LayoutRequestIn(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    pin_url: str = Field(min_length=8, max_length=300)
+    note: str | None = Field(None, max_length=500)
+    email: str | None = Field(None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    visitor: str | None = Field(None, pattern=r"^[A-Za-z0-9_-]{8,64}$")
+    referrer: str | None = Field(None, max_length=300)
+    device: Device | None = None
+
+
+class LayoutRequestOut(BaseModel):
+    id: str
+    created_at: str
+    status: Literal["pending", "accepted", "rejected", "done"]
+    pin_id: str
+    pin_url: str
+    pin_title: str | None = None
+    pin_author: str | None = None
+    pin_author_url: str | None = None
+    pin_thumb: str | None = None
+    pin_width: int | None = None
+    pin_height: int | None = None
+    note: str | None = None
+    email: str | None = None
+    referrer: str | None = None
+    device: str | None = None
+    signed_in: bool = False
+    admin_note: str | None = None
+    reviewed_at: str | None = None
+
+
+class LayoutRequestList(BaseModel):
+    requests: list[LayoutRequestOut]
+
+
+class LayoutRequestPatch(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    status: Literal["pending", "accepted", "rejected", "done"]
+    admin_note: str | None = Field(None, max_length=500)

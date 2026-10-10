@@ -101,3 +101,159 @@ create policy "stories_insert_own" on public.stories
     for insert to authenticated with check (user_id = (select auth.uid()));
 create policy "stories_delete_own" on public.stories
     for delete to authenticated using (user_id = (select auth.uid()));
+
+-- =========================================================================================
+-- Admins, analytics events and layout requests
+-- =========================================================================================
+-- Admins are granted only from the database (supabase/make_admin.py); no API can create one.
+create table if not exists public.admins (
+    user_id uuid primary key references auth.users (id) on delete cascade,
+    created_at timestamptz not null default now()
+);
+alter table public.admins enable row level security;
+revoke all on table public.admins from anon, authenticated;
+grant select on table public.admins to authenticated;
+drop policy if exists "admins_select_self" on public.admins;
+create policy "admins_select_self" on public.admins
+    for select to authenticated using (user_id = (select auth.uid()));
+
+-- Definer so RLS policies can ask "is the caller an admin?" without exposing the table.
+create or replace function public.is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+    select exists (select 1 from public.admins where user_id = auth.uid())
+$$;
+revoke all on function public.is_admin() from public;
+grant execute on function public.is_admin() to anon, authenticated;
+
+-- Anonymous usage analytics. No IPs, no user ids, no full URLs: a hashed visitor id (HMAC on
+-- the API), the referring site's host only, the page path and a coarse device class.
+create table if not exists public.events (
+    id bigint generated always as identity primary key,
+    created_at timestamptz not null default now(),
+    type text not null check (type in ('pageview', 'analysis', 'layout_open', 'export', 'save', 'request', 'gallery_pick')),
+    path text check (char_length(path) <= 120),
+    referrer text check (char_length(referrer) <= 120),
+    visitor text not null check (visitor ~ '^[0-9a-f]{16}$'),
+    layout text check (char_length(layout) <= 32),
+    device text check (device in ('mobile', 'tablet', 'desktop'))
+);
+create index if not exists events_created_idx on public.events (created_at desc);
+alter table public.events enable row level security;
+revoke all on table public.events from anon, authenticated;
+grant insert on table public.events to anon, authenticated;
+grant select on table public.events to authenticated;
+drop policy if exists "events_insert_any" on public.events;
+drop policy if exists "events_select_admin" on public.events;
+create policy "events_insert_any" on public.events
+    for insert to anon, authenticated with check (true);
+create policy "events_select_admin" on public.events
+    for select to authenticated using ((select public.is_admin()));
+
+-- Layout requests from the landing page: a Pinterest pin someone wants turned into a layout.
+create table if not exists public.layout_requests (
+    id uuid primary key default gen_random_uuid(),
+    created_at timestamptz not null default now(),
+    pin_id text not null check (pin_id ~ '^[0-9]{5,25}$'),
+    pin_url text not null check (pin_url ~ '^https://www\.pinterest\.com/pin/[0-9]{5,25}/$'),
+    pin_title text check (char_length(pin_title) <= 200),
+    pin_author text check (char_length(pin_author) <= 120),
+    pin_author_url text check (pin_author_url ~ '^https://www\.pinterest\.com/'),
+    pin_thumb text check (pin_thumb ~ '^https://i\.pinimg\.com/'),
+    pin_width int, pin_height int,
+    note text check (char_length(note) <= 500),
+    email text check (email is null or (char_length(email) <= 200 and email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$')),
+    referrer text check (char_length(referrer) <= 120),
+    visitor text check (visitor ~ '^[0-9a-f]{16}$'),
+    device text check (device in ('mobile', 'tablet', 'desktop')),
+    user_id uuid default auth.uid(),
+    status text not null default 'pending' check (status in ('pending', 'accepted', 'rejected', 'done')),
+    admin_note text check (char_length(admin_note) <= 500),
+    reviewed_at timestamptz,
+    reviewed_by uuid
+);
+create index if not exists layout_requests_created_idx on public.layout_requests (created_at desc);
+alter table public.layout_requests enable row level security;
+revoke all on table public.layout_requests from anon, authenticated;
+grant insert on table public.layout_requests to anon, authenticated;
+grant select, update on table public.layout_requests to authenticated;
+drop policy if exists "requests_insert_any" on public.layout_requests;
+drop policy if exists "requests_select_admin" on public.layout_requests;
+drop policy if exists "requests_update_admin" on public.layout_requests;
+-- Anyone may submit, but only as a fresh, unreviewed request owned by themselves (or nobody).
+create policy "requests_insert_any" on public.layout_requests
+    for insert to anon, authenticated with check (
+        status = 'pending' and admin_note is null and reviewed_at is null and reviewed_by is null
+        and (user_id is null or user_id = (select auth.uid()))
+    );
+create policy "requests_select_admin" on public.layout_requests
+    for select to authenticated using ((select public.is_admin()));
+create policy "requests_update_admin" on public.layout_requests
+    for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+
+-- At most 10 requests per visitor per day (serialized per visitor).
+create or replace function public.layout_requests_limit() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+    if new.visitor is not null then
+        perform pg_advisory_xact_lock(hashtext('req:' || new.visitor));
+        if (select count(*) from public.layout_requests
+            where visitor = new.visitor and created_at > now() - interval '1 day') >= 10 then
+            raise exception 'REQUEST_LIMIT' using errcode = 'P0001';
+        end if;
+    end if;
+    return new;
+end;
+$$;
+drop trigger if exists layout_requests_limit on public.layout_requests;
+create trigger layout_requests_limit before insert on public.layout_requests
+    for each row execute function public.layout_requests_limit();
+
+-- Dashboard numbers in one round trip. Invoker + explicit check: non-admins get an error.
+create or replace function public.admin_stats(days int default 30) returns jsonb
+language plpgsql stable security invoker set search_path = public as $$
+declare
+    since timestamptz := now() - make_interval(days => greatest(1, least(days, 365)));
+begin
+    if not public.is_admin() then
+        raise exception 'NOT_ADMIN' using errcode = '42501';
+    end if;
+    return jsonb_build_object(
+        'since', since,
+        'totals', (select jsonb_build_object(
+            'pageviews', count(*) filter (where type = 'pageview'),
+            'visitors', count(distinct visitor),
+            'analyses', count(*) filter (where type = 'analysis'),
+            'layout_opens', count(*) filter (where type = 'layout_open'),
+            'exports', count(*) filter (where type = 'export'),
+            'saves', count(*) filter (where type = 'save'),
+            'requests', count(*) filter (where type = 'request'))
+            from public.events where created_at >= since),
+        'daily', (select coalesce(jsonb_agg(x.j order by x.d), '[]'::jsonb) from (
+            select date_trunc('day', created_at) as d, jsonb_build_object(
+                'day', to_char(date_trunc('day', created_at), 'YYYY-MM-DD'),
+                'pageviews', count(*) filter (where type = 'pageview'),
+                'visitors', count(distinct visitor),
+                'exports', count(*) filter (where type = 'export')) as j
+            from public.events where created_at >= since group by 1) x),
+        'referrers', (select coalesce(jsonb_agg(jsonb_build_object('name', r, 'count', n) order by n desc), '[]'::jsonb) from (
+            select coalesce(referrer, 'direct') as r, count(*) as n from public.events
+            where created_at >= since and type = 'pageview' group by 1 order by 2 desc limit 12) x),
+        'pages', (select coalesce(jsonb_agg(jsonb_build_object('name', path, 'count', n) order by n desc), '[]'::jsonb) from (
+            select path, count(*) as n from public.events
+            where created_at >= since and type = 'pageview' and path is not null group by 1 order by 2 desc limit 12) x),
+        'layouts', (select coalesce(jsonb_agg(jsonb_build_object('name', layout, 'opens', o, 'exports', e) order by e desc, o desc), '[]'::jsonb) from (
+            select layout, count(*) filter (where type = 'layout_open') as o, count(*) filter (where type = 'export') as e
+            from public.events where created_at >= since and layout is not null group by 1 order by 3 desc, 2 desc limit 15) x),
+        'devices', (select coalesce(jsonb_object_agg(coalesce(device, 'unknown'), n), '{}'::jsonb) from (
+            select device, count(distinct visitor) as n from public.events where created_at >= since group by 1) x),
+        'requests', (select jsonb_build_object(
+            'pending', count(*) filter (where status = 'pending'),
+            'accepted', count(*) filter (where status = 'accepted'),
+            'rejected', count(*) filter (where status = 'rejected'),
+            'done', count(*) filter (where status = 'done'))
+            from public.layout_requests)
+    );
+end;
+$$;
+revoke all on function public.admin_stats(int) from public;
+grant execute on function public.admin_stats(int) to authenticated;

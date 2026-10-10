@@ -21,6 +21,7 @@ import { authConfigured, signOut, useAuth } from "../lib/auth";
 import { sampleFile } from "../lib/sample";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
 import { inputFor } from "../lib/story/input";
+import { track } from "../lib/analytics";
 import type { StoryState, TemplateId } from "../lib/story/types";
 import { MAX_BYTES, checkFile } from "../lib/upload";
 import { Editor } from "./Editor";
@@ -224,9 +225,11 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
       );
       if (!live()) return;
       setAnalysis(result);
+      track("analysis");
       const date = new Date();
       setStoryDate(date);
       if (preset) {
+        track("layout_open", { layout: preset });
         // Picked from the gallery: go straight to that layout, personalised by the analysis.
         const layout = result.layouts.find((l) => l.id === preset) ?? result.layouts[0] ?? null;
         setStory(defaultState(preset, inputFor(layout, result, date)));
@@ -273,6 +276,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
       analysis?.layouts[0] ??
       null;
     setStory(defaultState(id, inputFor(layout, analysis, storyDate)));
+    track("layout_open", { layout: id });
     setPhase("edit");
   };
 

@@ -7,6 +7,7 @@ import {
   Source_Serif_4,
   Space_Mono,
 } from "next/font/google";
+import { Analytics } from "../components/Analytics";
 import "./globals.css";
 
 // DESIGN.md substitutes: Bodoni Moda (Canopee), Source Serif 4 (Editorial New).
@@ -36,7 +37,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   const vars = [display, serif, italic, sans, hand, mono].map((f) => f.variable).join(" ");
   return (
     <html lang="en" className={vars}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }

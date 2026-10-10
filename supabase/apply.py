@@ -24,24 +24,29 @@ def parse(url: str) -> dict:
                 dbname=dbname.split("?")[0], sslmode="require", prepare_threshold=None)
 
 
-env = {}
-for line in (ROOT / "apps/api/.env").read_text().splitlines():
-    if "=" in line and not line.lstrip().startswith("#"):
-        k, v = line.split("=", 1)
-        env[k.strip()] = v.strip()
-if not env.get("DATABASE_URL"):
-    raise SystemExit("DATABASE_URL is not set in apps/api/.env")
+def connect() -> psycopg.Connection:
+    env = {}
+    for line in (ROOT / "apps/api/.env").read_text().splitlines():
+        if "=" in line and not line.lstrip().startswith("#"):
+            k, v = line.split("=", 1)
+            env[k.strip()] = v.strip()
+    if not env.get("DATABASE_URL"):
+        raise SystemExit("DATABASE_URL is not set in apps/api/.env")
+    return psycopg.connect(**parse(env["DATABASE_URL"]), connect_timeout=15)
 
-with psycopg.connect(**parse(env["DATABASE_URL"]), connect_timeout=15) as conn:
-    with conn.transaction():
-        conn.execute((ROOT / "supabase/schema.sql").read_text())
-        conn.execute("notify pgrst, 'reload schema'")
-    policies = [r[0] for r in conn.execute(
-        "select policyname from pg_policies where tablename = 'stories' order by 1").fetchall()]
-    rls, anon_sel, auth_sel, auth_upd = conn.execute(
-        "select relrowsecurity, has_table_privilege('anon','public.stories','select'),"
-        " has_table_privilege('authenticated','public.stories','select'),"
-        " has_table_privilege('authenticated','public.stories','update')"
-        " from pg_class where oid = 'public.stories'::regclass").fetchone()
-print("rls:", rls, "| policies:", policies)
-print("anon select:", anon_sel, "| authenticated select:", auth_sel, "| authenticated update:", auth_upd)
+
+if __name__ == "__main__":
+    with connect() as conn:
+        with conn.transaction():
+            conn.execute((ROOT / "supabase/schema.sql").read_text())
+            conn.execute("notify pgrst, 'reload schema'")
+        for table in ("stories", "events", "layout_requests", "admins"):
+            policies = [r[0] for r in conn.execute(
+                "select policyname from pg_policies where tablename = %s order by 1", (table,)).fetchall()]
+            rls, anon_sel, auth_upd = conn.execute(
+                "select relrowsecurity, has_table_privilege('anon', c.oid, 'select'),"
+                " has_table_privilege('authenticated', c.oid, 'update')"
+                " from pg_class c where c.oid = %s::regclass", (f"public.{table}",)).fetchone()
+            print(f"{table}: rls={rls} anon_select={anon_sel} auth_update={auth_upd} policies={policies}")
+        admins = conn.execute("select count(*) from public.admins").fetchone()[0]
+        print("admins:", admins)

@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { BackendStatus } from "../components/BackendStatus";
 import { HeroExample } from "../components/HeroExample";
+import { RequestLayout } from "../components/RequestLayout";
 import styles from "./page.module.css";
 
 const STEPS = [
@@ -14,7 +16,12 @@ export default function Home() {
       <header className={styles.masthead}>
         <span>Vol. 01 — Story Studio</span>
         <span className={styles.brand}>Tasteframe</span>
-        <Link href="/create" className={styles.homeLink}>Open the studio →</Link>
+        <nav className={styles.nav} aria-label="Main">
+          <BackendStatus />
+          <RequestLayout />
+          <Link href="/gallery" className={styles.homeLink}>Gallery</Link>
+          <Link href="/create" className={styles.homeLink}>Open the studio</Link>
+        </nav>
       </header>
 
       <section className={styles.hero}>

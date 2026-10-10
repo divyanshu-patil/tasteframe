@@ -19,6 +19,7 @@ import { PinSource } from "./PinSource";
 import { StoryCanvas } from "./StoryCanvas";
 import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
 import { useMasks } from "./useMasks";
+import { track } from "../lib/analytics";
 import { PROPS } from "../lib/story/elements";
 import s from "./maker.module.css";
 
@@ -143,6 +144,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
     try {
       await onSave();
       setSaving({ kind: "done" });
+      track("save", { layout: story.templateId });
     } catch (e) {
       if ((e as { code?: string }).code === "LOGIN_CANCELLED") return setSaving({ kind: "idle" });
       setSaving({ kind: "error", msg: e instanceof Error && e.message ? e.message : "Saving failed." });
@@ -161,6 +163,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
       setExporting("done");
+      track("export", { layout: story.templateId });
     } catch {
       setExporting("error");
     }
@@ -224,6 +227,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
 
   const chooseLayout = (id: TemplateId) => {
     dispatch({ type: "template", id, input: input(id) });
+    track("layout_open", { layout: id });
     setSel(null);
   };
 

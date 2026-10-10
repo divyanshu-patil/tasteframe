@@ -16,6 +16,14 @@
 .masthead > :last-child {
   text-align: right;
 }
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-14);
+}
+
 .brand {
   font-family: var(--font-display);
   font-weight: 600;
@@ -161,6 +169,9 @@
   }
   .masthead > :last-child {
     text-align: center;
+  }
+  .nav {
+    justify-content: center;
   }
   .hero {
     grid-template-columns: 1fr;
