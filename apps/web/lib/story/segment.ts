@@ -93,3 +93,4 @@ export function personMask(photo: Photo): Promise<HTMLCanvasElement | null> {
   }
   return p;
 }
+
