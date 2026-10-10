@@ -127,12 +127,6 @@ const SPECS: Spec[] = [
   },
   // ---- blocks & badges --------------------------------------------------------------------
   {
-    id: "redblock", name: "Red Block", blurb: "Black-and-white photo with one red block holding a few words.", filter: "bw",
-    bg: { kind: "photo" }, overlay: { strength: 0.05, color: "#000000" }, frames: [{ slot: 0, r: FULL }],
-    deco: [{ k: "rect", r: { x: 470, y: 700, w: 330, h: 560 }, color: "#d23b2c", alpha: 0.88 }],
-    headline: T("mono", 30, 0.46, 0.385, { color: WHITE, width: 0.26 }), caption: T("mono", 20, 0.46, 0.6, { color: WHITE, width: 0.26 }),
-  },
-  {
     id: "badge", name: "Quote Badge", blurb: "A red circle badge with a short quote over a monochrome photo.", filter: "bw",
     bg: { kind: "photo" }, overlay: { strength: 0.1, color: "#000000" }, frames: [{ slot: 0, r: FULL }],
     deco: [{ k: "circle", x: 640, y: 1000, rad: 170, color: "#c0392b", alpha: 0.95 }],
@@ -329,19 +323,6 @@ const SPECS: Spec[] = [
     cover: { show: true, style: "igart", scale: 1.6, rotate: -9, x: 0.36, y: 0.3 },
     headline: C("hand", 70, 0.76, { color: WHITE }), caption: C("mono", 20, 0.135, { color: WHITE }),
     text: { headline: { shadow: true }, caption: { shadow: true } },
-  },
-  {
-    id: "coverstack", name: "Player Stack", blurb: "Stacked, tilted player cards — your song on top, photo crops behind.",
-    bg: { kind: "blur" }, overlay: { strength: 0.4, color: "#000000" },
-    frames: [],
-    under: [
-      { k: "rect", r: { x: 140, y: 420, w: 420, h: 560 }, color: "#1c1a1e", alpha: 0.8, radius: 40, rot: -12 },
-      { k: "photo", slot: 0, r: { x: 175, y: 455, w: 350, h: 350 }, rot: -12, zoom: 1.8, dx: -0.2 },
-      { k: "rect", r: { x: 560, y: 1000, w: 420, h: 560 }, color: "#1c1a1e", alpha: 0.8, radius: 40, rot: 10 },
-      { k: "photo", slot: 0, r: { x: 595, y: 1035, w: 350, h: 350 }, rot: 10, zoom: 2, dx: 0.25 },
-    ],
-    cover: { show: true, style: "igpill", scale: 1.15, rotate: 4, x: 0.52, y: 0.47 },
-    headline: T("sans", 50, 0.08, 0.135, { color: WHITE }), caption: T("mono", 20, 0.08, 0.79, { color: WHITE }),
   },
   {
     id: "coverpolaroid", name: "Polaroid + Cover", blurb: "A polaroid on paper with the song cover taped on like a sticker.",

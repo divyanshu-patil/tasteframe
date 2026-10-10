@@ -12,7 +12,7 @@ export const LAYOUT_GROUPS: { id: string; name: string; ids: TemplateId[] }[] = 
   {
     id: "music",
     name: "Song cover & music",
-    ids: ["coverface", "coversingle", "coverfloat", "coverbubble", "coverstack", "coverpolaroid", "coversepia", "covercorner", "covermouth", "nowplaying", "vinyl"],
+    ids: ["coverface", "coversingle", "coverfloat", "coverbubble", "coverpolaroid", "coversepia", "covercorner", "covermouth", "nowplaying", "vinyl"],
   },
   {
     id: "multi",

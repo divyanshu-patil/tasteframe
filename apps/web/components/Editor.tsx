@@ -10,7 +10,7 @@ import { LAYOUT_GROUPS, groupOf } from "../lib/story/groups";
 import { pinsFor } from "../lib/story/pins";
 import type { Selection } from "../lib/story/selection";
 import { STICKER_KINDS, type Sticker, newSticker } from "../lib/story/stickers";
-import { TEMPLATES, slotRectsFor } from "../lib/story/templates";
+import { TEMPLATES, layoutBoxes, slotRectsFor } from "../lib/story/templates";
 import type { Align, Crop, FontRole, StoryState, TemplateId, TemplateInput, TextKey } from "../lib/story/types";
 import { CoverPanel, useCoverImage, useTrackArt } from "./CoverPanel";
 import { ColorField, Section, Segmented, Slider, Toggle, deg, pct, px, times } from "./controls";
@@ -19,6 +19,7 @@ import { PinSource } from "./PinSource";
 import { StoryCanvas } from "./StoryCanvas";
 import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
 import { useMasks } from "./useMasks";
+import { PROPS } from "../lib/story/elements";
 import s from "./maker.module.css";
 
 interface Props {
@@ -80,6 +81,8 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
   const art = useTrackArt((story.tracks ?? []).flatMap((t) => (t.trackId ? [t.trackId] : [])));
   const order = story.order?.length ? story.order : [0, 1, 2, 3];
   const boxes = slotRectsFor(story, photos.length);
+  const lboxes = layoutBoxes(photos, story);
+  const rel = (r: { x: number; y: number; w: number; h: number }) => ({ x: r.x / 1080, y: r.y / 1920, w: r.w / 1080, h: r.h / 1920 });
   const capacity = tpl.capacity ?? 1;
   const emptySlots = Math.max(0, Math.min(4, capacity) - photos.length);
   const pins = useMemo(() => pinsFor(story.templateId), [story.templateId]);
@@ -180,7 +183,13 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
         return dispatch({ type: "cover-move", dx, dy });
       case "view":
         return dispatch({ type: "view", key: target.key, dx: -dx * 1.5, dy: -dy * 1.5 });
+      case "box": {
+        const b = lboxes.find((x) => x.key === target.key);
+        return b && dispatch({ type: "box", key: target.key, from: rel(b.r), dx, dy });
+      }
       case "slot": {
+        // Photo drawn turned 90° (e.g. Player Cutout): finger right = photo up.
+        if (tpl.slotTurn === 90) [dx, dy] = [dy, -dx];
         if (!ownSlot(target.i)) return dispatch({ type: "view", key: `slot${target.i}`, dx: -dx * 1.5, dy: -dy * 1.5 });
         const c = cropOf(target.i);
         return dispatch({ type: "crop", slot: target.i, patch: { x: c.x - dx * 1.5, y: c.y - dy * 1.5 } });
@@ -223,6 +232,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
     { sel: { kind: "text", key: "headline" }, label: "Headline" },
     ...(story.caption.text ? [{ sel: { kind: "text", key: "caption" } as Selection, label: "Caption" }] : []),
     ...boxes.map((_, i) => ({ sel: { kind: "slot", i } as Selection, label: boxes.length > 1 ? `Photo box ${i + 1}` : "Photo" })),
+    ...lboxes.map((b) => ({ sel: { kind: "box", key: b.key } as Selection, label: b.label })),
     ...(story.spot ? [{ sel: { kind: "spot" } as Selection, label: story.templateId === "colorbox" ? "Colour box" : "Strip" }] : []),
     ...(story.cover?.show ? [{ sel: { kind: "cover" } as Selection, label: "Song sticker" }] : []),
     ...story.stickers.map((st) => ({ sel: { kind: "sticker", id: st.id } as Selection, label: stickerName(st) })),
@@ -256,6 +266,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           onDragText={(key, dx, dy) => dispatch({ type: "move-by", key, dx, dy })}
           onDragPhoto={(dx, dy, slot) => panBy({ kind: "slot", i: slot }, dx, dy)}
           onDragView={(key, dx, dy) => panBy({ kind: "view", key }, dx, dy)}
+          onDragBox={(key, dx, dy) => panBy({ kind: "box", key }, dx, dy)}
           onDragSpot={(dx, dy) => dispatch({ type: "spot", dx, dy })}
           onDragCover={(dx, dy) => dispatch({ type: "cover-move", dx, dy })}
           onDragSticker={(id, dx, dy) => dispatch({ type: "sticker-move", id, dx, dy })}
@@ -330,6 +341,30 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
               </div>
               {layoutEls.length < defaultElCount(story, input) && (
                 <button className={s.linkBtn} onClick={() => dispatch({ type: "restore-elements", input: input(story.templateId) })}>Bring back removed elements</button>
+              )}
+            </div>
+          )}
+          {tpl.prop && (
+            <div className={s.subgroup}>
+              <p className={s.subhead}>Second picture</p>
+              {photos.length > 1 ? (
+                <p className={s.small}>Showing your second photo. Remove it in Photos to use a prop shot again.</p>
+              ) : (
+                <>
+                  <div className={s.propGrid} role="group" aria-label="Prop photo">
+                    {PROPS.map((p) => (
+                      <button key={p.id} className={`${s.propBtn} ${story.prop === p.id ? s.swatchOn : ""}`} aria-pressed={story.prop === p.id} aria-label={p.title} onClick={() => dispatch({ type: "prop", id: p.id })}>
+                        {/* eslint-disable-next-line @next/next/no-img-element -- local prop thumbnail */}
+                        <img src={p.file} alt="" loading="lazy" />
+                      </button>
+                    ))}
+                  </div>
+                  <div className={s.row}>
+                    <button className={s.secondary} onClick={() => dispatch({ type: "prop", id: nextProp(story.prop) })}>Shuffle</button>
+                    {onAddPhotos && <button className={s.secondary} onClick={() => addInput.current?.click()}>Use my own photo</button>}
+                  </div>
+                  {propCredit()}
+                </>
               )}
             </div>
           )}
@@ -477,6 +512,18 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
     );
   }
 
+  function propCredit() {
+    const p = PROPS.find((x) => x.id === story.prop);
+    if (!p) return null;
+    return (
+      <p className={s.small}>
+        Photo: <a href={p.source} target="_blank" rel="noopener noreferrer">{p.title}</a>
+        {p.creator !== "unknown" && <> by {p.creatorUrl ? <a href={p.creatorUrl} target="_blank" rel="noopener noreferrer">{p.creator}</a> : p.creator}</>} ·{" "}
+        {p.licenseUrl ? <a href={p.licenseUrl} target="_blank" rel="noopener noreferrer">{p.license}</a> : p.license}
+      </p>
+    );
+  }
+
   function spotControls() {
     const sp = story.spot!;
     const full = sp.w >= 0.99;
@@ -486,6 +533,12 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
         <Slider label="Up ↕ down" value={sp.y} min={0} max={1 - sp.h} step={0.001} nudge={0.005} format={pct} onChange={(v) => dispatch({ type: "spot", y: v })} />
         {!full && <Slider label="Width" value={sp.w} min={0.08} max={1} step={0.005} nudge={0.01} format={pct} onChange={(v) => dispatch({ type: "spot", w: v })} />}
         <Slider label="Height" value={sp.h} min={0.04} max={0.6} step={0.005} nudge={0.01} format={pct} onChange={(v) => dispatch({ type: "spot", h: v })} />
+        {story.templateId === "tornstrip" && (
+          <>
+            <p className={s.subhead}>Inside the strip</p>
+            {boxControls({ viewKey: "band" })}
+          </>
+        )}
       </>
     );
   }
@@ -601,6 +654,33 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
     } else if (sel?.kind === "view") {
       title = sel.key.startsWith("slot") ? `Photo box ${Number(sel.key.slice(4)) + 1}` : "Zoomed box";
       body = boxControls({ viewKey: sel.key });
+    } else if (sel?.kind === "box") {
+      const b = lboxes.find((x) => x.key === sel.key);
+      if (b) {
+        const r = rel(b.r);
+        const set = (patch: Partial<typeof r>) => dispatch({ type: "box", key: b.key, from: r, ...patch });
+        title = b.label;
+        body = (
+          <>
+            <p className={s.small}>Drag its frame on the Story to move it{b.image ? "; drag inside to choose which part of the photo it shows" : ""}.</p>
+            <Slider label="Left ↔ right" value={r.x} min={-r.w / 2} max={1 - r.w / 2} step={0.001} nudge={0.005} format={pct} onChange={(v) => set({ x: v })} />
+            <Slider label="Up ↕ down" value={r.y} min={-r.h / 2} max={1 - r.h / 2} step={0.001} nudge={0.005} format={pct} onChange={(v) => set({ y: v })} />
+            <Slider label="Width" value={r.w} min={0.03} max={1} step={0.002} nudge={0.01} format={pct} onChange={(v) => set({ w: v })} />
+            <Slider label="Height" value={r.h} min={0.02} max={1} step={0.002} nudge={0.01} format={pct} onChange={(v) => set({ h: v })} />
+            {b.layer && (
+              <Segmented label="Layer" value={story.decorations[b.layer] !== false ? "behind" : "front"} options={[{ id: "behind", label: "Behind you" }, { id: "front", label: "In front of you" }]} onChange={(v) => dispatch({ type: "decoration", key: b.layer!, on: v === "behind" })} />
+            )}
+            {b.tinted && (
+              <>
+                <Slider label="Opacity" value={story.overlay.strength} min={0} max={1} step={0.01} nudge={0.02} format={pct} onChange={(v) => dispatch({ type: "overlay", patch: { strength: v } })} />
+                <ColorField label="Colour" value={story.overlay.color} onChange={(v) => dispatch({ type: "overlay", patch: { color: v } })} />
+              </>
+            )}
+            {b.image && boxControls({ viewKey: b.key })}
+            <button className={s.linkBtn} onClick={() => dispatch({ type: "box", key: b.key, from: r, reset: true })}>Put it back</button>
+          </>
+        );
+      }
     } else if (sel?.kind === "spot" && story.spot) {
       title = story.templateId === "colorbox" ? "Colour box" : "Strip";
       body = spotControls();
@@ -634,6 +714,12 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
       </div>
     );
   }
+}
+
+/** A different prop photo than the current one (deterministic cycle with a skip). */
+function nextProp(cur?: string): string {
+  const i = PROPS.findIndex((p) => p.id === cur);
+  return PROPS[(i + 3 + PROPS.length) % PROPS.length]!.id;
 }
 
 /** How many elements this layout places by default (to offer restoring deleted ones). */

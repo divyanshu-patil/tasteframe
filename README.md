@@ -137,16 +137,27 @@ prefix on every read and delete.
 
 ## Layouts, filters, stickers
 
-- **84 layouts**, grouped in the editor (Cutouts & posters, Screens & cameras, Song cover &
+- **83 layouts**, grouped in the editor (Cutouts & posters, Screens & cameras, Song cover &
   music, Multi-photo, Type & notes, Film & mood, Paper & scrapbook). Each was modelled on Pinterest
   references (`design-refs/pinterest`; see `design-refs/README.md`):
   - 26 hand-drawn ones in `templates.ts`, `templates-more.ts` and `templates-multi.ts`.
-  - 38 declarative ones in `layouts-aesthetic.ts`, built by the spec engine in `spec.ts`. The
+  - 36 declarative ones in `layouts-aesthetic.ts`, built by the spec engine in `spec.ts`. The
     flat-colour ones were removed for quality.
-  - 20 from the owner's own pins in `templates-refs.ts`: Playlist (Spotify-style table), Player
-    Cutout, Triptych, CCTV, Colour Box, Torn Strip, Sticker Cutout, Focus, Camera Screen,
-    Camcorder, Night Cam, Sepia Prints, Desktop, WhatsApp Screen, Kiss Mark, Xerox Poster,
-    Yearbook, Song on Lips, Sepia + Song and Song Corner.
+  - 21 from the owner's own pins in `templates-refs.ts`, each matched to its pin:
+    - **Playlist** uses the owner's sideways Instagram/Spotify screen template (green-screen
+      keyed). It has your photo in the top window and, in the bottom one, either a prop shot or
+      your own second photo. The 10 prop shots (can, matcha, iced latte, turntable…) are
+      shuffleable, openly licensed, and credited in the app; see `public/props` and
+      `lib/story/props.json`.
+    - **Player Cutout** turns the whole Story sideways like its pin. You're a high-contrast B&W
+      die-cut over a sepia collage, with the song running down the side.
+    - **Red Block** is a translucent block you can put behind or in front of you, with opacity,
+      move and resize.
+    - **Torn Strip** has real ripped-paper edges over a darker B&W layer with a ghost masthead.
+    - **Vinyl** is a release poster.
+    - Also: CCTV, Triptych, Colour Box, Sticker Cutout, Focus, Camera Screen, Camcorder, Night
+      Cam, Sepia Prints, Desktop, WhatsApp Screen, Kiss Mark, Xerox Poster, Yearbook, Song on
+      Lips, Sepia + Song and Song Corner.
 - **Pinterest originals**: every suggestion, the editor and the gallery show the pin a layout was
   modelled on. This uses Pinterest's own oEmbed thumbnail, linked to the pin with the creator
   credited (`lib/story/pins.json`, built by `design-refs/build_pins.py`). No pin images are stored
@@ -185,6 +196,9 @@ prefix on every read and delete.
   - **Every box that shows part of a photo** (repeated bands, collage tiles, CCTV callouts, insets)
     can be dragged or zoomed to choose what it shows.
   - Strips and windows (Torn Strip, Focus, Colour Box) drag, or move and resize with sliders.
+  - Layout boxes (CCTV's subject, detail and callout frames, Xerox's inset, Red Block's block)
+    move by dragging their frame and resize in the inspector. Inside a picture box, dragging pans
+    the picture.
   - The "This layout" section shows only the controls that layout uses.
 
 ### How layouts are ranked

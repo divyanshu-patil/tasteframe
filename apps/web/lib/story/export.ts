@@ -1,5 +1,5 @@
 // PNG export at exactly 1080×1920 — independent of on-screen preview size.
-import { elementsReady } from "./elements";
+import { elementsReady, propReady } from "./elements";
 import { type Photo, fontString } from "./draw";
 import { TEMPLATES, type StoryAssets, renderStory } from "./templates";
 import type { StoryState } from "./types";
@@ -24,7 +24,7 @@ export function exportFilename(s: StoryState, now = new Date()): string {
 
 export async function exportPng(photo: Photo | Photo[], s: StoryState, assets: StoryAssets = {}): Promise<Blob> {
   if (!TEMPLATES[s.templateId]) throw new Error("Unknown template");
-  await Promise.all([fontsReady(), elementsReady()]);
+  await Promise.all([fontsReady(), elementsReady(), ...(TEMPLATES[s.templateId].prop ? [propReady(s.prop ?? TEMPLATES[s.templateId].prop!)] : [])]);
   const canvas = document.createElement("canvas");
   canvas.width = STORY_W;
   canvas.height = STORY_H;

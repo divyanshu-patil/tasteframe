@@ -17,7 +17,7 @@ import {
   star,
 } from "./draw";
 import { type FilterId, filteredPhoto, rotatedPhoto } from "./filters";
-import { type Slots, type Template, decos, fmtDate, on, pad, stamp, subjectHigh, subjectLow, t, tape, tornRect } from "./kit";
+import { type Slots, type Template, boxAt, decos, fmtDate, on, pad, stamp, subjectHigh, subjectLow, t, tape, tornRect } from "./kit";
 import { AESTHETIC_TEMPLATES } from "./layouts-aesthetic";
 import { REF_TEMPLATES } from "./templates-refs";
 import { DEFAULT_COVER, drawCover } from "./cover";
@@ -517,11 +517,13 @@ const focusCrop = (f?: { x: number; y: number }): Crop => ({
 
 export function defaultState(id: TemplateId, input: TemplateInput): StoryState {
   const { filter, ...rest } = TEMPLATES[id].defaults(input);
+  const rot = TEMPLATES[id].photoRot;
+  const turn = (c: Crop): Crop => (rot ? { ...c, rot } : c);
   return {
     templateId: id,
-    crop: focusCrop(input.focuses?.[0] ?? input.focus),
+    crop: turn(focusCrop(input.focuses?.[0] ?? input.focus)),
     order: [0, 1, 2, 3],
-    crops: [1, 2, 3].map((i) => focusCrop(input.focuses?.[i])),
+    crops: [1, 2, 3].map((i) => turn(focusCrop(input.focuses?.[i]))),
     accent: input.accent,
     palette: input.palette.length ? input.palette : [input.accent],
     stamp: stampFor(input.date),
@@ -533,6 +535,7 @@ export function defaultState(id: TemplateId, input: TemplateInput): StoryState {
     focus: { x: clamp01((input.focuses?.[0] ?? input.focus)?.x ?? 0.5), y: clamp01((input.focuses?.[0] ?? input.focus)?.y ?? 0.42) },
     ...(TEMPLATES[id].spot ? { spot: TEMPLATES[id].spot!(input) } : {}),
     tags: (input.scene ?? []).slice(0, 5),
+    ...(TEMPLATES[id].prop ? { prop: TEMPLATES[id].prop } : {}),
     ...rest,
   };
 }
@@ -544,6 +547,8 @@ export interface HitBoxes {
   slots: Rect[];
   /** Named inset boxes (StoryState.views keys). */
   views: { key: string; r: Rect }[];
+  /** Movable layout boxes, at their current position. */
+  boxes: LayoutBox[];
 }
 
 const DEFAULT_CROP: Crop = { zoom: 1, x: 0.5, y: 0.5, fit: "cover" };
@@ -573,6 +578,24 @@ export function makeSlots(photos: Photo[], s: StoryState, masks: (Mask | null)[]
 }
 
 /** Number of slots a template shows for `count` photos (for hit-testing and the Photos panel). */
+export interface LayoutBox {
+  key: string;
+  label: string;
+  r: Rect;
+  image?: boolean;
+  tinted?: boolean;
+  layer?: string;
+}
+
+function resolvedBoxes(s: StoryState, slots: Slots): LayoutBox[] {
+  return (TEMPLATES[s.templateId].boxes?.(s, slots) ?? []).map((b) => ({ ...b, r: boxAt(s, b.key, b.r) }));
+}
+
+/** The layout's movable boxes for these photos (editor inspector + tests). */
+export function layoutBoxes(photos: Photo[], s: StoryState): LayoutBox[] {
+  return resolvedBoxes(s, makeSlots(photos, s));
+}
+
 export function slotRectsFor(s: StoryState, count: number): Rect[] {
   const tpl = TEMPLATES[s.templateId];
   const rects = tpl.slotRects?.(s, count) ?? [{ x: 0, y: 0, w: W, h: H }];
@@ -603,5 +626,5 @@ export function renderStory(ctx: Ctx, photos: Photo | Photo[], s: StoryState, as
   drawCover(ctx, s, assets.cover ?? null, slots.photo(0));
   for (const st of s.stickers ?? []) drawSticker(ctx, st, { tracks: s.tracks, art: assets.art, photo: slots.photo(0) });
   ctx.restore();
-  return { headline, caption, slots: slotRectsFor(s, slots.count), views: tpl.views?.(s, slots) ?? [] };
+  return { headline, caption, slots: slotRectsFor(s, slots.count), views: tpl.views?.(s, slots) ?? [], boxes: resolvedBoxes(s, slots) };
 }

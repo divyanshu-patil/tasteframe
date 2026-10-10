@@ -262,76 +262,155 @@ const nowplaying: Template = {
 };
 
 // ---------------------------------------------------------------------------------------------
+// Vinyl (pin by Noriko): a cream release poster — black record running off the left edge with
+// your photo as the label, a white modern tonearm, title top-left, "now available" pill below.
 const vinyl: Template = {
   id: "vinyl",
   name: "Vinyl",
-  blurb: "A record on paper stock with your photo as the label and a tonearm resting on it.",
+  blurb: "A release-poster record: your photo as the label, white tonearm, title and a now-available pill.",
   overlayLabel: "Paper",
   decorations: decos([
     ["tonearm", "Tonearm", true],
     ["grooves", "Grooves", true],
+    ["pill", "Now available pill", true],
   ]),
+  slotRects: () => [{ x: 140, y: 510, w: 380, h: 380 }],
   defaults: (i) => ({
-    headline: t({ text: i.music?.title ?? i.headline, size: 76, font: "display", x: 0.08, y: 0.7, width: 0.84 }),
-    caption: t({ text: i.music?.artist ? `${i.music.artist} — on repeat` : i.caption || fmtDate(i.date), size: 26, font: "mono", x: 0.08, y: 0.78, width: 0.84, color: "#69645f" }),
-    overlay: { strength: 0.25, color: "#efe9df" },
-    decorations: { tonearm: true, grooves: true },
+    headline: t({ text: (i.music?.title ?? i.headline).toUpperCase(), size: 50, font: "sans", x: 0.12, y: 0.165, width: 0.5, color: "#ffffff" }),
+    caption: t({ text: (i.music?.artist ?? i.caption ?? "").toUpperCase() || fmtDate(i.date), size: 19, font: "sans", x: 0.12, y: 0.2, width: 0.5, color: "#b9b4ad" }),
+    overlay: { strength: 0.18, color: "#f2f0eb" },
+    decorations: { tonearm: true, grooves: true, pill: true },
   }),
-  draw(ctx, photo, s) {
+  draw(ctx, photo, s, slots) {
     ctx.fillStyle = s.overlay.color;
     ctx.fillRect(0, 0, W, H);
     drawGrain(ctx, s.overlay.strength * 0.3, 31);
-    const cx = 520;
-    const cy = 780;
-    ctx.fillStyle = "#111111";
+    const cx = 330;
+    const cy = 700;
+    const R = 540;
+    // Record with a soft shadow on the paper.
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.35)";
+    ctx.shadowBlur = 40;
+    ctx.shadowOffsetY = 14;
+    ctx.fillStyle = "#0d0d0d";
     ctx.beginPath();
-    ctx.arc(cx, cy, 430, 0, Math.PI * 2);
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
     if (on(s, "grooves")) {
-      ctx.strokeStyle = "rgba(255,255,255,0.07)";
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
       ctx.lineWidth = 2;
-      for (let r = 190; r < 425; r += 9) {
+      for (let r = 215; r < R - 8; r += 8) {
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.stroke();
       }
-      const shine = ctx.createLinearGradient(cx - 430, cy - 430, cx + 430, cy + 430);
-      shine.addColorStop(0.35, "rgba(255,255,255,0)");
-      shine.addColorStop(0.5, "rgba(255,255,255,0.10)");
-      shine.addColorStop(0.65, "rgba(255,255,255,0)");
+      const shine = ctx.createLinearGradient(cx - R, cy - R, cx + R, cy + R);
+      shine.addColorStop(0.3, "rgba(255,255,255,0)");
+      shine.addColorStop(0.47, "rgba(255,255,255,0.12)");
+      shine.addColorStop(0.62, "rgba(255,255,255,0)");
       ctx.fillStyle = shine;
       ctx.beginPath();
-      ctx.arc(cx, cy, 430, 0, Math.PI * 2);
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Label: your photo with a pale rim and the title in script.
+    ctx.fillStyle = "#e9e6df";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 200, 0, Math.PI * 2);
+    ctx.fill();
     ctx.save();
     ctx.beginPath();
-    ctx.arc(cx, cy, 175, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 190, 0, Math.PI * 2);
     ctx.clip();
-    drawPhoto(ctx, photo, { x: cx - 175, y: cy - 175, w: 350, h: 350 }, s.crop);
+    drawPhoto(ctx, slots.photo(0), { x: cx - 190, y: cy - 190, w: 380, h: 380 }, s.crop);
+    ctx.restore();
+    ctx.save();
+    ctx.font = fontString("hand", 60);
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.textAlign = "center";
+    ctx.shadowColor = "rgba(0,0,0,0.35)";
+    ctx.shadowBlur = 8;
+    ctx.translate(cx, cy - 70);
+    ctx.rotate(-0.12);
+    ctx.fillText(s.headline.text.toLowerCase().slice(0, 16), 0, 0, 340);
     ctx.restore();
     ctx.fillStyle = s.overlay.color;
     ctx.beginPath();
-    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 9, 0, Math.PI * 2);
     ctx.fill();
     if (on(s, "tonearm")) {
       ctx.save();
-      ctx.strokeStyle = "#d8d4cd";
-      ctx.lineCap = "round";
-      ctx.lineWidth = 18;
-      ctx.beginPath();
-      ctx.moveTo(960, 330);
-      ctx.lineTo(930, 820);
-      ctx.lineTo(820, 990);
+      // Base: a pale disc in a thin outlined plinth.
+      ctx.strokeStyle = "rgba(0,0,0,0.12)";
+      ctx.lineWidth = 3;
+      roundRect(ctx, { x: 820, y: 190, w: 170, h: 250 }, 85);
       ctx.stroke();
-      ctx.fillStyle = "#f4f2ee";
+      ctx.shadowColor = "rgba(0,0,0,0.25)";
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = "#fbfaf7";
       ctx.beginPath();
-      ctx.arc(960, 330, 52, 0, Math.PI * 2);
+      ctx.arc(905, 290, 62, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#cfcac2";
-      ctx.fillRect(790, 975, 70, 40);
+      ctx.fillStyle = "#ffffff";
+      roundRect(ctx, { x: 875, y: 255, w: 60, h: 80 }, 12);
+      ctx.fill();
+      // Arm.
+      ctx.strokeStyle = "#f7f6f2";
+      ctx.lineCap = "round";
+      ctx.lineWidth = 20;
+      ctx.beginPath();
+      ctx.moveTo(905, 300);
+      ctx.lineTo(745, 1010);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(0,0,0,0.1)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(915, 300);
+      ctx.lineTo(755, 1010);
+      ctx.stroke();
+      // Headshell + needle.
+      ctx.translate(735, 1040);
+      ctx.rotate(0.6);
+      ctx.fillStyle = "#ffffff";
+      roundRect(ctx, { x: -36, y: -26, w: 72, h: 60 }, 8);
+      ctx.fill();
+      ctx.fillStyle = "#d9d6cf";
+      ctx.fillRect(-10, 34, 20, 26);
       ctx.restore();
     }
+    // Small studio mark, top right.
+    ctx.save();
+    ctx.font = fontString("sans", 34);
+    ctx.fillStyle = "#1d1d1b";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "top";
+    ctx.fillText("SIDE A", 1010, 120);
+    ctx.font = fontString("mono", 14);
+    ctx.fillText(s.stamp, 1010, 160);
+    ctx.restore();
+    if (on(s, "pill")) {
+      const r = { x: 80, y: 1500, w: 920, h: 170 };
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.12)";
+      ctx.shadowBlur = 30;
+      ctx.fillStyle = "#f8f7f3";
+      roundRect(ctx, r, 30);
+      ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.fillStyle = "#3a3632";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.font = fontString("sans", 26);
+      ctx.fillText("NOW AVAILABLE ON ALL STREAMING PLATFORMS", W / 2, r.y + 36, r.w - 60);
+      ctx.font = fontString("mono", 22);
+      ctx.fillStyle = "#6f6a63";
+      ctx.fillText("listen  ·  save  ·  share  ·  repeat", W / 2, r.y + 96, r.w - 60);
+      ctx.restore();
+    }
+    void photo;
   },
 };
 

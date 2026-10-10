@@ -49,7 +49,9 @@ async function run(name, contextOptions) {
   const browser = await chromium.launch({ executablePath: CHROME });
   const page = await (await browser.newContext(contextOptions)).newPage();
   const errors = [];
-  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  // MediaPipe (person cutouts) logs an informational TFLite line through console.error.
+  const BENIGN = /Created TensorFlow Lite XNNPACK delegate/;
+  page.on("console", (m) => m.type() === "error" && !BENIGN.test(m.text()) && errors.push(m.text()));
   page.on("pageerror", (e) => errors.push(String(e)));
   try {
     // Landing page routes to the studio.

@@ -3,9 +3,9 @@
 // shapes; text comes from the Story, never invented track names.
 import { drawCutout } from "./cutout";
 import { type Ctx, type Photo, drawGrain, drawPhoto, fontString, rgba, rng, roundRect } from "./draw";
-import { drawScreen } from "./elements";
-import { filteredPhoto } from "./filters";
-import { type Slots, type Template, decos, fmtDate, on, pad, t } from "./kit";
+import { drawScreen, propImage } from "./elements";
+import { filteredPhoto, rotatedPhoto } from "./filters";
+import { type Slots, type Template, boxAt, decos, fmtDate, on, pad, t } from "./kit";
 import type { Sticker, StickerKind } from "./stickers";
 import type { Crop, Rect, StoryState, TemplateId, TemplateInput } from "./types";
 import { STORY_H as H, STORY_W as W } from "./types";
@@ -116,99 +116,190 @@ const timeFrom = (s: StoryState) => {
   return `${pad(10 + (n % 13))}:${pad((n * 7) % 60)}`;
 };
 
-// ---- u01 Playlist (pin 613967361752648972): Spotify playlist table over two photos --------
-// The table is a regular sticker (kind "spotify"): drag, rotate or delete it. Rows hold real
-// Apple Music tracks by the song's artist (StoryState.tracks), never invented titles.
+// ---- u01 Playlist (pin 613967361752648972): the owner's screen template (Instagram Story +
+// sideways Spotify playlist, green windows keyed out) with your photo above and a prop photo —
+// a can, a matcha, a turntable… (shuffle) or your own second photo — below. Sideways, like the pin.
+const PL_TOP: Rect = { x: 5, y: 587, w: 1070, h: 631 };
+const PL_BOT: Rect = { x: 5, y: 1229, w: 1070, h: 691 };
 const playlist: Template = {
   id: "playlist",
   name: "Playlist",
-  blurb: "A Spotify-style playlist table across the top, two photos below — rotate anything.",
-  overlayLabel: "Background",
+  blurb: "Instagram Story with a sideways Spotify playlist: your photo plus a prop shot (shuffle it, or use yours).",
+  overlayLabel: "Photo tint",
   capacity: 2,
+  photoRot: 90,
+  prop: "coke",
   decorations: [],
   stickers: () => [
-    { ...el("spotify", 0.5, 0.168, 1080, 90), scale: 1.04, color: "#1ed760" },
     { ...el("heart", 0.3, 0.84, 84, 350), color: "#ff8a3d", scale: 0.35 },
     { ...el("heart", 0.2, 0.93, 96, 10), color: "#ff3d8b", scale: 0.4 },
   ],
-  slotRects: () => [
-    { x: 0, y: 646, w: W, h: 637 },
-    { x: 0, y: 1283, w: W, h: 637 },
-  ],
+  slotRects: () => [PL_TOP, PL_BOT],
   defaults: (i) => ({
-    headline: t({ text: i.headline, font: "sans", size: 30, color: WHITE, x: 0.06, y: 0.78, width: 0.6 }),
+    headline: t({ text: i.headline, font: "sans", size: 30, color: WHITE, x: 0.06, y: 0.8, width: 0.6 }),
     caption: t({ text: "", font: "mono", size: 20, color: WHITE, x: 0.06, y: 0.8 }),
-    overlay: { strength: 1, color: "#000000" },
+    overlay: { strength: 0.04, color: "#000000" },
     decorations: {},
   }),
   draw(ctx, _p, s, slots) {
-    ctx.fillStyle = s.overlay.color;
+    ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, W, H);
-    slotPhoto(ctx, slots, 0, { x: 0, y: 646, w: W, h: 637 });
-    slotPhoto(ctx, slots, 1, { x: 0, y: 1283, w: W, h: 637 });
+    slotPhoto(ctx, slots, 0, PL_TOP);
+    if (slots.own(1)) slotPhoto(ctx, slots, 1, PL_BOT);
+    else {
+      const img = propImage(s.prop ?? "coke");
+      if (img) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(PL_BOT.x, PL_BOT.y, PL_BOT.w, PL_BOT.h);
+        ctx.clip();
+        // Turned like the reference; framing is adjustable (views["slot1"]).
+        drawPhoto(ctx, rotatedPhoto(img, 90), PL_BOT, slots.adjust("slot1", { zoom: 1, x: 0.5, y: 0.5, fit: "cover" }));
+        ctx.restore();
+      }
+    }
+    ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength);
+    ctx.fillRect(0, 0, W, H);
+    drawScreen(ctx, "playlist", W, H);
   },
   text: { headline: { shadow: true } },
 };
 
-// ---- u02 Player Cutout: die-cut person over collage paper on a player card ---------------
+// ---- u02 Player Cutout (pin 1089308228644747115): the whole Story is a sideways music player —
+// you, die-cut and lying across a collage, above vertical progress/volume bars and the song.
+// Drawn in landscape coordinates (1920×1080) and turned 90° clockwise onto the Story.
+const LAND = { w: H, h: W };
+const toLand = (ctx: Ctx) => {
+  ctx.translate(W, 0);
+  ctx.rotate(Math.PI / 2);
+};
+const PC_PAPER: Rect = { x: 90, y: 40, w: 560, h: 955 }; // landscape px
+const PC_CUT: Rect = { x: 30, y: -10, w: 680, h: 1100 };
+function heartRings(ctx: Ctx, cx: number, cy: number, n: number) {
+  ctx.save();
+  ctx.lineWidth = 9;
+  for (let k = n; k > 0; k--) {
+    ctx.strokeStyle = k % 2 ? "rgba(235,222,205,0.9)" : "rgba(120,100,90,0.8)";
+    const z = k * 15;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + z * 0.75);
+    ctx.bezierCurveTo(cx - z * 1.4, cy - z * 0.15, cx - z * 0.55, cy - z * 1.05, cx, cy - z * 0.4);
+    ctx.bezierCurveTo(cx + z * 0.55, cy - z * 1.05, cx + z * 1.4, cy - z * 0.15, cx, cy + z * 0.75);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 const playercut: Template = {
   id: "playercut",
-  outline: true,
   name: "Player Cutout",
-  blurb: "You cut out over a collage, on a deep-red music player card.",
-  overlayLabel: "Card",
+  blurb: "A sideways music player: you die-cut over a collage, the song running down the side.",
+  overlayLabel: "Card colour",
   needsMask: true,
-  decorations: decos([["controls", "Player controls", true]]),
+  outline: true,
+  slotTurn: 90,
+  decorations: decos([["collage", "Collage clippings", true], ["controls", "Player controls", true]]),
+  // Story-space box of the photo area (for drag / selection).
+  slotRects: () => [{ x: 0, y: PC_CUT.x, w: W, h: PC_CUT.w }],
   defaults: (i) => ({
-    headline: t({ text: i.music?.title || i.headline, font: "sans", size: 46, color: WHITE, x: 0.12, y: 0.62, width: 0.76 }),
-    caption: t({ text: i.music?.artist || i.caption || fmtDate(i.date), font: "serif", size: 32, color: "#e8a0a8", x: 0.12, y: 0.66, width: 0.76 }),
-    overlay: { strength: 1, color: "#6b1a1a" },
-    decorations: { controls: true },
-    filter: "bw",
+    headline: t({ text: i.music?.title || i.headline, font: "sans", size: 50, color: WHITE, x: 0.898, y: 0.372, width: 0.5 }),
+    caption: t({ text: i.music?.artist || i.caption || fmtDate(i.date), font: "sans", size: 40, color: "#e7a3a8", x: 0.842, y: 0.372, width: 0.5 }),
+    overlay: { strength: 1, color: "#5b1515" },
+    decorations: { collage: true, controls: true },
+    filter: "noir",
   }),
-  slotRects: () => [{ x: 90, y: 260, w: 900, h: 820 }],
   draw(ctx, _p, s, slots) {
-    ctx.fillStyle = "#3d0d0d";
+    ctx.fillStyle = "#2a0909";
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = s.overlay.color;
-    roundRect(ctx, { x: 50, y: 170, w: W - 100, h: 1560 }, 70);
-    ctx.fill();
-    drawGrain(ctx, 0.08, 9);
-    // Collage paper: a pale, zoomed sepia copy of the photo.
-    const paper = { x: 110, y: 300, w: 860, h: 760 };
     ctx.save();
-    ctx.globalAlpha = 0.7;
-    slotPhoto(ctx, slots, 1, paper, 0, (p) => filteredPhoto(p, "faded"), "paper");
-    ctx.restore();
-    ctx.fillStyle = "rgba(240,225,200,0.35)";
-    ctx.fillRect(paper.x, paper.y, paper.w, paper.h);
-    const cut = { x: 60, y: 200, w: 960, h: 960 };
-    const ok = drawCutout(ctx, slots.photo(0), slots.mask(0), cut, slots.crop(0), outlineOf(s, 7));
-    if (!ok) slotPhoto(ctx, slots, 0, paper);
-    label(ctx, "now playing", 130, 1150, 22, "#e8a0a8");
-    if (!on(s, "controls")) return;
-    const y = 1390;
-    bar(ctx, 130, y, W - 260, 8, "rgba(232,160,168,0.35)");
-    bar(ctx, 130, y, (W - 260) * 0.48, 8, "#e8a0a8");
-    label(ctx, "1:24", 130, y + 24, 20, "#e8a0a8");
-    label(ctx, "-2:31", W - 130, y + 24, 20, "#e8a0a8", "mono", "right");
-    ctx.fillStyle = WHITE;
-    const cy = 1530;
-    for (const dir of [-1, 1] as const) {
-      for (const off of [0, 30]) {
-        const x = W / 2 + dir * (200 - off);
-        ctx.beginPath();
-        ctx.moveTo(x, cy - 22);
-        ctx.lineTo(x + dir * 30, cy);
-        ctx.lineTo(x, cy + 22);
-        ctx.fill();
+    toLand(ctx);
+    ctx.fillStyle = s.overlay.color;
+    roundRect(ctx, { x: 24, y: 22, w: LAND.w - 48, h: LAND.h - 44 }, 70);
+    ctx.fill();
+    const sheen = ctx.createLinearGradient(0, 0, LAND.w, LAND.h);
+    sheen.addColorStop(0, "rgba(255,255,255,0.06)");
+    sheen.addColorStop(1, "rgba(0,0,0,0.18)");
+    ctx.fillStyle = sheen;
+    roundRect(ctx, { x: 24, y: 22, w: LAND.w - 48, h: LAND.h - 44 }, 70);
+    ctx.fill();
+    // Collage paper: faded sepia clippings of the photo, columns of tiny type, heart rings.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PC_PAPER.x, PC_PAPER.y, PC_PAPER.w, PC_PAPER.h);
+    ctx.clip();
+    slotPhoto(ctx, slots, 1, PC_PAPER, 0, (p) => filteredPhoto(p, "sepia"), "paper");
+    ctx.fillStyle = "rgba(225,212,195,0.55)";
+    ctx.fillRect(PC_PAPER.x, PC_PAPER.y, PC_PAPER.w, PC_PAPER.h);
+    if (on(s, "collage")) {
+      const tiles: Rect[] = [
+        { x: 100, y: 50, w: 250, h: 260 }, { x: 360, y: 640, w: 280, h: 340 }, { x: 110, y: 720, w: 210, h: 250 },
+      ];
+      tiles.forEach((r, n) => {
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        slotPhoto(ctx, slots, 2 + n, r, 0, (p) => filteredPhoto(p, "bw"), `clip${n}`);
+        ctx.restore();
+        ctx.strokeStyle = "rgba(60,50,45,0.6)";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+      });
+      const rr = rng(71);
+      ctx.fillStyle = "rgba(70,60,55,0.65)";
+      for (let col = 0; col < 4; col++) {
+        for (let k = 0; k < 18; k++) {
+          if (rr() < 0.2) continue;
+          ctx.fillRect(560 - col * 30, 380 + k * 22, 18, 14);
+        }
       }
+      heartRings(ctx, 560, 150, 7);
     }
-    ctx.fillRect(W / 2 - 26, cy - 30, 16, 60);
-    ctx.fillRect(W / 2 + 10, cy - 30, 16, 60);
-    bar(ctx, 200, 1640, W - 400, 6, "rgba(232,160,168,0.35)");
-    bar(ctx, 200, 1640, (W - 400) * 0.6, 6, "#e8a0a8");
+    ctx.restore();
+    // You: high-contrast B&W with grain and a thin white die-cut edge, overflowing the paper.
+    const ok = drawCutout(ctx, slots.photo(0), slots.mask(0), PC_CUT, slots.crop(0), outlineOf(s, 6));
+    if (!ok) slotPhoto(ctx, slots, 0, PC_PAPER);
+    else drawGrain(ctx, 0.06, 88);
+    label(ctx, "Headphones", 720, 48, 30, "#e7a3a8", "sans");
+    if (on(s, "controls")) {
+      const bar = (y: number, k: number) => {
+        ctx.fillStyle = "rgba(231,163,168,0.3)";
+        roundRect(ctx, { x: 730, y, w: 980, h: 12 }, 6);
+        ctx.fill();
+        ctx.fillStyle = "#e7a3a8";
+        roundRect(ctx, { x: 730, y, w: 980 * k, h: 12 }, 6);
+        ctx.fill();
+      };
+      bar(232, 0.52);
+      label(ctx, "2:21", 730, 256, 28, "#e7a3a8", "sans");
+      label(ctx, "-2:20", 1710, 256, 28, "#e7a3a8", "sans", "right");
+      ctx.fillStyle = WHITE;
+      const tri = (x: number, dir: 1 | -1) => {
+        ctx.beginPath();
+        ctx.moveTo(x, 510);
+        ctx.lineTo(x + dir * 40, 540);
+        ctx.lineTo(x, 570);
+        ctx.fill();
+      };
+      tri(930, -1);
+      tri(970, -1);
+      tri(1340, 1);
+      tri(1300, 1);
+      roundRect(ctx, { x: 1110, y: 505, w: 22, h: 70 }, 4);
+      ctx.fill();
+      roundRect(ctx, { x: 1148, y: 505, w: 22, h: 70 }, 4);
+      ctx.fill();
+      bar(890, 0.62);
+      ctx.fillStyle = "#e7a3a8";
+      ctx.fillRect(690, 884, 14, 24);
+      ctx.beginPath();
+      ctx.moveTo(704, 884);
+      ctx.lineTo(718, 872);
+      ctx.lineTo(718, 920);
+      ctx.lineTo(704, 908);
+      ctx.fill();
+      ctx.fillRect(1726, 884, 14, 24);
+    }
+    ctx.restore();
   },
+  text: { headline: { rotate: Math.PI / 2 }, caption: { rotate: Math.PI / 2 } },
 };
 
 // ---- u03 Triptych: the same moment three times, faded ------------------------------------
@@ -238,16 +329,33 @@ const triptych: Template = {
 
 // ---- u04 CCTV: surveillance HUD with face box and zoom callouts --------------------------
 const RED = "#b83333";
+/** Default CCTV frames for this photo (Story px): subject, detail, zoomed callout. */
+function cctvDefaults(s: StoryState, slots: Slots) {
+  const f = face(s, slots);
+  const subject = cctvBox(f);
+  const detail = { x: f.x - subject.w * 0.4, y: Math.min(1450, subject.y + subject.h + subject.w * 1.1), w: subject.w * 0.8, h: subject.w * 0.7 };
+  return { subject, detail, inset: cctvInset(f, subject) };
+}
+function tag(ctx: Ctx, text: string, r: Rect, right: boolean) {
+  ctx.fillStyle = RED;
+  const w = Math.max(110, text.length * 15 + 24);
+  ctx.fillRect(right ? r.x + r.w - w : r.x, r.y - 40, w, 40);
+  label(ctx, text, (right ? r.x + r.w - w : r.x) + w / 2, r.y - 33, 23, WHITE, "mono", "center");
+}
 const cctv: Template = {
   id: "cctv",
   name: "CCTV",
-  views: (s, slots) => {
-    const f = face(s, slots);
-    return on(s, "callouts") ? [{ key: "inset", r: cctvInset(f, cctvBox(f)) }] : [];
-  },
-  blurb: "Surveillance-cam frame: timestamp, red tracking boxes and zoomed callouts.",
+  blurb: "Surveillance-cam frame: timestamp, red tracking boxes and zoomed callouts — move any box.",
   overlayLabel: "Photo tint",
-  decorations: decos([["callouts", "Zoom callouts", true]]),
+  decorations: decos([["callouts", "Zoom callout", true], ["detail", "Detail box", true]]),
+  boxes: (s, slots) => {
+    const d = cctvDefaults(s, slots);
+    return [
+      { key: "subject", label: "Subject box", r: d.subject },
+      ...(on(s, "detail") ? [{ key: "detail", label: "Detail box", r: d.detail }] : []),
+      ...(on(s, "callouts") ? [{ key: "inset", label: "Zoom callout", r: d.inset, image: true }] : []),
+    ];
+  },
   stickers: (i) => [
     el("folder", 150 / W, 980 / H, 120, -6),
     el("folder", 210 / W, 1140 / H, 80, 4),
@@ -258,7 +366,7 @@ const cctv: Template = {
     headline: t({ text: i.headline.toUpperCase(), font: "mono", size: 40, color: WHITE, x: 0.08, y: 0.09, width: 0.6 }),
     caption: t({ text: `DATA UPDATE\n${(i.caption || fmtDate(i.date)).toUpperCase()}`, font: "mono", size: 24, color: WHITE, x: 0.08, y: 0.78, width: 0.5 }),
     overlay: { strength: 0.12, color: "#000000" },
-    decorations: { callouts: true },
+    decorations: { callouts: true, detail: true },
     filter: "faded",
   }),
   draw(ctx, _p, s, slots) {
@@ -273,36 +381,38 @@ const cctv: Template = {
     label(ctx, `${timeFrom(s)}:49`, W - 86, 90, 44, WHITE, "mono", "right");
     label(ctx, "SCENE 05/20", W - 86, 150, 34, WHITE, "mono", "right");
     label(ctx, "DESIGN BY\nYOU", W - 86, 1490, 24, WHITE, "mono", "right");
-    const f = face(s, slots);
-    const box = cctvBox(f);
-    const bw = box.w;
+    const d = cctvDefaults(s, slots);
+    const box = boxAt(s, "subject", d.subject);
     ctx.strokeStyle = RED;
     ctx.lineWidth = 5;
     ctx.strokeRect(box.x, box.y, box.w, box.h);
-    ctx.fillStyle = RED;
-    ctx.fillRect(box.x + box.w - 140, box.y - 40, 140, 40);
-    label(ctx, "SUBJECT", box.x + box.w - 70, box.y - 34, 24, WHITE, "mono", "center");
+    tag(ctx, "SUBJECT", box, true);
     if (on(s, "callouts")) {
-      const bw2 = filteredPhoto(slots.photo(0), "bw");
-      const ins = cctvInset(f, box);
+      const ins = boxAt(s, "inset", d.inset);
+      const fromRight = ins.x + ins.w / 2 > box.x + box.w / 2;
+      ctx.strokeStyle = RED;
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(box.x + (ins.x > f.x ? box.w : 0), box.y + box.h);
-      ctx.lineTo(ins.x + (ins.x > f.x ? 0 : ins.w), ins.y);
+      ctx.moveTo(fromRight ? box.x + box.w : box.x, box.y + box.h);
+      ctx.lineTo(fromRight ? ins.x : ins.x + ins.w, ins.y);
       ctx.stroke();
       ctx.save();
       ctx.beginPath();
       ctx.rect(ins.x, ins.y, ins.w, ins.h);
       ctx.clip();
       const c = slots.crop(0);
-      drawPhoto(ctx, bw2, ins, slots.adjust("inset", { ...c, zoom: c.zoom * 2.4, x: s.focus?.x ?? 0.5, y: s.focus?.y ?? 0.4 }));
+      drawPhoto(ctx, filteredPhoto(slots.photo(0), "bw"), ins, slots.adjust("inset", { ...c, zoom: c.zoom * 2.4, x: s.focus?.x ?? 0.5, y: s.focus?.y ?? 0.4 }));
       ctx.restore();
+      ctx.lineWidth = 5;
       ctx.strokeRect(ins.x, ins.y, ins.w, ins.h);
       label(ctx, `#${s.accent.replace("#", "").toUpperCase()}`, ins.x, ins.y - 32, 22, WHITE);
-      // A second box lower down (hands / detail).
-      const d = { x: f.x - bw * 0.4, y: Math.min(1450, box.y + box.h + bw * 1.1), w: bw * 0.8, h: bw * 0.7 };
-      ctx.strokeRect(d.x, d.y, d.w, d.h);
-      ctx.fillRect(d.x, d.y - 36, 110, 36);
-      label(ctx, "DETAIL", d.x + 55, d.y - 31, 20, WHITE, "mono", "center");
+    }
+    if (on(s, "detail")) {
+      const det = boxAt(s, "detail", d.detail);
+      ctx.strokeStyle = RED;
+      ctx.lineWidth = 5;
+      ctx.strokeRect(det.x, det.y, det.w, det.h);
+      tag(ctx, "DETAIL", det, false);
     }
   },
 };
@@ -363,20 +473,109 @@ const colorbox: Template = {
   text: { headline: { lineHeight: 0.85, tracking: 0.02, fit: true } },
 };
 
-// ---- u06 Torn Strip: magazine cover torn open across the eyes -----------------------------
-function tornBand(ctx: Ctx, y: number, seed: number, dir: 1 | -1) {
-  const rand = rng(seed);
-  ctx.fillStyle = "#f8f6f0";
-  ctx.beginPath();
-  ctx.moveTo(-10, y);
-  for (let x = -10; x <= W + 10; x += 16) ctx.lineTo(x, y + dir * (18 + rand() * 26));
-  ctx.lineTo(W + 10, y - dir * 6);
-  ctx.lineTo(-10, y - dir * 6);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.6)";
-  for (let x = 0; x < W; x += 11) ctx.fillRect(x, y + dir * (20 + rand() * 24), 2, dir * (4 + rand() * 6));
+// ---- Red Block (pin by cassiano mendes): B&W photo, translucent red block in front of or
+// behind the person, a few words set small inside it.
+const RED_BLOCK: Rect = { x: 430, y: 700, w: 400, h: 690 };
+/** The block starts on the open side of the subject, partly behind them (like the pin). */
+const redBlockAt = (fx: number): Rect => ({ ...RED_BLOCK, x: fx < 0.5 ? Math.min(640, fx * W + 260) : Math.max(50, fx * W - 680) });
+const redblock: Template = {
+  id: "redblock",
+  name: "Red Block",
+  blurb: "Black-and-white photo with a translucent red block — behind you or in front, move and resize it.",
+  overlayLabel: "Red block",
+  needsMask: true,
+  decorations: decos([["behind", "Block behind you", true]]),
+  boxes: (s) => [{ key: "block", label: "Red block", r: redBlockAt(s.focus?.x ?? 0.5), tinted: true, layer: "behind" }],
+  defaults: (i) => {
+    const b = redBlockAt(fp(i).x);
+    const right = (b.x + b.w - 24) / W;
+    return {
+      headline: t({ text: i.headline.toLowerCase(), font: "sans", size: 26, color: WHITE, x: right, y: (b.y + 24) / H, width: 0.32, align: "right" }),
+      caption: t({ text: i.caption || fmtDate(i.date), font: "sans", size: 20, color: WHITE, x: right, y: (b.y + b.h - 70) / H, width: 0.32, align: "right" }),
+      overlay: { strength: 0.82, color: "#d23b2c" },
+      decorations: { behind: true },
+      filter: "bw",
+    };
+  },
+  draw(ctx, _p, s, slots) {
+    drawPhoto(ctx, slots.photo(0), FULL, slots.crop(0));
+    drawGrain(ctx, 0.08, 19);
+    if (on(s, "behind")) redBlock(ctx, s);
+  },
+  front(ctx, s, slots) {
+    if (on(s, "behind")) drawCutout(ctx, slots.photo(0), slots.mask(0), FULL, slots.crop(0));
+    else redBlock(ctx, s);
+  },
+};
+function redBlock(ctx: Ctx, s: StoryState) {
+  const r = boxAt(s, "block", redBlockAt(s.focus?.x ?? 0.5));
+  ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength);
+  ctx.fillRect(r.x, r.y, r.w, r.h);
 }
+
+// ---- u06 Torn Strip: magazine cover torn open across the eyes -----------------------------
+/** Organic noise 0..1 along x (layered sines + seeded jitter) for paper tears. */
+function tearNoise(seed: number) {
+  const r = rng(seed);
+  const waves = [0, 1, 2, 3].map((k) => ({ f: (0.004 + r() * 0.006) * (k + 1) ** 1.6, p: r() * 6.28, a: 1 / (k + 1.3) }));
+  const jitter = Array.from({ length: 400 }, () => r());
+  return (x: number) => {
+    let v = 0;
+    for (const w of waves) v += Math.sin(x * w.f + w.p) * w.a;
+    return 0.5 + v * 0.3 + (jitter[Math.floor(Math.abs(x) / 4) % 400]! - 0.5) * 0.18;
+  };
+}
+
+/**
+ * A torn paper edge like a ripped magazine page: white paper core of varying thickness along a
+ * slanted line, a fibrous fringe on the torn side, and a soft shadow cast onto the layer below.
+ * `dir` = 1 tears downward into the band (top edge), -1 upward (bottom edge).
+ */
+function tearEdge(ctx: Ctx, y0: number, y1: number, thick: [number, number], dir: 1 | -1, seed: number) {
+  const n1 = tearNoise(seed);
+  const n2 = tearNoise(seed + 9);
+  const at = (x: number) => y0 + ((y1 - y0) * x) / W; // slanted base line
+  const inner = (x: number) => at(x) + dir * (thick[0] + (thick[1] - thick[0]) * n1(x)); // torn side
+  const outer = (x: number) => at(x) - dir * (6 + 10 * n2(x)); // where the page continues
+  // Shadow cast onto the revealed layer.
+  ctx.save();
+  ctx.beginPath();
+  for (let x = -20; x <= W + 20; x += 6) ctx.lineTo(x, inner(x));
+  for (let x = W + 20; x >= -20; x -= 6) ctx.lineTo(x, inner(x) + dir * 26);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.filter = "blur(10px)";
+  ctx.fill();
+  ctx.restore();
+  // Paper core.
+  ctx.save();
+  ctx.beginPath();
+  for (let x = -20; x <= W + 20; x += 4) ctx.lineTo(x, outer(x));
+  for (let x = W + 20; x >= -20; x -= 4) ctx.lineTo(x, inner(x));
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, at(W / 2) - dir * 10, 0, at(W / 2) + dir * thick[1]);
+  g.addColorStop(0, "#fbfaf6");
+  g.addColorStop(1, "#e9e6df");
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.restore();
+  // Fibrous fringe along the torn side.
+  const r = rng(seed + 3);
+  ctx.save();
+  for (let x = 0; x < W; x += 2 + r() * 7) {
+    if (r() < 0.35) continue;
+    const y = inner(x);
+    const len = 2 + r() ** 2 * 14; // mostly short, a few long strands
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 + r() * 0.5})`;
+    ctx.lineWidth = 0.8 + r() * 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x, y - dir * 2);
+    ctx.quadraticCurveTo(x + (r() - 0.5) * 8, y + dir * len * 0.5, x + (r() - 0.5) * 10, y + dir * len);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 const tornstrip: Template = {
   id: "tornstrip",
   name: "Torn Strip",
@@ -399,22 +598,30 @@ const tornstrip: Template = {
     const band = s.spot ?? { x: 0, y: 0.18, w: 1, h: 0.135 };
     const top = band.y * H;
     const bot = top + band.h * H;
+    // The revealed layer: same photo in black and white, darker and nudged, ghost masthead behind.
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, top, W, bot - top);
+    ctx.rect(0, top - 60, W, bot - top + 120);
     ctx.clip();
     const c = slots.crop(0);
-    drawPhoto(ctx, filteredPhoto(slots.photo(0), "bw"), FULL, c);
+    drawPhoto(ctx, filteredPhoto(slots.photo(0), "bw"), FULL, slots.adjust("band", { ...c, zoom: c.zoom * 1.06 }));
+    ctx.fillStyle = "rgba(20,20,20,0.22)";
+    ctx.fillRect(0, top - 60, W, bot - top + 120);
     if (on(s, "ghost")) {
-      ctx.globalAlpha = 0.35;
-      label(ctx, s.headline.text.toUpperCase(), W / 2, top + 20, 220, INK, "display", "center");
+      ctx.globalAlpha = 0.42;
+      ctx.font = fontString("display", (bot - top) * 0.95);
+      ctx.fillStyle = "#3a3a3a";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(s.headline.text.toUpperCase(), W / 2, (top + bot) / 2 + 6, W * 1.15);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
-    tornBand(ctx, top, 11, 1);
-    tornBand(ctx, bot, 23, -1);
+    // Thin tear on top (slanting up to the right), thick tear below (slanting down).
+    tearEdge(ctx, top + 10, top - 14, [10, 34], 1, 11);
+    tearEdge(ctx, bot + 6, bot + 34, [22, 64], -1, 23);
   },
-  text: { headline: { tracking: 0.08, fit: true } },
+  text: { headline: { tracking: 0.08, fit: true, oneLine: true } },
 };
 
 // ---- u07 Sticker Cutout: you as a die-cut sticker over huge words ------------------------
@@ -742,7 +949,7 @@ const kissmark: Template = {
 const xerox: Template = {
   id: "xerox",
   name: "Xerox Poster",
-  views: (s) => (on(s, "inset") ? [{ key: "inset", r: { x: 56, y: 522, w: 216, h: 326 } }] : []),
+  boxes: (s) => (on(s, "inset") ? [{ key: "inset", label: "Inset sketch", r: XEROX_INSET, image: true }] : []),
   blurb: "Photocopied poster: toner-speckled portrait, a lyric column and a giant vertical word.",
   overlayLabel: "Paper",
   decorations: decos([["inset", "Inset sketch", true]]),
@@ -762,13 +969,14 @@ const xerox: Template = {
     if (on(s, "inset")) {
       ctx.strokeStyle = INK;
       ctx.lineWidth = 3;
-      ctx.strokeRect(54, 520, 220, 330);
+      const ib = boxAt(s, "inset", XEROX_INSET);
+      ctx.strokeRect(ib.x - 2, ib.y - 2, ib.w + 4, ib.h + 4);
       const c = slots.crop(0);
       ctx.save();
       ctx.beginPath();
-      ctx.rect(56, 522, 216, 326);
+      ctx.rect(ib.x, ib.y, ib.w, ib.h);
       ctx.clip();
-      drawPhoto(ctx, slots.photo(0), { x: 56, y: 522, w: 216, h: 326 }, slots.adjust("inset", { ...c, zoom: c.zoom * 1.4 }));
+      drawPhoto(ctx, slots.photo(0), ib, slots.adjust("inset", { ...c, zoom: c.zoom * 1.4 }));
       ctx.restore();
     }
     ctx.strokeStyle = "#3a3a3a";
@@ -779,6 +987,8 @@ const xerox: Template = {
   },
   text: { headline: { rotate: -Math.PI / 2, lineHeight: 0.8, tracking: -0.02 } },
 };
+
+const XEROX_INSET: Rect = { x: 56, y: 522, w: 216, h: 326 };
 
 // ---- u19 / pin 1093178509566174434: yearbook sheet photographed in a dim room ----------
 function mottled(ctx: Ctx, r: Rect, seed: number) {
@@ -975,6 +1185,7 @@ function musicSticker(id: TemplateId, name: string, blurb: string, filter: "sepi
 export const REF_TEMPLATES: Record<string, Template> = Object.fromEntries(
   [
     playlist,
+    redblock,
     covermouth,
     camtilt,
     playercut,

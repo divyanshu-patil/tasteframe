@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Photo } from "../lib/story/draw";
 import { fontsReady } from "../lib/story/export";
 import { coverBounds } from "../lib/story/cover";
+import { onAssetLoaded } from "../lib/story/elements";
 import type { Selection } from "../lib/story/selection";
 import { elementsReady } from "../lib/story/elements";
 import { stickerBounds } from "../lib/story/stickers";
@@ -35,6 +36,8 @@ interface Props {
   onDragCover?: (dx: number, dy: number) => void;
   /** Pan a box's framing (StoryState.views): repeated slots ("slot2") and named insets. */
   onDragView?: (key: string, dx: number, dy: number) => void;
+  /** Move a layout box (its edge, or anywhere inside if it holds no image). */
+  onDragBox?: (key: string, dx: number, dy: number) => void;
   /** Number of photos — slots beyond it are repeats of photo 1 and pan as views. */
   photoCount?: number;
   /** Drag the colour window (StoryState.spot). */
@@ -49,6 +52,7 @@ type Target =
   | { kind: "cover" }
   | { kind: "spot" }
   | { kind: "view"; key: string }
+  | { kind: "box"; key: string }
   | { kind: "photo"; slot: number; start: Crop };
 
 const inside = (p: { x: number; y: number }, r: Rect) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
@@ -66,7 +70,9 @@ function selectionRect(sel: Selection, s: StoryState, hits: HitBoxes | null): Re
     case "slot":
       return hits?.slots[sel.i] ?? null;
     case "view":
-      return hits?.views.find((v) => v.key === sel.key)?.r ?? (sel.key.startsWith("slot") ? (hits?.slots[Number(sel.key.slice(4))] ?? null) : null);
+      return hits?.views.find((v) => v.key === sel.key)?.r ?? hits?.boxes.find((b) => b.key === sel.key)?.r ?? (sel.key.startsWith("slot") ? (hits?.slots[Number(sel.key.slice(4))] ?? null) : null);
+    case "box":
+      return hits?.boxes.find((b) => b.key === sel.key)?.r ?? null;
     case "spot":
       return s.spot ? { x: s.spot.x * STORY_W, y: s.spot.y * STORY_H, w: s.spot.w * STORY_W, h: s.spot.h * STORY_H } : null;
     case "cover":
@@ -82,6 +88,9 @@ export function StoryCanvas(props: Props) {
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<number | null>(null);
   const [dropTarget, setDropTarget] = useState<{ slot: number; rect: Rect } | null>(null);
+  // Lazily loaded assets (prop photos) trigger a redraw when they arrive.
+  const [assetTick, setAssetTick] = useState(0);
+  useEffect(() => onAssetLoaded(() => setAssetTick((n) => n + 1)), []);
   const cb = useRef(props);
   cb.current = props;
   const height = (width * STORY_H) / STORY_W;
@@ -128,7 +137,7 @@ export function StoryCanvas(props: Props) {
       cancelled = true;
       cancelAnimationFrame(raf);
     };
-  }, [photo, state, width, height, selection, cover, masks]);
+  }, [photo, state, width, height, selection, cover, masks, assetTick]);
 
   // Wheel zoom needs a non-passive listener to stop the page from scrolling.
   useEffect(() => {
@@ -163,6 +172,18 @@ export function StoryCanvas(props: Props) {
       const b = hits.current?.[key];
       if (b && p.x >= b.x - pad && p.x <= b.x + b.w + pad && p.y >= b.y - pad && p.y <= b.y + b.h + pad) {
         return { kind: "text", key };
+      }
+    }
+    // Layout boxes: grab the frame (or anywhere, if it holds no picture) to move it; inside a
+    // picture box, drag pans the picture.
+    if (props.onDragBox) {
+      const EDGE = 36;
+      const lb = [...(hits.current?.boxes ?? [])].sort((a, b) => a.r.w * a.r.h - b.r.w * b.r.h);
+      for (const b of lb) {
+        const outer = { x: b.r.x - EDGE / 2, y: b.r.y - EDGE * 1.5, w: b.r.w + EDGE, h: b.r.h + EDGE * 2 };
+        if (!inside(p, outer)) continue;
+        const nearEdge = p.x < b.r.x + EDGE || p.x > b.r.x + b.r.w - EDGE || p.y < b.r.y + EDGE || p.y > b.r.y + b.r.h - EDGE;
+        return b.image && !nearEdge ? { kind: "view", key: b.key } : { kind: "box", key: b.key };
       }
     }
     // Boxes: the smallest one under the pointer wins (insets sit on top of big photos).
@@ -207,6 +228,7 @@ export function StoryCanvas(props: Props) {
                 : target.kind === "text" ? { kind: "text", key: target.key }
                 : target.kind === "sticker" ? { kind: "sticker", id: target.id }
                 : target.kind === "view" ? { kind: "view", key: target.key }
+                : target.kind === "box" ? { kind: "box", key: target.key }
                 : { kind: target.kind },
               );
               drag.current = { target, x: p.x, y: p.y };
@@ -247,6 +269,7 @@ export function StoryCanvas(props: Props) {
               else if (d.target.kind === "cover") cb.current.onDragCover?.(dx, dy);
               else if (d.target.kind === "spot") cb.current.onDragSpot?.(dx, dy);
               else if (d.target.kind === "view") cb.current.onDragView?.(d.target.key, dx, dy);
+              else if (d.target.kind === "box") cb.current.onDragBox?.(d.target.key, dx, dy);
               else cb.current.onDragSticker?.(d.target.id, dx, dy);
             }
           : undefined

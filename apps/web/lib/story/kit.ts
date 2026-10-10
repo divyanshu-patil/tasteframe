@@ -27,7 +27,7 @@ export interface Template {
   decorations: { key: string; label: string; on: boolean }[];
   defaults(input: TemplateInput): Omit<
     StoryState,
-    "templateId" | "crop" | "palette" | "stamp" | "accent" | "filter" | "stickers" | "order" | "crops" | "cover" | "tags" | "focus" | "spot" | "outline" | "tracks"
+    "templateId" | "crop" | "palette" | "stamp" | "accent" | "filter" | "stickers" | "order" | "crops" | "cover" | "tags" | "focus" | "spot" | "outline" | "tracks" | "prop"
   > & { filter?: FilterId };
   /** Song-cover layouts: where the cover sits by default (shown when `show`). */
   cover?: Partial<CoverState>;
@@ -36,6 +36,12 @@ export interface Template {
   slotRects?(s: StoryState, count: number): Rect[];
   /** Shows the configurable die-cut outline (StoryState.outline). */
   outline?: boolean;
+  /** Photos start turned this much (crop.rot), e.g. sideways Stories. */
+  photoRot?: 90 | 270;
+  /** Offers a prop photo (StoryState.prop) in a window when there's no photo of yours for it. */
+  prop?: string;
+  /** The photo is drawn turned (degrees clockwise) — the editor maps drag directions to match. */
+  slotTurn?: 90;
   /** Uses a person cutout (segment.ts); the editor computes masks only for these. */
   needsMask?: boolean;
   /** Distinct photos the layout shows. */
@@ -45,6 +51,18 @@ export interface Template {
   front?(ctx: Ctx, s: StoryState, slots: Slots): void;
   /** Overlay elements the layout places as regular (draggable) stickers, flagged `layout`. */
   stickers?: (i: TemplateInput) => Sticker[];
+  /** Movable boxes (tracking frames, insets, blocks). Defaults in Story px; the user's moves live
+   *  in StoryState.boxes. `image` boxes also pan their picture (StoryState.views, same key). */
+  boxes?: (s: StoryState, slots: Slots) => {
+    key: string;
+    label: string;
+    r: Rect;
+    image?: boolean;
+    /** Its colour/opacity are the layout overlay (shown in the box inspector). */
+    tinted?: boolean;
+    /** Decoration key that puts it behind the person (cutout) when on. */
+    layer?: string;
+  }[];
   /** Extra boxes showing part of the photo (insets, callouts) — draggable to reframe. */
   views?: (s: StoryState, slots: Slots) => { key: string; r: Rect }[];
   /** Default colour-window rect (0..1) for layouts that use StoryState.spot. */
@@ -65,6 +83,12 @@ export const t = (p: Partial<TextLayer> & Pick<TextLayer, "text">): TextLayer =>
 export const decos = (list: [string, string, boolean][]) =>
   list.map(([key, label, on]) => ({ key, label, on }));
 export const on = (s: StoryState, key: string) => s.decorations[key] !== false;
+
+/** A layout box: the user's moved/resized version if any, else the default (Story px). */
+export function boxAt(s: StoryState, key: string, def: Rect): Rect {
+  const b = s.boxes?.[key];
+  return b ? { x: b.x * 1080, y: b.y * 1920, w: b.w * 1080, h: b.h * 1920 } : def;
+}
 
 // Text drawn over the photo goes to the half away from the main subject (e.g. a face in a selfie).
 export const subjectLow = (i: TemplateInput) => (i.focus?.y ?? 0.5) > 0.55;

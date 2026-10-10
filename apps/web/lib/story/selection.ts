@@ -6,6 +6,7 @@ export type Selection =
   | { kind: "sticker"; id: string }
   | { kind: "slot"; i: number }
   | { kind: "view"; key: string }
+  | { kind: "box"; key: string }
   | { kind: "spot" }
   | { kind: "cover" }
   | null;

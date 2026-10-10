@@ -161,6 +161,8 @@ export interface TextOpts {
   outline?: number; // stroke width: outlined letters instead of filled
   /** Shrink the type so no line (even one long word) is wider than the layer width. */
   fit?: boolean;
+  /** Keep the text on a single line (mastheads); combine with `fit`. */
+  oneLine?: boolean;
 }
 
 /** Draw a text layer; returns its bounding box (for hit-testing / dragging in the editor). */
@@ -178,13 +180,13 @@ export function drawText(ctx: Ctx, layer: TextLayer, opts: TextOpts = {}): Rect 
   ctx.textAlign = layer.align;
   ctx.textBaseline = "top";
   const maxW = layer.width * STORY_W;
-  let lines = wrap(ctx, layer.text, maxW);
+  let lines = opts.oneLine ? [layer.text.replace(/\s*\n\s*/g, " ")] : wrap(ctx, layer.text, maxW);
   if (opts.fit) {
     const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
     if (widest > maxW) {
       layer = { ...layer, size: Math.max(12, Math.floor(layer.size * (maxW / widest) * 0.99)) };
       ctx.font = fontString(layer.font, layer.size);
-      lines = wrap(ctx, layer.text, maxW);
+      if (!opts.oneLine) lines = wrap(ctx, layer.text, maxW);
     }
   }
   const lh = layer.size * (opts.lineHeight ?? (layer.font === "display" ? 0.95 : 1.2));
@@ -211,7 +213,18 @@ export function drawText(ctx: Ctx, layer: TextLayer, opts: TextOpts = {}): Rect 
   });
   ctx.restore();
   const left = layer.align === "left" ? ax : layer.align === "center" ? ax - widest / 2 : ax - widest;
-  return { x: left, y: ay, w: widest, h: lines.length * lh };
+  const box = { x: left, y: ay, w: widest, h: lines.length * lh };
+  if (!opts.rotate) return box;
+  // Rotated text: the axis-aligned box around the rotated block (for hit-testing/selection).
+  const c = Math.cos(opts.rotate);
+  const sn = Math.sin(opts.rotate);
+  const pts = [[box.x, box.y], [box.x + box.w, box.y], [box.x, box.y + box.h], [box.x + box.w, box.y + box.h]].map(([x, y]) => [
+    ax + (x! - ax) * c - (y! - ay) * sn,
+    ay + (x! - ax) * sn + (y! - ay) * c,
+  ]);
+  const xs = pts.map((q) => q[0]!);
+  const ys = pts.map((q) => q[1]!);
+  return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
 }
 
 export function hexToRgb(hex: string): [number, number, number] {

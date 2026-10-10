@@ -102,7 +102,6 @@ LayoutId = Literal[
     "coversingle",
     "coverfloat",
     "coverbubble",
-    "coverstack",
     "coverpolaroid",
     "notesdark",
 ]
@@ -392,6 +391,17 @@ class Rect01(Point01):
     h: float = Field(gt=0, le=1)
 
 
+class BoxRect(BaseModel):
+    """A moved/resized layout box, 0..1 of the Story (may hang half off an edge)."""
+
+    model_config = {"extra": "forbid"}
+
+    x: float = Field(ge=-0.5, le=1)
+    y: float = Field(ge=-0.5, le=1)
+    w: float = Field(gt=0, le=1)
+    h: float = Field(gt=0, le=1)
+
+
 class ViewTweak(BaseModel):
     """Drag/zoom inside a box showing part of the photo, relative to the layout's framing."""
 
@@ -462,6 +472,10 @@ class StoryConfig(BaseModel):
     views: dict[Annotated[str, Field(pattern=r"^[a-z0-9-]{1,24}$")], ViewTweak] = Field(
         default_factory=dict, max_length=24
     )
+    boxes: dict[Annotated[str, Field(pattern=r"^[a-z0-9-]{1,24}$")], BoxRect] = Field(
+        default_factory=dict, max_length=12
+    )
+    prop: str | None = Field(None, pattern=r"^[a-z]{2,16}$")
     outline: OutlineConfig | None = None
     focus: Point01 | None = None
     spot: Rect01 | None = None

@@ -22,7 +22,10 @@ export type EditorAction =
   | { type: "spot"; x?: number; y?: number; w?: number; h?: number; dx?: number; dy?: number }
   | { type: "cover-move"; dx: number; dy: number }
   | { type: "tracks"; tracks: NonNullable<StoryState["tracks"]> }
+  | { type: "prop"; id: string }
   | { type: "view"; key: string; dx?: number; dy?: number; zoom?: number; reset?: boolean }
+  /** Move/resize a layout box; `from` is its current rect (0..1) when it hasn't been moved yet. */
+  | { type: "box"; key: string; from: { x: number; y: number; w: number; h: number }; dx?: number; dy?: number; x?: number; y?: number; w?: number; h?: number; reset?: boolean }
   | { type: "sticker-move"; id: string; dx: number; dy: number }
   | { type: "move-by"; key: TextKey; dx: number; dy: number }
   | { type: "outline"; patch: Partial<NonNullable<StoryState["outline"]>> }
@@ -111,6 +114,18 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
       const y = (a.y ?? s.spot.y) + (a.dy ?? 0);
       return { ...s, spot: { w, h, x: clamp(x, 0, 1 - w), y: clamp(y, 0, 1 - h) } };
     }
+    case "box": {
+      const boxes = { ...s.boxes };
+      if (a.reset) {
+        delete boxes[a.key];
+        return { ...s, boxes };
+      }
+      const b = boxes[a.key] ?? a.from;
+      const w = clamp(a.w ?? b.w, 0.03, 1);
+      const h = clamp(a.h ?? b.h, 0.02, 1);
+      boxes[a.key] = { w, h, x: clamp((a.x ?? b.x) + (a.dx ?? 0), -w * 0.5, 1 - w * 0.5), y: clamp((a.y ?? b.y) + (a.dy ?? 0), -h * 0.5, 1 - h * 0.5) };
+      return { ...s, boxes };
+    }
     case "view": {
       const views = { ...s.views };
       if (a.reset) {
@@ -125,6 +140,8 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
       };
       return { ...s, views };
     }
+    case "prop":
+      return { ...s, prop: a.id };
     case "tracks":
       return { ...s, tracks: a.tracks.slice(0, 10) };
     case "cover-move":
@@ -141,12 +158,17 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
       // Switching layouts keeps the user's words, crop and stickers; styling (incl. filter)
       // comes from the new template.
       const fresh = defaultState(a.id, a.input);
+      // Sideways layouts turn the photos; leaving one turns them back.
+      const was = TEMPLATES[s.templateId].photoRot;
+      const now = TEMPLATES[a.id].photoRot;
+      const turn = (c: StoryState["crop"]) => (now ? { ...c, rot: now } : was ? { ...c, rot: undefined } : c);
       return {
         ...fresh,
-        crop: s.crop,
+        crop: turn(s.crop),
+        crops: (s.crops ?? []).map(turn),
+        prop: s.prop ?? fresh.prop,
         focus: s.focus ?? fresh.focus,
         order: s.order,
-        crops: s.crops,
         // The user's own stickers stay; the old layout's placed elements give way to the new one's.
         stickers: [...(s.stickers ?? []).filter((x) => !x.layout), ...fresh.stickers],
         outline: s.outline ?? fresh.outline,

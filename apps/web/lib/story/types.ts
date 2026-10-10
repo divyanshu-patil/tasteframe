@@ -92,7 +92,6 @@ export const TEMPLATE_IDS = [
   "coversingle",
   "coverfloat",
   "coverbubble",
-  "coverstack",
   "coverpolaroid",
   "notesdark",
 ] as const;
@@ -150,6 +149,10 @@ export interface StoryState {
   /** Per-box framing tweaks (drag/zoom inside a box that shows part of the photo), keyed by
    *  box id ("slot2" for repeated slots, or a layout's named inset). Offsets add to the default. */
   views?: Record<string, { dx: number; dy: number; zoom: number }>;
+  /** Moved/resized layout boxes (0..1 of the Story), keyed by the layout's box id. */
+  boxes?: Record<string, Rect>;
+  /** Prop photo id (public/props) shown where a layout offers one, e.g. Playlist's lower window. */
+  prop?: string;
   /** Short words from the photo (image reasoning elements) for checklist/receipt layouts. */
   tags?: string[];
 }

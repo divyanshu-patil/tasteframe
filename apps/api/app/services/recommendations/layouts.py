@@ -1076,18 +1076,6 @@ CATALOGUE: tuple[Template, ...] = (
         keywords=("pop", "k-pop", "dance", "hip hop"),
     ),
     Template(
-        "coverstack",
-        "Player Stack",
-        "music",
-        ("stacked players", "album cover"),
-        "stacked, tilted player cards - your song on top, photo crops behind",
-        {"moody": 0.85, "cinematic": 0.8, "cool": 0.7},
-        ("music", "night", "concert", "headphones"),
-        {"person": 0.9, "people": 0.8, "scene": 0.9, "object": 0.6},
-        text_on_photo=True,
-        keywords=("electronic", "indie", "alternative"),
-    ),
-    Template(
         "coverpolaroid",
         "Polaroid + Cover",
         "music",
