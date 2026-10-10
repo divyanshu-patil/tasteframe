@@ -288,6 +288,9 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
         <p className={s.small}>Tap to select · drag to move · scroll or pinch to zoom · arrow keys nudge</p>
         {tpl.needsMask && !masks && <p className={s.small} role="status">Cutting you out of the photo on your device (the first time loads a small model)…</p>}
         {tpl.needsMask && masks && !masks[0] && <p className={s.small} role="status">No person found to cut out, so this layout shows the whole photo. Use Refine cutout to paint one in.</p>}
+        {tpl.needsMask && autoMasks && (
+          <button type="button" className={s.linkBtn} onClick={() => setRefining(0)}>Cutout not quite right? Refine it</button>
+        )}
       </div>
 
       <div className={s.panel}>
@@ -624,6 +627,9 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
             <button className={s.secondary} onClick={() => dispatch({ type: "crop", slot: i, patch: { rot: ((((c.rot ?? 0) + 90) % 360) as Crop["rot"]) } })}>Rotate photo 90°</button>
             <button className={s.linkBtn} onClick={() => dispatch({ type: "crop", slot: i, patch: { zoom: 1, x: 0.5, y: 0.5, fit: "cover", rot: 0 } })}>Reset framing</button>
           </div>
+          {tpl.needsMask && (
+            <button className={s.secondary} disabled={!autoMasks} onClick={() => setRefining((order[i] ?? i) % photos.length)}>Refine cutout (add / erase)</button>
+          )}
         </>
       );
     }

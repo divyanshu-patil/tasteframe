@@ -467,6 +467,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
             </>
           ) : (
             <label
+              htmlFor="photo-input"
               className={`${s.drop} ${dragOver ? s.dropActive : ""}`}
               onDragOver={(e) => {
                 e.preventDefault();
