@@ -116,9 +116,19 @@ async def delete_story(
     storage: Storage = Depends(get_storage),
     repo: SupabaseStories = Depends(get_repo),
 ) -> Response:
-    """Deletes the row (RLS: own rows only) and its photo copy. Idempotent."""
-    row = await repo.delete(user, story_id)
-    key = str(row.get("s3_object_key", "")) if row else ""
+    """Deletes the row (RLS: own rows only), then its photo copy. Idempotent.
+
+    PostgREST has been observed to occasionally answer a valid DELETE with an empty result. We
+    look the row up first and, if it survives the delete, report a retryable error instead of a
+    false 204 — so the photo is never orphaned and the UI keeps the item for a retry."""
+    row = await repo.get(user, story_id)
+    if not row:
+        return Response(status_code=204)  # already gone
+    if not await repo.delete(user, story_id) and await repo.get(user, story_id):
+        raise AppError(
+            "PERSISTENCE_UNAVAILABLE", "Couldn't delete that Story. Please try again.", 503, True
+        )
+    key = str(row.get("s3_object_key", ""))
     if key.startswith(f"saved/{user.id}/"):
         await asyncio.to_thread(storage.delete, key)
     return Response(status_code=204)

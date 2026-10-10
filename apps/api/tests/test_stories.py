@@ -51,6 +51,7 @@ class FakeSupabase:
         self.users = dict([ALICE, BOB])
         self.rows: list[dict] = []
         self.fail = False
+        self.ignore_deletes = False  # PostgREST answering a DELETE with [] and deleting nothing
         self.requests: list[httpx.Request] = []
 
     def handler(self, req: httpx.Request) -> httpx.Response:
@@ -80,6 +81,8 @@ class FakeSupabase:
             r for r in mine if "id" not in params or r["id"] == params["id"].removeprefix("eq.")
         ]
         if req.method == "DELETE":
+            if self.ignore_deletes:
+                return httpx.Response(200, json=[])
             self.rows = [r for r in self.rows if r not in hits]
         return httpx.Response(200, json=hits)
 
@@ -227,3 +230,16 @@ def test_expired_upload_cannot_be_saved(setup):
     client.delete(f"/v1/uploads/{key}", headers=h)
     r = save(client, h, key)
     assert r.status_code == 404 and r.json()["error"]["code"] == "OBJECT_NOT_FOUND"
+
+
+def test_delete_that_silently_fails_is_reported_and_keeps_the_photo(setup, tmp_path):
+    client, fake = setup
+    h = headers(client)
+    sid = save(client, h, upload(client, h, make_image())).json()["id"]
+    fake.ignore_deletes = True
+    r = client.delete(f"/v1/stories/{sid}", headers=h)
+    assert r.status_code == 503 and r.json()["error"]["retryable"] is True
+    assert len(fake.rows) == 1 and len(list((tmp_path / "uploads").glob("saved/**/*.jpg"))) == 1
+    fake.ignore_deletes = False
+    assert client.delete(f"/v1/stories/{sid}", headers=h).status_code == 204  # retry works
+    assert fake.rows == [] and not list((tmp_path / "uploads").glob("saved/**/*.jpg"))
