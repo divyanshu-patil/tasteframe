@@ -17,11 +17,13 @@ class Storage(Protocol):
     def get(self, key: str) -> bytes | None: ...
     def put(self, key: str, data: bytes, content_type: str) -> None: ...
     def delete(self, key: str) -> None: ...
+    def copy(self, src: str, dst: str) -> bool: ...
 
 
 class S3Storage:
     def __init__(self, settings: Settings, client=None):
         import boto3
+        from botocore.config import Config
 
         self.s = settings
         creds = {}
@@ -30,7 +32,14 @@ class S3Storage:
                 "aws_access_key_id": settings.aws_access_key_id.get_secret_value(),
                 "aws_secret_access_key": settings.aws_secret_access_key.get_secret_value(),
             }
-        self.client = client or boto3.client("s3", region_name=settings.aws_region, **creds)
+        # Regional endpoint + SigV4: the global endpoint answers browser POSTs for non-us-east-1
+        # buckets with a 307 redirect, which presigned-POST uploads can't follow.
+        self.client = client or boto3.client(
+            "s3",
+            region_name=settings.aws_region,
+            config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
+            **creds,
+        )
         self.bucket = settings.aws_s3_bucket
 
     def presign(self, key: str, content_type: str) -> tuple[str, dict[str, str]]:
@@ -60,6 +69,15 @@ class S3Storage:
 
     def delete(self, key: str) -> None:
         self.client.delete_object(Bucket=self.bucket, Key=key)  # idempotent in S3
+
+    def copy(self, src: str, dst: str) -> bool:
+        try:
+            self.client.copy_object(
+                Bucket=self.bucket, Key=dst, CopySource={"Bucket": self.bucket, "Key": src}
+            )
+        except self.client.exceptions.ClientError:
+            return False
+        return True
 
 
 class LocalStorage:
@@ -99,6 +117,13 @@ class LocalStorage:
 
     def delete(self, key: str) -> None:
         self._path(key).unlink(missing_ok=True)
+
+    def copy(self, src: str, dst: str) -> bool:
+        data = self.get(src)
+        if not data:
+            return False
+        self.put(dst, data, "")
+        return True
 
 
 _storage: Storage | None = None

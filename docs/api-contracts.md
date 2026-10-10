@@ -112,9 +112,31 @@ Idempotent 204 for own keys, including ones already deleted. 404 for foreign or 
 ```
 Every response carries an `X-Request-ID` header. Codes: `INVALID_REQUEST`, `SESSION_INVALID`,
 `RATE_LIMITED`, `IMAGE_TOO_LARGE`, `INVALID_IMAGE`, `OBJECT_NOT_FOUND`, `UPLOAD_FORBIDDEN`,
-`UPLOAD_EXPIRED`, `QLOO_NOT_CONFIGURED`, `QLOO_AUTH_FAILED`, `QLOO_RATE_LIMITED`,
+`UPLOAD_EXPIRED`, `STORY_NOT_FOUND`, `STORY_LIMIT`, `PERSISTENCE_NOT_CONFIGURED`,
+`PERSISTENCE_UNAVAILABLE`, `QLOO_NOT_CONFIGURED`, `QLOO_AUTH_FAILED`, `QLOO_RATE_LIMITED`,
 `QLOO_TIMEOUT`, `QLOO_INVALID_QUERY`, `QLOO_UPSTREAM_ERROR`, `INTERNAL_ERROR`.
 
-## Not implemented
-`POST/DELETE /v1/stories` (Supabase persistence) — deferred; the guest MVP keeps Story state in
-the browser.
+## `GET /v1/features`
+```json
+{"qloo": true, "saved_stories": true, "storage": "s3"}
+```
+Booleans only (never values). The UI hides taste search and saving when these are off.
+
+## Saved Stories (when Supabase is configured; otherwise 503 `PERSISTENCE_NOT_CONFIGURED`)
+
+`POST /v1/stories` → 201
+```json
+{"object_key": "tmp/<session>/<random>.jpg",
+ "config": { "...exact StoryState from apps/web/lib/story/types.ts (strictly validated)..." },
+ "provenance": {"qloo_used": true, "music_artist": "…", "music_title": null, "track_source": null}}
+```
+Copies the photo to `saved/`, inserts a row, and returns a `StoryOut`:
+`{id, template_id, config, provenance, created_at, expires_at}`. Errors: `STORY_LIMIT` (409),
+`OBJECT_NOT_FOUND` (404, upload expired), `PERSISTENCE_UNAVAILABLE` (503, copy rolled back).
+
+`GET /v1/stories` → `{"stories": [StoryOut…]}`, newest first, unexpired, this session only.
+
+`GET /v1/stories/{id}/photo` → image bytes (`Cache-Control: private, no-store`). 404 for other
+sessions or expired Stories.
+
+`DELETE /v1/stories/{id}` → 204 (idempotent). Removes the row and its `saved/` object.

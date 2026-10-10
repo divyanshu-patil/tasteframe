@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import analysis, health, session, taste, uploads
+from app.api.routes import analysis, health, session, stories, taste, uploads
 from app.core import errors
 from app.core.config import check_settings, get_settings
 
@@ -36,7 +36,7 @@ def create_app() -> FastAPI:
         expose_headers=["X-Request-ID"],
     )
     errors.install(app)
-    for r in (health, session, uploads, taste, analysis):
+    for r in (health, session, uploads, taste, analysis, stories):
         app.include_router(r.router)
     return app
 

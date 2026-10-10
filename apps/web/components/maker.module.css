@@ -250,3 +250,9 @@ textarea.input { width: 100%; resize: vertical; }
   .heroStack:hover .heroCard { transform: translateX(calc((var(--i) - 1) * 70px)) rotate(calc((var(--i) - 1) * 5deg)) scale(0.85); }
   .grid2 { grid-template-columns: 1fr; }
 }
+
+/* ---- saved stories ---- */
+.savedList { list-style: none; display: grid; }
+.savedList li { display: flex; justify-content: space-between; align-items: center; gap: var(--spacing-14); padding: var(--spacing-10) 0; border-bottom: 1px solid var(--color-bone-cream); flex-wrap: wrap; }
+.savedName { display: grid; gap: 2px; font-size: 17px; }
+.savedName strong { font-weight: 600; }

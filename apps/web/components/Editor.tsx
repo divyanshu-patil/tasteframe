@@ -19,8 +19,10 @@ interface Props {
   input: (id: TemplateId) => TemplateInput;
   suggested: TemplateId[];
   music: Music | null;
-  onBack: () => void;
+  onBack?: () => void;
   onStartOver: () => void;
+  /** Present only when saving is configured and the photo is uploaded. */
+  onSave?: () => Promise<void>;
 }
 
 const FONTS: { id: FontRole; label: string }[] = [
@@ -47,9 +49,22 @@ function usePreviewWidth(): number {
   return w;
 }
 
-export function Editor({ photo, story, setStory, input, suggested, music, onBack, onStartOver }: Props) {
+export function Editor({ photo, story, setStory, input, suggested, music, onBack, onStartOver, onSave }: Props) {
   const [active, setActive] = useState<TextKey>("headline");
   const [exporting, setExporting] = useState<"idle" | "busy" | "error" | "done">("idle");
+  const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
+  // Any edit after saving makes "Save" available again (saves a new copy).
+  useEffect(() => setSaving((cur) => (cur.kind === "done" ? { kind: "idle" } : cur)), [story]);
+  const doSave = async () => {
+    if (!onSave) return;
+    setSaving({ kind: "busy" });
+    try {
+      await onSave();
+      setSaving({ kind: "done" });
+    } catch (e) {
+      setSaving({ kind: "error", msg: e instanceof Error && e.message ? e.message : "Saving failed." });
+    }
+  };
   const width = usePreviewWidth();
   const dispatch = (a: EditorAction) => setStory((cur) => (cur ? editorReducer(cur, a) : cur));
   const tpl = TEMPLATES[story.templateId];
@@ -93,7 +108,7 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
 
       <div className={s.panel}>
         <div className={s.panelHead}>
-          <button className={s.linkBtn} onClick={onBack}>← All suggestions</button>
+          {onBack ? <button className={s.linkBtn} onClick={onBack}>← All suggestions</button> : <span />}
           <button className={s.linkBtn} onClick={onStartOver}>Start over</button>
         </div>
 
@@ -215,9 +230,24 @@ export function Editor({ photo, story, setStory, input, suggested, music, onBack
           <button className={s.primary} onClick={doExport} disabled={exporting === "busy"}>
             {exporting === "busy" ? "Rendering…" : "Download PNG"}
           </button>
+          {onSave && (
+            <button className={s.secondary} onClick={doSave} disabled={saving.kind === "busy" || saving.kind === "done"}>
+              {saving.kind === "busy" ? "Saving…" : saving.kind === "done" ? "Saved ✓" : "Save to my Stories"}
+            </button>
+          )}
           <button className={s.secondary} onClick={() => dispatch({ type: "reset", input: input(story.templateId) })}>
             Reset to template
           </button>
+        </div>
+        <div aria-live="polite">
+          {saving.kind === "error" && (
+            <p className={s.error}>
+              {saving.msg} <button className={s.linkBtn} onClick={doSave}>Try again</button>
+            </p>
+          )}
+          {saving.kind === "done" && (
+            <p className={s.small}>Saved to this browser&apos;s Stories. The photo copy is kept privately and deleted automatically after a week.</p>
+          )}
         </div>
         <div aria-live="polite">
           {exporting === "error" && (

@@ -39,6 +39,21 @@
         "API_PORT",
         "API_BASE_URL",
         "NEXT_PUBLIC_UPLOAD_MAX_MB"
+      ],
+      "passThroughEnv": [
+        "ENVIRONMENT",
+        "SESSION_SECRET",
+        "STORAGE_BACKEND",
+        "QLOO_*",
+        "AWS_*",
+        "S3_*",
+        "SUPABASE_*",
+        "STORY_RETENTION_DAYS",
+        "MAX_SAVED_STORIES",
+        "CORS_ORIGINS",
+        "PUBLIC_API_URL",
+        "MUSIC_METADATA_PROVIDER",
+        "RATE_LIMIT_*"
       ]
     },
     "test": {

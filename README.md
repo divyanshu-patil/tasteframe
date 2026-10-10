@@ -36,7 +36,8 @@ supabase/schema.sql optional persistence schema (not used by the guest MVP)
 ```bash
 pnpm install
 pnpm api:setup                  # creates apps/api/.venv and pip-installs requirements-dev.txt
-cp .env.example apps/api/.env   # keep the API block; set SESSION_SECRET (and QLOO_API_KEY if you have one)
+cp apps/api/.env.example apps/api/.env        # set SESSION_SECRET; STORAGE_BACKEND=local if no AWS yet
+cp apps/web/.env.example apps/web/.env.local
 pnpm dev                        # Turbo runs Next.js (:3000) and FastAPI (:8000) together
 ```
 
@@ -87,10 +88,13 @@ editor and export never need the network.
 
 ## Configuration
 
-See `.env.example` (placeholders only). Real env files are gitignored.
+Templates (placeholders only): `apps/api/.env.example` → `apps/api/.env` and
+`apps/web/.env.example` → `apps/web/.env.local`. The root `.env.example` points to both. Real env
+files are gitignored. Turbo passes the API variables through `pnpm dev` (`passThroughEnv`).
 
 - **API (`apps/api/.env`)**: `SESSION_SECRET`, `QLOO_API_KEY`, `QLOO_BASE_URL`, `STORAGE_BACKEND`,
-  `AWS_*`, `S3_*`, `CORS_ORIGINS`, `PUBLIC_API_URL`, `MUSIC_METADATA_PROVIDER`, `RATE_LIMIT_*`.
+  `AWS_*`, `S3_*`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STORY_RETENTION_DAYS`,
+  `MAX_SAVED_STORIES`, `CORS_ORIGINS`, `PUBLIC_API_URL`, `MUSIC_METADATA_PROVIDER`, `RATE_LIMIT_*`.
 - **Web (`apps/web/.env.local`)**: `API_BASE_URL` (server-only, used by the `/api` rewrite) and
   `NEXT_PUBLIC_UPLOAD_MAX_MB` (non-secret hint).
 
@@ -109,11 +113,13 @@ Details, verified endpoints and the fallback policy are in [`qloo_API.md`](qloo_
 ## AWS S3 setup (production)
 
 1. Create a bucket and keep **Block Public Access** on (all four settings). Default SSE-S3
-   encryption is fine.
+   encryption is fine. Set `AWS_REGION` to the bucket's **actual** region (check
+   `aws s3api get-bucket-location`). Presigned POSTs go to the regional endpoint.
 2. CORS: apply `docs/aws/cors.json` with your web origin. Only `POST` from that origin is allowed.
-3. Lifecycle: apply `docs/aws/lifecycle.json`, which expires `tmp/` objects after 1 day.
-4. IAM: attach `docs/aws/iam-policy.json` (Put/Get/Delete on `tmp/*` only) to the API's role or
-   user. Prefer an instance/task role over static keys.
+3. Lifecycle: apply `docs/aws/lifecycle.json`. It expires `tmp/` after 1 day and `saved/` after
+   8 days.
+4. IAM: attach `docs/aws/iam-policy.json` (Put/Get/Delete on `tmp/*` and `saved/*` only) to the
+   API's role or user. Prefer an instance/task role over static keys.
 5. Set `STORAGE_BACKEND=s3`, `AWS_S3_BUCKET`, `AWS_REGION` and credentials if no role.
 
 ```bash
@@ -128,18 +134,37 @@ and expire after `S3_PRESIGNED_URL_TTL_SECONDS` (default 300 s). Keys are
 `tmp/<session-id>/<random>.<ext>`, never derived from filenames. The API verifies the session
 prefix on every read and delete.
 
-## Supabase (optional, not wired in)
+## Supabase — saved Stories (optional)
 
-The guest MVP stores nothing in a database: Story state lives in the browser and photos expire
-from S3. `supabase/schema.sql` is a ready, RLS-enabled schema for saved stories if accounts are
-added later. Apply it with `supabase db push` or the SQL editor. Never expose the service-role
-key to the browser.
+Guests can **Save to my Stories** from the editor, then reopen or delete them from the start
+screen. The feature turns on automatically when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
+are set (`GET /v1/features` reports it). Otherwise the UI hides it.
+
+1. Create a Supabase project. In **SQL editor**, run `supabase/schema.sql`. It creates
+   `public.stories` with RLS enabled and no anon policies.
+2. Under **Project Settings → API**, copy the Project URL and the **service_role** key into
+   `apps/api/.env`. They are API-only and never go in the web app or `NEXT_PUBLIC_*`.
+3. Optional: schedule `select public.purge_expired_stories()` daily with pg_cron. The API already
+   hides expired rows.
+
+How it works:
+- The API talks to PostgREST with the service-role key and filters every query by
+  `guest_session_hash = sha256(SESSION_SECRET:session_id)`. Raw session ids are never stored.
+- Saving copies the EXIF-stripped photo from `tmp/` to `saved/<session>/<random>.<ext>`. The row
+  stores only that key, the validated Story config (strict schema, no extra fields) and minimal
+  provenance (`qloo_used`, music artist/title). No seeds or image bytes are stored.
+- Photos are served back through `GET /v1/stories/{id}/photo`, which is same-origin, so the canvas
+  is never tainted. There are no public or presigned GET URLs.
+- Delete removes both the row and the photo. Rows expire after `STORY_RETENTION_DAYS` (7), and
+  `saved/` objects after 8 days via S3 lifecycle.
+- The session token lives in `localStorage`, so saved Stories belong to that browser.
 
 ## Deployment
 
 The web app and API deploy separately. Nothing has been deployed from this repository yet.
 
 **API** (any Python/Docker host, e.g. Render, Fly.io, Cloud Run):
+- Add the production web origin to the bucket's CORS `AllowedOrigins` and to `CORS_ORIGINS`.
 - Docker: `apps/api/Dockerfile` (listens on `$PORT`). Without Docker: `pip install -r
   requirements.txt` then `uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers`.
 - Env: `ENVIRONMENT=production`, `SESSION_SECRET`, `QLOO_API_KEY`, `STORAGE_BACKEND=s3`,

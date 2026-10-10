@@ -8,8 +8,13 @@ import {
   MOODS,
   type Mood,
   type Stage,
+  type Features,
+  type SavedStory,
   analyze,
   deleteUpload,
+  getFeatures,
+  saveStory,
+  storyPhoto,
   uploadPhoto,
 } from "../lib/api";
 import { sampleFile } from "../lib/sample";
@@ -20,6 +25,7 @@ import { MAX_BYTES, checkFile } from "../lib/upload";
 import { Editor } from "./Editor";
 import { Progress } from "./Progress";
 import { Results } from "./Results";
+import { SavedStories } from "./SavedStories";
 import { type Seed, TastePicker } from "./TastePicker";
 import s from "./maker.module.css";
 
@@ -57,6 +63,8 @@ export function StoryMaker() {
   const [objectKey, setObjectKey] = useState<string | null>(null);
   const [story, setStory] = useState<StoryState | null>(null);
   const [storyDate, setStoryDate] = useState(() => new Date());
+  const [features, setFeatures] = useState<Features | null>(null);
+  const [savedVersion, setSavedVersion] = useState(0); // bump to refresh the saved list
   const runId = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -67,6 +75,10 @@ export function StoryMaker() {
     if (phase !== "setup")
       rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [phase]);
+
+  useEffect(() => {
+    void getFeatures().then(setFeatures);
+  }, []);
 
   // Revoke the preview object URL whenever the photo changes or the page unmounts.
   useEffect(
@@ -196,6 +208,40 @@ export function StoryMaker() {
     setSeeds([]);
   };
 
+  /** Re-open a saved Story: photo comes back through the API (same-origin, canvas-safe). */
+  const openSaved = async (saved: SavedStory) => {
+    const blob = await storyPhoto(saved.id);
+    const file = new File([blob], `saved-${saved.config.templateId}`, { type: blob.type });
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await loadImage(url);
+      runId.current++;
+      cleanupUpload(objectKey);
+      setObjectKey(null);
+      setAnalysis(null);
+      setPhoto({ file, type: blob.type, url, img });
+      setStory(saved.config);
+      setPhase("edit");
+    } catch (e) {
+      URL.revokeObjectURL(url);
+      throw e;
+    }
+  };
+
+  const save =
+    features?.saved_stories && objectKey && story
+      ? async () => {
+          const m = analysis?.music;
+          await saveStory(objectKey, story, {
+            qloo_used: analysis?.provenance.qloo_used ?? false,
+            music_artist: m?.artist ?? null,
+            music_title: m?.kind === "track" ? m.title : null,
+            track_source: m?.kind === "track" ? m.track_source : null,
+          });
+          setSavedVersion((v) => v + 1);
+        }
+      : undefined;
+
   const toggleMood = (m: Mood) =>
     setMoods((cur) =>
       cur.includes(m)
@@ -270,8 +316,9 @@ export function StoryMaker() {
           }
           suggested={analysis?.layouts.map((l) => l.id) ?? LOCAL_LAYOUTS}
           music={analysis?.music ?? null}
-          onBack={() => setPhase("results")}
+          onBack={analysis || objectKey ? () => setPhase("results") : undefined}
           onStartOver={startOver}
+          onSave={save}
         />
       );
     }
@@ -281,6 +328,10 @@ export function StoryMaker() {
         <h2 id="setup-title" className={s.srOnly}>
           Create your Stories
         </h2>
+
+        {features?.saved_stories && (
+          <SavedStories key={savedVersion} onOpen={openSaved} />
+        )}
 
         <div className={s.step}>
           <p className={s.stepNo}>01 — Photo</p>
@@ -386,7 +437,11 @@ export function StoryMaker() {
           <p className={s.stepNo}>
             03 — Taste <span className={s.muted}>(optional)</span>
           </p>
-          <TastePicker seeds={seeds} onChange={setSeeds} />
+          <TastePicker
+            seeds={seeds}
+            onChange={setSeeds}
+            available={features?.qloo !== false}
+          />
         </div>
 
         <div className={s.ctaRow}>

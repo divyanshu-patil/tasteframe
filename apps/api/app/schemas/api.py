@@ -1,6 +1,6 @@
 """Public request/response models (app contracts — not Qloo schemas)."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -143,3 +143,79 @@ class AnalysisOut(BaseModel):
     layouts: list[LayoutSuggestion]
     music: MusicSuggestion
     provenance: Provenance
+
+
+# ---- saved Stories (optional Supabase persistence) -------------------------------------
+HEX = r"^#[0-9a-fA-F]{6}$"
+
+
+class FeaturesOut(BaseModel):
+    qloo: bool
+    saved_stories: bool
+    storage: Literal["s3", "local"]
+
+
+class TextLayerConfig(BaseModel):
+    text: str = Field(max_length=160)
+    size: float = Field(ge=12, le=240)
+    color: str = Field(pattern=HEX)
+    align: Literal["left", "center", "right"]
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    width: float = Field(gt=0, le=1)
+    font: Literal["display", "serif", "sans", "hand", "mono", "italic"]
+
+
+class CropConfig(BaseModel):
+    zoom: float = Field(ge=1, le=3)
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+
+
+class OverlayConfig(BaseModel):
+    strength: float = Field(ge=0, le=1)
+    color: str = Field(pattern=HEX)
+
+
+class StoryConfig(BaseModel):
+    """Mirror of the web app's serializable StoryState (apps/web/lib/story/types.ts)."""
+
+    model_config = {"extra": "forbid"}
+
+    templateId: LayoutId  # noqa: N815 — matches the browser's JSON shape
+    headline: TextLayerConfig
+    caption: TextLayerConfig
+    crop: CropConfig
+    overlay: OverlayConfig
+    decorations: dict[str, bool] = Field(max_length=12)
+    accent: str = Field(pattern=HEX)
+    palette: list[Annotated[str, Field(pattern=HEX)]] = Field(max_length=6)
+    stamp: str = Field(max_length=16)
+
+
+class StoryProvenance(BaseModel):
+    """Minimal, sanitized: no seeds or taste text are stored."""
+
+    qloo_used: bool = False
+    music_artist: str | None = Field(None, max_length=120)
+    music_title: str | None = Field(None, max_length=160)
+    track_source: Literal["itunes"] | None = None
+
+
+class SaveStoryIn(BaseModel):
+    object_key: str = Field(max_length=200)
+    config: StoryConfig
+    provenance: StoryProvenance = Field(default_factory=StoryProvenance)
+
+
+class StoryOut(BaseModel):
+    id: str
+    template_id: LayoutId
+    config: StoryConfig
+    provenance: StoryProvenance
+    created_at: str
+    expires_at: str | None
+
+
+class StoryListOut(BaseModel):
+    stories: list[StoryOut]

@@ -9,7 +9,8 @@
 | Qloo returns track-level suggestions | **No**: no track/song entity type documented; guide says use `urn:entity:artist` | Hackathon developer guide | Artist-level card + iTunes metadata fallback (`test_itunes_exact_artist_match_only`) |
 | Free vision processing is available | Local Pillow statistics; no third-party vision provider, no data leaves our API | — | `tests/test_services.py::test_vision_*` |
 | iTunes Search API provides track metadata | Verified live with a manual request; used for title + Apple Music link only, exact artist match, no audio | https://performance-partners.apple.com/search-api | `test_itunes_*` (mocked) |
-| Supabase is free for all use | Not used in MVP | https://supabase.com/pricing | — |
+| Supabase is free for all use | Not guaranteed; used only for optional saved Stories (small JSON rows, 7-day expiry) | https://supabase.com/pricing | `tests/test_stories.py` (mocked PostgREST); live pending project keys |
+| Real S3 bucket accepts presigned POST and enforces limits | Verified 2026-10-10 on `ap-south-1`: 204 upload, 11 MB rejected (`EntityTooLarge`), regional endpoint needed (global → 307) | — | `test_presign_uses_regional_endpoint`, manual curl, browser e2e |
 | S3 is free for all use | False as a blanket guarantee; lifecycle 1-day expiry + 10 MB cap bound cost | https://aws.amazon.com/s3/pricing/ | `tests/test_storage_s3.py` (Stubber) |
 | Hosting is always free | False as a blanket guarantee; not deployed yet | Provider plan pages | — |
 | Exported PNG contains an interactive music sticker | No; the UI directs users to Instagram's native Music sticker | — | UI copy in `MusicCard` |

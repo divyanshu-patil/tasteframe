@@ -70,3 +70,15 @@ describe("analysis stream", () => {
     await expect(readAnalysisStream(streamOf(['{"stage":"photo"}\n']), () => undefined)).rejects.toMatchObject({ code: "BAD_RESPONSE" });
   });
 });
+
+describe("saved story parsing", () => {
+  it("round-trips a real template state and rejects tampered ones", async () => {
+    const { defaultState } = await import("./story/templates");
+    const { parseStoryState } = await import("./api");
+    const state = defaultState("scrapbook", { headline: "h", caption: "c", accent: "#c03f13", palette: [], date: new Date(2026, 9, 10) });
+    expect(parseStoryState(JSON.parse(JSON.stringify(state)))).toEqual(state);
+    expect(parseStoryState({ ...state, templateId: "evil" })).toBeNull();
+    expect(parseStoryState({ ...state, headline: { text: 1 } })).toBeNull();
+    expect(parseStoryState(null)).toBeNull();
+  });
+});

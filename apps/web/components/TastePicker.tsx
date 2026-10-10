@@ -16,7 +16,15 @@ const TYPES: { id: TasteType; label: string }[] = [
 ];
 const MAX_SEEDS = 5;
 
-export function TastePicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: Seed[]) => void }) {
+export function TastePicker({
+  seeds,
+  onChange,
+  available = true,
+}: {
+  seeds: Seed[];
+  onChange: (s: Seed[]) => void;
+  available?: boolean;
+}) {
   const [type, setType] = useState<TasteType>("artist");
   const [q, setQ] = useState("");
   const [state, setState] = useState<
@@ -53,6 +61,15 @@ export function TastePicker({ seeds, onChange }: { seeds: Seed[]; onChange: (s: 
     setState({ kind: "idle" });
     setQ("");
   };
+
+  if (!available) {
+    return (
+      <p className={s.muted}>
+        Taste search (Qloo) isn&apos;t configured on this deployment, so Stories will be shaped by
+        your photo&apos;s visual mood only.
+      </p>
+    );
+  }
 
   return (
     <div className={s.taste}>

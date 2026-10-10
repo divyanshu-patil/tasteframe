@@ -26,6 +26,10 @@ def make_image(fmt: str = "JPEG", size=(600, 900), color=(200, 140, 60), exif=No
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
+    # Never read the developer's real apps/api/.env (it may hold live keys) in unit tests.
+    monkeypatch.chdir(tmp_path)
+    for var in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "AWS_S3_BUCKET", "ENVIRONMENT"):
+        monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("STORAGE_BACKEND", "local")
     monkeypatch.setenv("LOCAL_STORAGE_DIR", str(tmp_path / "uploads"))
     monkeypatch.setenv("SESSION_SECRET", "test-secret")

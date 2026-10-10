@@ -1,6 +1,6 @@
 // Browser client for the Tasteframe API. All calls go through the Next.js `/api` rewrite;
 // no provider keys ever reach the browser. Responses are validated before use.
-import type { TemplateId } from "./story/types";
+import type { StoryState, TemplateId } from "./story/types";
 import { TEMPLATE_IDS } from "./story/types";
 
 export const API = "/api";
@@ -156,7 +156,7 @@ export function sessionToken(): Promise<string> {
   if (!tokenPromise) {
     tokenPromise = (async () => {
       try {
-        const cached = sessionStorage.getItem(TOKEN_KEY);
+        const cached = localStorage.getItem(TOKEN_KEY);
         if (cached) return cached;
       } catch {
         /* storage unavailable: fall back to a fresh session */
@@ -166,7 +166,7 @@ export function sessionToken(): Promise<string> {
       const body: unknown = await res.json();
       if (!isObj(body) || !isStr(body.session_token)) throw new ApiError("BAD_RESPONSE", "Bad session.");
       try {
-        sessionStorage.setItem(TOKEN_KEY, body.session_token);
+        localStorage.setItem(TOKEN_KEY, body.session_token);
       } catch {
         /* ignore */
       }
@@ -192,7 +192,7 @@ async function authed(path: string, init: RequestInit = {}): Promise<Response> {
   if (res.status === 401) {
     tokenPromise = null;
     try {
-      sessionStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_KEY);
     } catch {
       /* ignore */
     }
@@ -303,4 +303,94 @@ export async function deleteUpload(objectKey: string): Promise<void> {
   const path = objectKey.split("/").map(encodeURIComponent).join("/");
   const res = await authed(`/v1/uploads/${path}`, { method: "DELETE" });
   if (!res.ok && res.status !== 404) throw await errorFrom(res);
+}
+
+// ---- features & saved Stories ------------------------------------------------------------
+export interface Features {
+  qloo: boolean;
+  saved_stories: boolean;
+}
+
+export async function getFeatures(): Promise<Features> {
+  try {
+    const res = await fetch(`${API}/v1/features`);
+    const v: unknown = await res.json();
+    if (res.ok && isObj(v)) return { qloo: v.qloo === true, saved_stories: v.saved_stories === true };
+  } catch {
+    /* treat as unavailable */
+  }
+  return { qloo: false, saved_stories: false };
+}
+
+export interface SavedStory {
+  id: string;
+  config: StoryState;
+  created_at: string;
+  expires_at: string | null;
+  provenance: { qloo_used: boolean; music_artist: string | null; music_title: string | null };
+}
+
+const isLayer = (v: unknown) =>
+  isObj(v) && isStr(v.text) && isNum(v.size) && isStr(v.color) && isNum(v.x) && isNum(v.y);
+
+export function parseStoryState(v: unknown): StoryState | null {
+  if (!isObj(v) || !(TEMPLATE_IDS as readonly unknown[]).includes(v.templateId)) return null;
+  if (!isLayer(v.headline) || !isLayer(v.caption) || !isObj(v.crop) || !isObj(v.overlay)) return null;
+  if (!isObj(v.decorations) || !isStr(v.accent) || !isStrArr(v.palette) || !isStr(v.stamp)) return null;
+  return v as unknown as StoryState;
+}
+
+function parseSaved(v: unknown): SavedStory | null {
+  if (!isObj(v) || !isStr(v.id) || !isStr(v.created_at)) return null;
+  const config = parseStoryState(v.config);
+  if (!config) return null;
+  const p = isObj(v.provenance) ? v.provenance : {};
+  return {
+    id: v.id,
+    config,
+    created_at: v.created_at,
+    expires_at: isStr(v.expires_at) ? v.expires_at : null,
+    provenance: {
+      qloo_used: p.qloo_used === true,
+      music_artist: isStr(p.music_artist) ? p.music_artist : null,
+      music_title: isStr(p.music_title) ? p.music_title : null,
+    },
+  };
+}
+
+export async function saveStory(
+  objectKey: string,
+  config: StoryState,
+  provenance: SavedStory["provenance"] & { track_source: "itunes" | null },
+): Promise<SavedStory> {
+  const res = await authed("/v1/stories", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ object_key: objectKey, config, provenance }),
+  });
+  if (!res.ok) throw await errorFrom(res);
+  const saved = parseSaved(await res.json());
+  if (!saved) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  return saved;
+}
+
+export async function listStories(): Promise<SavedStory[]> {
+  const res = await authed("/v1/stories");
+  if (!res.ok) throw await errorFrom(res);
+  const v: unknown = await res.json();
+  if (!isObj(v) || !Array.isArray(v.stories)) {
+    throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  }
+  return v.stories.map(parseSaved).filter((x): x is SavedStory => x !== null);
+}
+
+export async function storyPhoto(id: string): Promise<Blob> {
+  const res = await authed(`/v1/stories/${encodeURIComponent(id)}/photo`);
+  if (!res.ok) throw await errorFrom(res);
+  return res.blob();
+}
+
+export async function deleteStory(id: string): Promise<void> {
+  const res = await authed(`/v1/stories/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res.ok) throw await errorFrom(res);
 }

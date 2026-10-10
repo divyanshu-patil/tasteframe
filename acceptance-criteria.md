@@ -17,11 +17,11 @@ These are pass/fail checks, not just UI tasks.
 - [x] Unsupported, corrupt and oversized files rejected clearly.
 - [x] User can preview, replace and remove photo.
 - [x] Server validates size/type and actual image decoding.
-- [ ] Bucket private with Block Public Access enabled. — documented commands/policies in README + `docs/aws/`; no bucket provisioned yet.
+- [x] Bucket private with Block Public Access enabled. — verified on the real bucket (all four BPA settings on, SSE-S3).
 - [x] Browser uses short-lived presigned URL; no AWS secrets in browser.
 - [x] Random object keys; not derived directly from original filename.
 - [x] Expired/unauthorized URLs rejected.
-- [ ] Temporary objects expire through lifecycle/cleanup. — `docs/aws/lifecycle.json` (1 day) + delete on Start over (tested locally).
+- [x] Temporary objects expire through lifecycle/cleanup. — lifecycle applied to the real bucket (tmp/ 1 day, saved/ 8 days); delete-on-Start-over verified against S3.
 
 ## C. Visual analysis
 - [x] Returns broad visual features or asks for manual mood selection.
@@ -71,8 +71,8 @@ These are pass/fail checks, not just UI tasks.
 ## H. Privacy/security
 - [x] Qloo key, AWS secret and Supabase service-role key absent from browser bundles.
 - [ ] Production CORS restricted. — `CORS_ORIGINS` allowlist + S3 CORS template; production values set at deploy.
-- [ ] S3 bucket private. — see B; pending provisioning.
-- [ ] Supabase RLS enabled if user-owned data stored. — no user data stored (Supabase not used); schema has RLS.
+- [x] S3 bucket private. — verified (Block Public Access on).
+- [ ] Supabase RLS enabled if user-owned data stored. — schema enables RLS (no anon policies); pending applying it to your project.
 - [x] Raw photos not stored in Postgres.
 - [x] Deletion/retention documented and tested.
 - [x] Signed URLs and credentials not logged.
