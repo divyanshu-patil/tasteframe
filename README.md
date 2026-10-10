@@ -177,3 +177,7 @@ quota, and set billing alerts.
 - Single-instance in-memory rate limiting. No caching of Qloo responses, because the terms
   weren't verified for caching.
 - Live Qloo behaviour is verified only when a key is configured (see `qloo_API.md`).
+
+## License
+
+MIT — see [LICENSE](LICENSE).

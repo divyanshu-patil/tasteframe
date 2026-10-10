@@ -97,7 +97,7 @@ These are pass/fail checks, not just UI tasks.
 ## K. Public submission
 - [ ] Demo URL works in incognito without private access.
 - [ ] Main flow works end-to-end.
-- [ ] Public repo has source, setup and open-source license.
+- [ ] Public repo has source, setup and open-source license. — MIT LICENSE + setup docs added; repo not yet public.
 - [ ] Production secrets configured outside source control.
 - [x] Live Qloo behavior distinguishable from preview/sample mode.
 - [x] Mobile browser tested.
