@@ -433,7 +433,7 @@ export function StoryMaker() {
             >
               <span className={s.dropTitle}>Drop up to 4 photos</span>
               <span className={s.muted}>
-                or click to choose · JPEG, PNG or WebP · up to {Math.round(MAX_BYTES / 1048576)} MB each
+                or click to choose · JPG / JPEG, PNG or WebP · up to {Math.round(MAX_BYTES / 1048576)} MB each
               </span>
               <span className={s.primaryFake}>Choose photos</span>
             </label>
@@ -443,7 +443,7 @@ export function StoryMaker() {
             id="photo-input"
             type="file"
             multiple
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/jpg,image/pjpeg,image/png,image/webp,.jpg,.jpeg,.jpe,.jfif,.png,.webp"
             className={s.srOnly}
             onChange={(e) => {
               void choose(e.target.files);

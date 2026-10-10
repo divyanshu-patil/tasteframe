@@ -75,8 +75,15 @@ class SessionOut(BaseModel):
 
 
 class PresignIn(BaseModel):
-    content_type: Literal["image/jpeg", "image/png", "image/webp"]
+    # "image/jpg" / "image/pjpeg" are common non-standard labels for JPEG; normalised below.
+    content_type: Literal["image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/webp"]
     size_bytes: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _jpeg_alias(self) -> "PresignIn":
+        if self.content_type in ("image/jpg", "image/pjpeg"):
+            self.content_type = "image/jpeg"
+        return self
 
 
 class PresignOut(BaseModel):

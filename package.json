@@ -1,5 +1,5 @@
 {
-  "name": "VibeStory",
+  "name": "tasteframe",
   "private": true,
   "scripts": {
     "build": "turbo run build",

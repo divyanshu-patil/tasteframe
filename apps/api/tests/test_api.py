@@ -258,3 +258,16 @@ def test_multi_photo_analysis_merges_and_ranks_for_photo_count(client):
     other = new_session(client)
     assert client.post("/v1/analysis", headers=other, json={"object_keys": keys}).status_code == 404
     assert client.post("/v1/analysis", headers=h, json={"object_keys": keys * 2}).status_code == 422
+
+
+def test_jpg_mime_aliases_are_accepted_as_jpeg(client):
+    h = new_session(client)
+    for alias in ("image/jpg", "image/pjpeg"):
+        r = client.post(
+            "/v1/uploads/presign", headers=h, json={"content_type": alias, "size_bytes": 1000}
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert (
+            body["object_key"].endswith(".jpg") and body["fields"]["Content-Type"] == "image/jpeg"
+        )

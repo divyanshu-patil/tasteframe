@@ -22,6 +22,6 @@ export async function checkFile(file: Blob, maxBytes = MAX_BYTES): Promise<FileC
     return { ok: false, error: `Photos must be ${Math.round(maxBytes / 1048576)} MB or smaller.` };
   }
   const type = sniff(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
-  if (!type) return { ok: false, error: "Use a JPEG, PNG or WebP photo." };
+  if (!type) return { ok: false, error: "Use a JPG/JPEG, PNG or WebP photo." };
   return { ok: true, type };
 }
