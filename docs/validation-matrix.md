@@ -1,18 +1,20 @@
 # Validation Matrix — Evidence and Tests
 
-| Claim/assumption | Status | Official evidence | Test |
+| Claim/assumption | Status (2026-10-10) | Official evidence | Test |
 |---|---|---|---|
-| Qloo entity search/lookup exists | Verify current endpoint/schema | https://docs.qloo.com/ and https://github.com/qloo/docs-public | Search three known artists and one film/brand |
-| Qloo Insights returns taste-related entities/tags | Capability family documented; exact parameters vary | Official Insights/taste-analysis docs | Run query with resolved entity signal and supported target |
-| Qloo directly analyzes uploaded photos | Do not assume; this design treats it as unsupported | Current official API docs | Do not depend on it unless docs explicitly confirm |
-| Qloo generates Story layouts | Not a Qloo responsibility here | Current official docs | Render locally with Canvas/SVG |
-| Qloo returns exact track-level suggestions | Unverified until tested with current schema/key | Current entity types/OpenAPI | Check track type and returned title/artist/ID |
-| Free vision processing is available | Depends on provider terms and quota | Provider pricing/data-use docs | Test quota, retention and image training terms |
-| Supabase is free for all use | Not guaranteed | https://supabase.com/pricing | Check current quotas and project policies |
-| S3 is free for all use | False as a blanket guarantee | https://aws.amazon.com/s3/pricing/ | Check storage, requests, region and egress |
-| Hosting is always free | False as a blanket guarantee | Current provider plan | Verify bandwidth, cold starts and terms |
-| Exported image can contain Instagram's interactive music sticker | No; PNG is not an interactive licensed sticker | Instagram/Meta product and music terms | Show track info and direct user to native sticker |
-| Qloo meaningfully changes output | Product hypothesis | Controlled product test | Same image with two taste seeds; compare results |
+| Qloo entity search exists | **Docs verified**: `GET /search` (`query`, `types`, `take`); live call pending key | https://docs.qloo.com/reference/get-search | `tests/test_qloo_client.py`, `test_api.py::test_taste_search` (mocked); `-m integration` (live) |
+| Qloo Insights returns related entities/tags | **Docs verified**: `GET /v2/insights`, `filter.type`, `signal.interests.entities`, `take` ≤ 50; live pending key | Insights deep dive; docs-public repo | `test_insights_normalizes_tags`, `test_seed_changes_cultural_results` (mocked) |
+| Qloo directly analyzes uploaded photos | Not assumed; photos never sent to Qloo | Current docs list no image input | — |
+| Qloo generates Story layouts | Not used; local Canvas renderer | — | `apps/web/lib/story/templates.test.ts` |
+| Qloo returns track-level suggestions | **No**: no track/song entity type documented; guide says use `urn:entity:artist` | Hackathon developer guide | Artist-level card + iTunes metadata fallback (`test_itunes_exact_artist_match_only`) |
+| Free vision processing is available | Local Pillow statistics; no third-party vision provider, no data leaves our API | — | `tests/test_services.py::test_vision_*` |
+| iTunes Search API provides track metadata | Verified live with a manual request; used for title + Apple Music link only, exact artist match, no audio | https://performance-partners.apple.com/search-api | `test_itunes_*` (mocked) |
+| Supabase is free for all use | Not used in MVP | https://supabase.com/pricing | — |
+| S3 is free for all use | False as a blanket guarantee; lifecycle 1-day expiry + 10 MB cap bound cost | https://aws.amazon.com/s3/pricing/ | `tests/test_storage_s3.py` (Stubber) |
+| Hosting is always free | False as a blanket guarantee; not deployed yet | Provider plan pages | — |
+| Exported PNG contains an interactive music sticker | No; the UI directs users to Instagram's native Music sticker | — | UI copy in `MusicCard` |
+| Qloo meaningfully changes output | Seed → Insights results → music + Qloo-tag-driven layout ranking | Controlled test | `test_seed_changes_cultural_results`, `test_cultural_tags_shift_ranking` (mocked); live comparison pending key |
+| Export is exactly 1080×1920 | Verified in headless Chrome (desktop + 390px mobile), all 8 templates | — | Manual e2e via Playwright (see README) + `editor.test.ts` |
 
 ## Evidence protocol
 For every API test, record date, schema/version, endpoint family, sanitized parameters, status, sanitized response fixture, expected/observed behavior, quota headers and conclusion. Never commit keys, private photos, signed URLs or personal data.

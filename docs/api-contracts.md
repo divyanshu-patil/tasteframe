@@ -1,98 +1,120 @@
-# Internal API Contracts
+# Internal API Contracts (implemented)
 
-These are app contracts, not Qloo endpoint definitions.
+App contracts between `apps/web` and `apps/api` — not Qloo endpoint definitions. The browser
+calls them same-origin via the Next.js rewrite `/api/* → API_BASE_URL/*`. Live OpenAPI docs are at
+`http://localhost:8000/docs` in development. Source: `apps/api/app/schemas/api.py`.
+
+Every endpoint except `/health`, `POST /v1/session` and the dev-only local upload needs the header
+`X-Session-Token: <token from POST /v1/session>`.
 
 ## `GET /health`
 ```json
 {"status":"ok","service":"tasteframe-api"}
 ```
-Do not include infrastructure secrets or verbose internals.
+
+## `POST /v1/session`
+Anonymous guest session (HMAC-signed; no account). Rate-limited.
+```json
+{"session_token":"<22-char id>.<signature>"}
+```
 
 ## `POST /v1/uploads/presign`
 Request:
 ```json
 {"content_type":"image/jpeg","size_bytes":1234567}
 ```
-Response:
+`content_type` ∈ `image/jpeg | image/png | image/webp`; `size_bytes` ≤ `S3_UPLOAD_MAX_BYTES` or 413.
+
+Response (S3 presigned POST; the browser sends `multipart/form-data` with all `fields` and then
+`file`):
 ```json
 {
-  "upload_url":"short-lived-presigned-url",
-  "object_key":"temporary/session-random-id/random-object-id.jpg",
-  "expires_in":300,
-  "required_headers":{"Content-Type":"image/jpeg"}
+  "upload_url": "https://<bucket>.s3.amazonaws.com/",
+  "method": "POST",
+  "fields": {"key": "tmp/<session>/<random>.jpg", "Content-Type": "image/jpeg", "policy": "…", "…": "…"},
+  "object_key": "tmp/<session>/<random>.jpg",
+  "expires_in": 300,
+  "max_bytes": 10485760
 }
 ```
-Generate keys server-side. The URL is a temporary capability; never log it. Check size/type before issuing and validate the object after upload because declared MIME does not prove the bytes match.
+The policy enforces `Content-Type` and `content-length-range`. In `STORAGE_BACKEND=local` the URL
+is `PUBLIC_API_URL/v1/uploads/local` with HMAC `signature` + `expires` fields (dev only; 404 when
+S3 is configured). The URL is a temporary capability and is never logged.
 
 ## `POST /v1/analysis`
 Request:
 ```json
 {
-  "object_key":"temporary/session-random-id/random-object-id.jpg",
-  "taste_seeds":[{"entity_type":"artist","query":"user-entered artist"}],
-  "manual_mood":["cinematic","nostalgic"],
-  "locale":"en"
+  "object_key": "tmp/<session>/<random>.jpg",
+  "taste_seeds": [{"entity_id": "<UUID from /v1/taste/search>", "entity_type": "artist", "name": "…"}],
+  "manual_mood": ["cinematic", "nostalgic"],
+  "locale": "en"
 }
 ```
-`entity_type` is an app-level value. Backend must map it to a currently supported Qloo type; do not accept provider URNs from the browser.
+- `object_key` must belong to the caller's session (else 404 `OBJECT_NOT_FOUND`, same as missing).
+- `taste_seeds` ≤ 5; `entity_id` must be UUID-shaped; `entity_type` ∈ `artist | movie | tv_show |
+  brand | book | podcast` (mapped to Qloo URNs server-side).
+- `manual_mood` ≤ 4 of `cinematic minimal nostalgic editorial warm cool moody bright playful
+  dreamy bold natural`.
 
-Response (illustrative placeholder data):
+Response: `application/x-ndjson`, one JSON object per line:
+```text
+{"stage":"photo"}
+{"stage":"mood"}
+{"stage":"taste"}
+{"stage":"layouts"}
+{"result":{ …AnalysisOut… }}      ← or {"error":{…}} at any point
+```
+`AnalysisOut` (values illustrative):
 ```json
 {
-  "analysis_id":"opaque-analysis-id",
-  "visual_profile":{
-    "palette":["navy","amber"],
-    "lighting":"low",
-    "composition":"portrait",
-    "mood":["cinematic","nostalgic"],
-    "source":"vision_or_manual"
+  "analysis_id": "opaque",
+  "visual_profile": {
+    "palette": ["#283c6e", "#e79647"], "brightness": 0.39, "contrast": 0.51, "saturation": 0.65,
+    "warmth": 0.13, "composition": "landscape", "mood": ["moody", "warm"],
+    "source": "vision+manual", "width": 1200, "height": 800
   },
-  "cultural_recommendations":[{
-    "provider":"qloo",
-    "kind":"artist",
-    "name":"verified provider-returned name",
-    "provider_id":"opaque-provider-id",
-    "reason":"Related to a user-confirmed cultural seed",
-    "evidence":["user_seed"]
+  "cultural_recommendations": [{
+    "provider": "qloo", "kind": "artist", "entity_id": "…", "name": "provider-returned name",
+    "tags": ["Indie"], "reason": "Qloo affinity with <seed names>", "evidence": ["<seed name>"]
   }],
-  "layouts":[{
-    "id":"cinematic",
-    "name":"Cinematic",
-    "reason":"High contrast suits this image",
-    "config":{"photo_fit":"cover","overlay":"bottom-gradient","caption_alignment":"left"}
+  "layouts": [{
+    "id": "vintage", "name": "Vintage", "reason": "…", "style_tags": ["grain", "light leak", "date stamp"],
+    "score": {"visual_fit": 0.8, "cultural_style_fit": 0.9, "readability_fit": 0.7, "total": 0.82},
+    "headline": "golden hour, again.", "caption": "on repeat — <artist>", "accent": "#e79647"
   }],
-  "music":{
-    "kind":"artist",
-    "title":null,
-    "artist":"verified artist name",
-    "url":null,
-    "source":"qloo",
-    "explanation":"Artist-level suggestion; track metadata unavailable."
+  "music": {
+    "kind": "track | artist | none", "artist": "…", "title": "only when kind=track", "url": "https://music.apple.com/… or null",
+    "artist_source": "qloo", "track_source": "itunes | null", "explanation": "…"
   },
-  "provenance":{
-    "qloo_used":true,
-    "visual_analysis_used":true,
-    "track_level_result":false
+  "provenance": {
+    "qloo_used": true, "qloo_error": null, "visual_analysis_used": true, "track_level_result": false,
+    "seeds": ["<seed name>"], "layout_rule": "local heuristic: 0.45 visual + 0.35 cultural + 0.20 readability"
   }
 }
 ```
-All values are illustrative. Never invent scores, URLs or results. Omit unsupported fields.
+`score` is an internal heuristic, never a provider score. Layout `id`s are rendered by
+`apps/web/lib/story/templates.ts` (a test keeps both catalogues in sync).
+
+## `GET /v1/taste/search?q=<2–80 chars>&type=<taste type>`
+```json
+{"query":"…","entity_type":"artist","candidates":[
+  {"provider":"qloo","entity_id":"…","name":"…","entity_type":"artist","disambiguation":"provider descriptor or null","image_url":null}
+]}
+```
+
+## `DELETE /v1/uploads/{object_key}`
+Idempotent 204 for own keys, including ones already deleted. 404 for foreign or malformed keys.
 
 ## Error envelope
 ```json
-{
-  "error":{
-    "code":"QLOO_RATE_LIMITED",
-    "message":"Cultural recommendations are temporarily unavailable. Please try again shortly.",
-    "request_id":"opaque-request-id",
-    "retryable":true
-  }
-}
+{"error":{"code":"QLOO_RATE_LIMITED","message":"Cultural recommendations are busy. Please try again shortly.","request_id":"…","retryable":true}}
 ```
-Suggested codes: `INVALID_IMAGE`, `IMAGE_TOO_LARGE`, `UPLOAD_EXPIRED`, `OBJECT_NOT_FOUND`, `INVALID_TASTE_SEED`, `QLOO_AUTH_FAILED`, `QLOO_RATE_LIMITED`, `QLOO_TIMEOUT`, `QLOO_EMPTY_RESULTS`, `VISION_UNAVAILABLE`, `INTERNAL_ERROR`.
+Every response carries an `X-Request-ID` header. Codes: `INVALID_REQUEST`, `SESSION_INVALID`,
+`RATE_LIMITED`, `IMAGE_TOO_LARGE`, `INVALID_IMAGE`, `OBJECT_NOT_FOUND`, `UPLOAD_FORBIDDEN`,
+`UPLOAD_EXPIRED`, `QLOO_NOT_CONFIGURED`, `QLOO_AUTH_FAILED`, `QLOO_RATE_LIMITED`,
+`QLOO_TIMEOUT`, `QLOO_INVALID_QUERY`, `QLOO_UPSTREAM_ERROR`, `INTERNAL_ERROR`.
 
-## `DELETE /v1/uploads/{object_key}`
-Confirm the object belongs to the caller/session. Never allow arbitrary bucket/key deletion. Return success if deletion succeeds or object is already absent.
-
-## Optional persistence
-`POST /v1/stories` may save story config, object key and minimal metadata. `DELETE /v1/stories/{story_id}` deletes the record and associated temporary object. Enforce ownership on every operation.
+## Not implemented
+`POST/DELETE /v1/stories` (Supabase persistence) — deferred; the guest MVP keeps Story state in
+the browser.

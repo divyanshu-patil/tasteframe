@@ -34,7 +34,7 @@ needVenv();
 const tasks = {
   dev: ["-m", "uvicorn", "app.main:app", "--reload", "--no-access-log", "--host", host, "--port", port],
   start: ["-m", "uvicorn", "app.main:app", "--host", host, "--port", port, "--proxy-headers", "--no-access-log"],
-  test: ["-m", "pytest", ...process.argv.slice(3)],
+  test: ["-m", "pytest", ...process.argv.slice(3).filter((a) => a !== "--")],
   lint: ["-m", "ruff", "check", "."],
   format: ["-m", "ruff", "format", "."],
 };

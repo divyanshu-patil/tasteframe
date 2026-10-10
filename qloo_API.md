@@ -7,6 +7,45 @@
 
 **Important:** verify endpoint names, auth header, query parameters, entity types, response shape, rate limits and plan access against current docs and your hackathon key. Examples from old blog posts may be stale.
 
+## Verified integration (docs checked 2026-10-10)
+
+Sources: hackathon developer guide, `GET /search` and Insights deep-dive reference pages, and
+`github.com/qloo/docs-public` (last commit 2026-02-25).
+
+| Item | Value used in `apps/api/app/services/qloo/client.py` |
+|---|---|
+| Base URL | `https://hackathon.api.qloo.com` (hackathon keys don't work on staging/prod hosts) |
+| Auth | `X-Api-Key: <key>` request header |
+| Entity search | `GET /search?query=<text>&types=<urn>&take=6`; 404 means "No results" |
+| Insights | `GET /v2/insights?filter.type=<urn>&signal.interests.entities=<id,id>&take=<n>` (take ≤ 50) |
+| Types used | `urn:entity:artist`, `movie`, `tv_show`, `brand`, `book`, `podcast` (all listed for both search and Insights) |
+| Track/song type | **None exists.** The guide says to use `urn:entity:artist` for music. The app is artist-level; song titles come from iTunes Search, labelled |
+| Response fields read | Insights `results.entities[]`: `entity_id`, `name`, `properties.{release_year, short_description, description, image.url}`, `tags[].name`. Search `results[]`: same entity fields |
+| Rate limits | Not published ("high enough for typical hackathon projects"). We handle 429 with ≤ 2 backoff retries |
+
+Queries the app makes per analysis (only when the user confirmed ≥ 1 seed): two Insights calls,
+`filter.type=urn:entity:artist` (take 8) and `filter.type=urn:entity:movie` (take 5), both
+signalled by the confirmed entity IDs. Seeds are excluded from results. Each taste search is one
+`/search` call, triggered only on submit and rate-limited per session.
+
+Browser input never reaches Qloo as raw parameters. `entity_type` is an app enum mapped to URNs
+server-side. `entity_id` must be UUID-shaped and comes from a prior `/search` result. Free-text
+mood words are never sent as tags or URNs.
+
+Error mapping: 401/403 → `QLOO_AUTH_FAILED` (no retry); 400 → `QLOO_INVALID_QUERY`;
+429 → retry, then `QLOO_RATE_LIMITED`; 5xx/transport → retry, then `QLOO_UPSTREAM_ERROR`;
+timeout → `QLOO_TIMEOUT`; non-JSON or missing `results` → `QLOO_UPSTREAM_ERROR`. During
+analysis a Qloo failure degrades the result: layouts still return and
+`provenance.qloo_error` carries the code, which the UI shows.
+
+Caching: **not implemented**. Qloo's terms on caching weren't verified.
+
+### Live-key status
+No Qloo key was available while building. Every behaviour above is covered by mocked tests built
+from documented response shapes (`apps/api/tests/fixtures/qloo/`, marked as doc-derived). Run
+`pnpm api:test -- -m integration -s` with `QLOO_API_KEY` set to verify live, and then record the
+date and outcome here.
+
 ## Capability boundaries
 
 | Need | Qloo role | Other component |
@@ -125,17 +164,17 @@ class QlooClient:
 These are app-level method names, not Qloo API endpoint names.
 
 ## Validation checklist
-- [ ] Current official docs/schema inspected and test date recorded.
-- [ ] Key works from server-side request.
-- [ ] Search resolves at least three known artists and one film/brand.
-- [ ] Ambiguous names can be disambiguated.
-- [ ] One documented Insights query succeeds.
-- [ ] Supported target entity types confirmed.
-- [ ] Track-level support tested; fallback documented if unavailable.
-- [ ] Empty results, invalid query/key, timeout and rate limit tested.
-- [ ] Sanitized response fixtures saved.
-- [ ] Caching/quota rules checked.
-- [ ] Key absent from browser bundle, client response and logs.
+- [x] Current official docs/schema inspected (2026-10-10).
+- [ ] Key works from server-side request — **blocked: no key yet** (integration test ready).
+- [ ] Search resolves three known artists and one film/brand live — blocked on key.
+- [x] Ambiguous names can be disambiguated (UI lists candidates; user picks).
+- [ ] One documented Insights query succeeds live — blocked on key (mocked tests pass).
+- [x] Supported target entity types confirmed from docs.
+- [x] Track-level support: no track entity type in docs → artist-level + iTunes fallback.
+- [x] Empty results, invalid query/key, timeout, rate limit, malformed responses tested (mocked).
+- [x] Doc-derived fixtures saved (live sanitized fixtures pending key).
+- [ ] Caching rules — not verified; caching disabled.
+- [x] Key absent from browser bundle (build scanned), client responses (tested) and logs.
 
 ## Proof for judges
 Show selected seed, resolved provider entity, sanitized Qloo results and the recommendation influenced by them. Compare the same photo with two different taste seeds. Do not claim population-level predictive accuracy based on a small demo.

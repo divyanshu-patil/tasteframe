@@ -131,3 +131,18 @@
 | Photo metadata leaks GPS | Strip EXIF and avoid unnecessary persistence |
 | Qloo has no effect on output | Build controlled seed comparison and evidence panel |
 | Free host sleeps | Deploy early and test cold starts |
+
+## Status (2026-10-10)
+
+| Phase | Status |
+|---|---|
+| 0 Qloo validation | Docs verified. Live key test **blocked: no key** (integration test ready) |
+| 1 Monorepo foundation | Done: FastAPI in `apps/api`, Turbo tasks, CI workflow, `.env.example` |
+| 2 Editor first | Done: 8 templates, editor, 1080×1920 export (browser-verified) |
+| 3 S3 | Code + tests done (presigned POST, ownership, delete). Bucket not provisioned |
+| 4 Qloo adapter | Done with mocked tests. Live pending key |
+| 5 Visual + ranking | Done |
+| 6 Resilience | Done: timeouts, retries, rate limits, safe errors, stale-run guard |
+| 7 Supabase | Deferred (not needed for guest MVP) |
+| 8 Polish/evaluate | UI polished; desktop + mobile e2e. Five-image / three-profile study pending key |
+| 9 Deploy | Docs + Dockerfile ready. Not deployed |

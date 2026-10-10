@@ -185,3 +185,23 @@ Record request ID, elapsed time by stage, Qloo status class, cache hit/miss, can
 - Manual mood controls work if vision provider is unavailable.
 - Qloo failure is explicit; no static data is falsely labelled as Qloo output.
 - User can edit and export without paid image generation.
+
+## 13. As implemented (2026-10-10)
+
+| Concern | Implementation |
+|---|---|
+| Guest identity | `POST /v1/session` → HMAC-signed token (`X-Session-Token`); object keys `tmp/<session>/<random>.<ext>`; ownership = key prefix match (`app/core/security.py`) |
+| Upload | S3 presigned **POST** (policy enforces type + size), or signed local-disk stand-in for dev (`app/services/storage/store.py`) |
+| Image validation | Pillow decode, JPEG/PNG/WebP only, pixel cap, decompression-bomb guard, EXIF/GPS stripped and written back (`app/services/vision/analyzer.py`) |
+| Vision | Local Pillow statistics → palette, brightness, contrast, saturation, warmth, orientation → rule-based mood words; manual moods merged first |
+| Qloo | `app/services/qloo/client.py`: `/search` and `/v2/insights` (artist + movie targets), timeouts, bounded retries, normalized `QlooEntity` |
+| Ranking | `app/services/recommendations/layouts.py`: 8-template catalogue, 0.45/0.35/0.20 heuristic, one suggestion per template family |
+| Music | Top Qloo artist; exact-artist iTunes Search lookup for a title + Apple Music link (`app/services/music/itunes.py`) |
+| Progress | `/v1/analysis` streams NDJSON stage events — the UI's progress list reflects real server stages |
+| Web proxy | Next.js rewrite `/api/* → API_BASE_URL` keeps the browser same-origin; `API_BASE_URL` is server-only |
+| Renderer | `apps/web/lib/story/{types,draw,templates,editor,export}.ts` — pure, deterministic Canvas 2D; previews and export share `renderStory()` |
+| Templates | cinematic, stills, editorial, journal, scrapbook, filmstrip, vintage, minimal — modelled on `design-refs/` |
+| Persistence | None in MVP (Supabase schema kept for later) |
+
+Deviations from the original proposal: Story state is not persisted server-side, and the analysis
+response is streamed rather than returned as a single JSON body.

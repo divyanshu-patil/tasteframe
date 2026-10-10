@@ -94,3 +94,14 @@ Read `docs/README.md` inside that installed package first, then read the relevan
 
 This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
 <!-- END:turborepo-agent-rules -->
+
+## Repo specifics (added during implementation)
+- Versions: Node ≥ 24, pnpm 11.25, Python ≥ 3.11 (CI uses 3.12).
+- API tasks run through `apps/api/scripts/py.mjs` (`pnpm api:setup`, `pnpm --filter api dev|test|lint`).
+- Layout ids live in two places: `apps/api/app/services/recommendations/layouts.py` (ranking) and
+  `apps/web/lib/story/templates.ts` (rendering). `templates.test.ts` fails if they drift.
+- Rendering must stay pure: `renderStory(ctx, photo, state)` with no React state or randomness
+  except the seeded `rng()`.
+- Browser e2e: `pnpm --filter web e2e` against a running `pnpm dev` (uses installed Chrome).
+- Pinterest reference images in `design-refs/pinterest/` are gitignored. Never commit them.
+- Commits: author is the repository owner only. No AI co-author trailers.

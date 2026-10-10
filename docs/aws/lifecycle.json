@@ -1,0 +1,11 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-temporary-uploads",
+      "Filter": { "Prefix": "tmp/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 1 },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    }
+  ]
+}
