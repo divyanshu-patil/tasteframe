@@ -41,7 +41,7 @@ cp apps/web/.env.example apps/web/.env.local
 pnpm dev                        # Turbo runs Next.js (:3000) and FastAPI (:8000) together
 ```
 
-Open http://localhost:3000. With no AWS bucket, `STORAGE_BACKEND=local` stores uploads in
+Open http://localhost:3000 (landing) or http://localhost:3000/create (studio). With no AWS bucket, `STORAGE_BACKEND=local` stores uploads in
 `apps/api/.uploads/` behind HMAC-signed, expiring upload URLs that mimic S3 presigned POSTs.
 With no `QLOO_API_KEY`, the app still works: taste search says it's unavailable, and layouts
 are ranked on visual signals only (shown honestly in the UI).
@@ -94,8 +94,9 @@ files are gitignored. Turbo passes the API variables through `pnpm dev` (`passTh
 
 - **API (`apps/api/.env`)**: `SESSION_SECRET`, `QLOO_API_KEY`, `QLOO_BASE_URL`, `STORAGE_BACKEND`,
   `AWS_*`, `S3_*`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `CORS_ORIGINS`, `PUBLIC_API_URL`, `MUSIC_METADATA_PROVIDER`, `RATE_LIMIT_*`.
-- **Web (`apps/web/.env.local`)**: `API_BASE_URL` (server-only, used by the `/api` rewrite) and
-  `NEXT_PUBLIC_UPLOAD_MAX_MB` (non-secret hint).
+- **Web (`apps/web/.env.local`)**: `API_BASE_URL` (server-only, used by the `/api` rewrite),
+  `NEXT_PUBLIC_UPLOAD_MAX_MB` (non-secret hint), and `NEXT_PUBLIC_SUPABASE_URL` plus
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (public, for login).
 
 The API refuses to start in `ENVIRONMENT=production` without a real `SESSION_SECRET` and S3.
 Errors list variable names only, never values.
@@ -115,8 +116,8 @@ Details, verified endpoints and the fallback policy are in [`qloo_API.md`](qloo_
    encryption is fine. Set `AWS_REGION` to the bucket's **actual** region (check
    `aws s3api get-bucket-location`). Presigned POSTs go to the regional endpoint.
 2. CORS: apply `docs/aws/cors.json` with your web origin. Only `POST` from that origin is allowed.
-3. Lifecycle: apply `docs/aws/lifecycle.json`. It expires `tmp/` after 1 day and `saved/` after
-   8 days.
+3. Lifecycle: apply `docs/aws/lifecycle.json`. It expires `tmp/` after 1 day. Account-owned
+   `saved/` photos persist until the user deletes the Story.
 4. IAM: attach `docs/aws/iam-policy.json` (Put/Get/Delete on `tmp/*` and `saved/*` only) to the
    API's role or user. Prefer an instance/task role over static keys.
 5. Set `STORAGE_BACKEND=s3`, `AWS_S3_BUCKET`, `AWS_REGION` and credentials if no role.
@@ -133,46 +134,57 @@ and expire after `S3_PRESIGNED_URL_TTL_SECONDS` (default 300 s). Keys are
 `tmp/<session-id>/<random>.<ext>`, never derived from filenames. The API verifies the session
 prefix on every read and delete.
 
-## Supabase — saved Stories (optional)
+## Routes
 
-Guests can **Save to my Stories** from the editor, then reopen or delete them from the start
-screen. The feature turns on automatically when `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are
-set (`GET /v1/features` reports it). Otherwise the UI hides it.
+| Route | What it is |
+|---|---|
+| `/` | Landing page: pitch, example Stories, how it works, link to the studio |
+| `/create` | The MVP studio: upload → mood → taste → three Stories → editor → PNG export |
 
-1. Create a Supabase project, then apply `supabase/schema.sql` (re-runnable) in one of two ways:
-   paste it into the **SQL editor**, or set `DATABASE_URL` in `apps/api/.env` and run
-   `uv run --no-project --with "psycopg[binary]==3.2.10" python supabase/apply.py`. The script
-   applies the schema in one transaction and verifies the functions and grants.
-2. Under **Project Settings → API Keys**, copy the Project URL and the **publishable** key
-   (`sb_publishable_…`) into `apps/api/.env`. No secret or service-role key is used.
-3. Optional: schedule `select public.purge_expired_stories()` daily with pg_cron (as a
-   privileged role). The functions already hide expired rows.
+Creating and downloading never need an account. **Saving a Story to the backend requires login.**
 
-Security model. The publishable key is public by design (role `anon`), so the database enforces
-everything:
-- RLS is on and `anon` has **no table privileges**. Direct reads and writes are denied.
-- `anon` can only execute four `SECURITY DEFINER` functions: `tf_save_story`, `tf_list_stories`,
-  `tf_get_story` and `tf_delete_story`. Each requires the owner hash
-  `sha256(SESSION_SECRET:session_id)`. The API computes it and never sends it to browsers, so even
-  a direct caller holding the publishable key can't enumerate or guess anyone's rows.
-- Limits are enforced in SQL so callers can't bypass them: 20 active Stories per owner
-  (serialized with an advisory lock) and 7-day expiry. Templates, storage-key format and JSON
-  sizes are checked by constraints.
-- Residual risk: someone holding the publishable key can create rows under made-up owners. They
-  are size-capped, expire in 7 days, and can't reference other users' data. Use Supabase's API
-  rate limits, or switch to a secret key if this matters.
-- Verified locally with PGlite as role `anon`: own rows are reachable, other owners' rows and
-  direct table access are denied, and the limit and constraints are enforced.
+## Supabase — accounts & saved Stories (optional)
 
-How it works:
-- Saving copies the EXIF-stripped photo from `tmp/` to `saved/<session>/<random>.<ext>`. The row
-  stores only that key, the validated Story config (strict schema, no extra fields) and minimal
-  provenance (`qloo_used`, music artist/title). No seeds or image bytes are stored.
-- Photos are served back through `GET /v1/stories/{id}/photo`, which is same-origin, so the canvas
-  is never tainted. There are no public or presigned GET URLs.
-- Delete removes both the row and the photo. `saved/` objects also expire after 8 days via S3
-  lifecycle.
-- The session token lives in `localStorage`, so saved Stories belong to that browser.
+When a guest clicks **Log in to save**, a login dialog opens (email + password via Supabase
+Auth). Their editor state is kept, and the save continues automatically after login. Signed-in
+users see "Your saved Stories" on `/create` on any device, and can reopen or delete them.
+
+Setup:
+1. Create a Supabase project and apply `supabase/schema.sql` (re-runnable). Either paste it into
+   the **SQL editor**, or set `DATABASE_URL` in `apps/api/.env` and run
+   `uv run --no-project --with "psycopg[binary]==3.2.10" python supabase/apply.py`.
+2. Put the Project URL and **publishable** key (`sb_publishable_…`) in **both**
+   `apps/api/.env` (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`) and `apps/web/.env.local`
+   (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`). Publishable keys are
+   designed to be public. No secret or service-role key is used by the app.
+3. **Authentication → Providers → Email** must be enabled (the default). If **Confirm email** is
+   on, new users must click the emailed link before logging in. Supabase's built-in mailer only
+   delivers to your project team's addresses and is rate-limited, so for real users configure
+   custom SMTP (**Authentication → Emails → SMTP**) or turn confirmation off for the demo.
+4. Add your site URL (e.g. `http://localhost:3000`, then your production origin) under
+   **Authentication → URL Configuration**, so confirmation links come back to `/create`.
+
+Security model (standard Supabase RLS):
+- The browser logs in with supabase-js. For saved-Story calls it sends the user's access token to
+  our API. The API verifies it with Supabase (`GET /auth/v1/user`), then forwards the same
+  token to PostgREST, so queries run as role `authenticated` with `auth.uid()` = that user.
+- `public.stories` has RLS with select/insert/delete policies `user_id = auth.uid()` and no
+  updates. `anon` has no access.
+- A CHECK constraint requires `s3_object_key` to start with `saved/<user_id>/`, so even a direct
+  PostgREST call can't point a row at someone else's photo. The API also re-checks the prefix
+  before reading.
+- A trigger limits each user to 20 Stories (`STORY_LIMIT` → 409). Saved Stories persist until
+  deleted, and deleting the auth user cascades to their rows.
+- Verified with PGlite as `authenticated`/`anon`, and against the live project (anon denied;
+  invalid tokens → 401).
+
+How saving works:
+- Saving needs the current browser's upload (session token) **and** a logged-in user. The
+  EXIF-stripped photo is copied from `tmp/` to `saved/<user_id>/<random>.<ext>`. The row stores
+  only that key, the validated Story config (strict schema) and minimal provenance (`qloo_used`,
+  music artist/title). No seeds or image bytes are stored.
+- Photos come back through `GET /v1/stories/{id}/photo` (same-origin, canvas-safe, no public
+  URLs). Delete removes the row and the photo.
 
 ## Deployment
 

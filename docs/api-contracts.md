@@ -112,7 +112,46 @@ Idempotent 204 for own keys, including ones already deleted. 404 for foreign or 
 ```
 Every response carries an `X-Request-ID` header. Codes: `INVALID_REQUEST`, `SESSION_INVALID`,
 `RATE_LIMITED`, `IMAGE_TOO_LARGE`, `INVALID_IMAGE`, `OBJECT_NOT_FOUND`, `UPLOAD_FORBIDDEN`,
-`UPLOAD_EXPIRED`, `STORY_NOT_FOUND`, `STORY_LIMIT`, `PERSISTENCE_NOT_CONFIGURED`,
+`UPLOAD_EXPIRED`, `AUTH_REQUIRED`, `AUTH_UNAVAILABLE`, `STORY_NOT_FOUND`, `STORY_LIMIT`, `PERSISTENCE_NOT_CONFIGURED`,
+`PERSISTENCE_UNAVAILABLE`, `QLOO_NOT_CONFIGURED`, `QLOO_AUTH_FAILED`, `QLOO_RATE_LIMITED`,
+`QLOO_TIMEOUT`, `QLOO_INVALID_QUERY`, `QLOO_UPSTREAM_ERROR`, `INTERNAL_ERROR`.
+
+## `GET /v1/features`
+```json
+{"qloo": true, "saved_stories": true, "storage": "s3"}
+```
+Booleans only (never values). The UI hides taste search and saving when these are off.
+
+## Saved Stories (login required; 503 `PERSISTENCE_NOT_CONFIGURED` if Supabase isn't set up)
+
+Every call needs `Authorization: Bearer <Supabase access token>` (from supabase-js after login).
+Missing or invalid tokens get 401 `AUTH_REQUIRED` ("Log in to save Stories to your account."). The
+API verifies the token with Supabase Auth, then queries PostgREST **as that user** (RLS).
+
+`POST /v1/stories` → 201. Also needs `X-Session-Token`: the upload must belong to this browser.
+```json
+{"object_key": "tmp/<session>/<random>.jpg",
+ "config": { "...exact StoryState from apps/web/lib/story/types.ts (strictly validated)..." },
+ "provenance": {"qloo_used": true, "music_artist": "…", "music_title": null, "track_source": null}}
+```
+Copies the photo to `saved/<user_id>/`, inserts a row, and returns
+`StoryOut {id, template_id, config, provenance, created_at}`. Errors: `STORY_LIMIT` (409, 20 per
+user), `OBJECT_NOT_FOUND` (404, upload expired), `PERSISTENCE_UNAVAILABLE` (503, copy rolled back).
+
+`GET /v1/stories` → `{"stories": [StoryOut…]}`, the user's own, newest first (any device).
+
+`GET /v1/stories/{id}/photo` → image bytes (`Cache-Control: private, no-store`). 404 for other
+users' Stories.
+
+`DELETE /v1/stories/{id}` → 204 (idempotent). Removes the row and its photo.
+
+## Error envelope
+```json
+{"error":{"code":"QLOO_RATE_LIMITED","message":"Cultural recommendations are busy. Please try again shortly.","request_id":"…","retryable":true}}
+```
+Every response carries an `X-Request-ID` header. Codes: `INVALID_REQUEST`, `SESSION_INVALID`,
+`RATE_LIMITED`, `IMAGE_TOO_LARGE`, `INVALID_IMAGE`, `OBJECT_NOT_FOUND`, `UPLOAD_FORBIDDEN`,
+`UPLOAD_EXPIRED`, `AUTH_REQUIRED`, `AUTH_UNAVAILABLE`, `STORY_NOT_FOUND`, `STORY_LIMIT`, `PERSISTENCE_NOT_CONFIGURED`,
 `PERSISTENCE_UNAVAILABLE`, `QLOO_NOT_CONFIGURED`, `QLOO_AUTH_FAILED`, `QLOO_RATE_LIMITED`,
 `QLOO_TIMEOUT`, `QLOO_INVALID_QUERY`, `QLOO_UPSTREAM_ERROR`, `INTERNAL_ERROR`.
 
