@@ -72,7 +72,7 @@ These are pass/fail checks, not just UI tasks.
 - [x] Qloo key, AWS secret and Supabase service-role key absent from browser bundles.
 - [ ] Production CORS restricted. — `CORS_ORIGINS` allowlist + S3 CORS template; production values set at deploy.
 - [x] S3 bucket private. — verified (Block Public Access on).
-- [ ] Supabase RLS enabled if user-owned data stored. — schema enables RLS (no anon policies); pending applying it to your project.
+- [x] Supabase RLS enabled if user-owned data stored. — verified live: RLS on, anon has no table access, only tf_* functions; browser e2e save/reopen/delete passes.
 - [x] Raw photos not stored in Postgres.
 - [x] Deletion/retention documented and tested.
 - [x] Signed URLs and credentials not logged.

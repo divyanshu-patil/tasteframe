@@ -139,7 +139,10 @@ Guests can **Save to my Stories** from the editor, then reopen or delete them fr
 screen. The feature turns on automatically when `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are
 set (`GET /v1/features` reports it). Otherwise the UI hides it.
 
-1. Create a Supabase project. In **SQL editor**, run `supabase/schema.sql`. It can be re-run.
+1. Create a Supabase project, then apply `supabase/schema.sql` (re-runnable) in one of two ways:
+   paste it into the **SQL editor**, or set `DATABASE_URL` in `apps/api/.env` and run
+   `uv run --no-project --with "psycopg[binary]==3.2.10" python supabase/apply.py`. The script
+   applies the schema in one transaction and verifies the functions and grants.
 2. Under **Project Settings → API Keys**, copy the Project URL and the **publishable** key
    (`sb_publishable_…`) into `apps/api/.env`. No secret or service-role key is used.
 3. Optional: schedule `select public.purge_expired_stories()` daily with pg_cron (as a

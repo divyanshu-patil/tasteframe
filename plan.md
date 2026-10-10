@@ -143,6 +143,6 @@
 | 4 Qloo adapter | Done with mocked tests. Live pending key |
 | 5 Visual + ranking | Done |
 | 6 Resilience | Done: timeouts, retries, rate limits, safe errors, stale-run guard |
-| 7 Supabase | Done (saved Stories); pending your project keys + applying schema.sql |
+| 7 Supabase | Done and verified live (schema applied, RLS + RPC, browser e2e) |
 | 8 Polish/evaluate | UI polished; desktop + mobile e2e. Five-image / three-profile study pending key |
 | 9 Deploy | Docs + Dockerfile ready. Not deployed |
