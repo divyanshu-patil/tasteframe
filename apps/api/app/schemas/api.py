@@ -104,6 +104,13 @@ LayoutId = Literal[
     "coverbubble",
     "coverpolaroid",
     "notesdark",
+    "appswitch",
+    "phones",
+    "camlyric",
+    "filmslant",
+    "songbox",
+    "clockit",
+    "doodlefit",
 ]
 FilterId = Literal[
     "none",
@@ -146,6 +153,12 @@ StickerKind = Literal[
     "faceheart",
     "barcode",
     "spotify",
+    "chromestar",
+    "chromesparkle",
+    "exclaim",
+    "anger",
+    "owocat",
+    "headcat",
 ]
 UUID_PATTERN = r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
 

@@ -63,7 +63,7 @@ The tools that exist each solve a third of the problem:
 > layout, and neither should someone who lives on indie folk and someone who lives on drill.
 
 That is Tasteframe. It looks at the photo (light, colour, who or what is in it), listens to
-your taste through Qloo, and picks from 83 layouts modelled on real Pinterest Stories. Then it
+your taste through Qloo, and picks from 90 layouts modelled on real Pinterest Stories. Then it
 gets out of the way: every word, sticker, strip and photo box on the Story can be moved and
 tuned until it's yours.
 
@@ -173,7 +173,7 @@ culture that sits around them, and Tasteframe uses those tags ("indie", "funk", 
 the ranking toward layouts that fit. The top artist becomes the music suggestion, and Apple's
 catalogue supplies a real song title, never an invented one.
 
-### 🗂️ 3. Picks three of 83 layouts, and shows where each came from
+### 🗂️ 3. Picks three of 90 layouts, and shows where each came from
 
 Every layout was rebuilt from real Pinterest Story references, from Torn Strip magazine
 covers to sideways Spotify players, CCTV frames, yearbook sheets and photocopied lyric posters.
@@ -287,7 +287,7 @@ A complete loop, not a demo. Everything marked shipped is built, tested and runn
 | :-- | :--: |
 | **Core:** upload 1–4 photos, visual mood, subject-aware framing | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
 | **Core:** Qloo taste search and insights, cultural ranking, music suggestion | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
-| **Core:** 83 layouts ranked per photo, with Shuffle and Pinterest originals | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
+| **Core:** 90 layouts ranked per photo, with Shuffle and Pinterest originals | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
 | **Core:** editor with inspector, movable boxes, cutouts, filters, stickers, song sticker | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
 | 1080 × 1920 PNG export | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
 | Vision reasoning (Gemma 4 on Ollama Cloud) | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |

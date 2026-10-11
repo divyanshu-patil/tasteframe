@@ -10,12 +10,12 @@ import type { Sticker, StickerKind } from "./stickers";
 import type { Crop, Rect, StoryState, TemplateId, TemplateInput } from "./types";
 import { STORY_H as H, STORY_W as W } from "./types";
 
-const FULL: Rect = { x: 0, y: 0, w: W, h: H };
-const WHITE = "#ffffff";
+export const FULL: Rect = { x: 0, y: 0, w: W, h: H };
+export const WHITE = "#ffffff";
 const INK = "#1d1d1b";
 
 /** Where a photo-space point (0..1) lands when the photo is cover-drawn into r with crop. */
-function photoPoint(photo: Photo, r: Rect, crop: Crop, fx: number, fy: number) {
+export function photoPoint(photo: Photo, r: Rect, crop: Crop, fx: number, fy: number) {
   const scale = Math.max(r.w / photo.width, r.h / photo.height) * Math.max(1, crop.zoom);
   const w = photo.width * scale;
   const h = photo.height * scale;
@@ -31,9 +31,9 @@ function face(s: StoryState, slots: Slots, r: Rect = FULL) {
   return { x: Math.min(r.x + r.w - 60, Math.max(r.x + 60, p.x)), y: Math.min(r.y + r.h - 60, Math.max(r.y + 60, p.y)), w: p.w };
 }
 
-const fp = (i: TemplateInput) => i.focuses?.[0] ?? i.focus ?? { x: 0.5, y: 0.42 };
+export const fp = (i: TemplateInput) => i.focuses?.[0] ?? i.focus ?? { x: 0.5, y: 0.42 };
 /** A layout-placed element sticker; `px` is its longest side in Story pixels. */
-const el = (kind: StickerKind, x: number, y: number, px: number, rotate = 0, color = "#ffffff"): Sticker => ({
+export const el = (kind: StickerKind, x: number, y: number, px: number, rotate = 0, color = "#ffffff"): Sticker => ({
   id: `layout-${kind}-${Math.round(x * 1000)}-${Math.round(y * 1000)}`,
   kind,
   x: Math.min(1, Math.max(0, x)),
@@ -57,7 +57,7 @@ const SHIFT = [
   { x: 0.04, y: 0.08, z: 1.35 },
 ];
 /** Slot i (own photo, or a gently shifted crop of photo 1) into r, clipped. */
-function slotPhoto(ctx: Ctx, slots: Slots, i: number, r: Rect, radius = 0, photoOverride?: (p: Photo) => Photo, key?: string) {
+export function slotPhoto(ctx: Ctx, slots: Slots, i: number, r: Rect, radius = 0, photoOverride?: (p: Photo) => Photo, key?: string) {
   ctx.save();
   if (radius) roundRect(ctx, r, radius);
   else {
@@ -79,12 +79,12 @@ function slotPhoto(ctx: Ctx, slots: Slots, i: number, r: Rect, radius = 0, photo
 }
 
 /** The Story's outline setting; `base` scales the width for layouts with a subtler die-cut. */
-function outlineOf(s: StoryState, base = 14) {
+export function outlineOf(s: StoryState, base = 14) {
   const o = s.outline ?? { show: true, color: WHITE, width: 14, margin: 0 };
   return o.show && o.width > 0 && base > 0 ? { color: o.color, width: (o.width * base) / 14, margin: o.margin ?? 0 } : undefined;
 }
 
-function rot(ctx: Ctx, cx: number, cy: number, deg: number, fn: () => void) {
+export function rot(ctx: Ctx, cx: number, cy: number, deg: number, fn: () => void) {
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate((deg * Math.PI) / 180);
@@ -93,7 +93,7 @@ function rot(ctx: Ctx, cx: number, cy: number, deg: number, fn: () => void) {
   ctx.restore();
 }
 
-function label(ctx: Ctx, text: string, x: number, y: number, size: number, color: string, font: Parameters<typeof fontString>[0] = "mono", align: CanvasTextAlign = "left") {
+export function label(ctx: Ctx, text: string, x: number, y: number, size: number, color: string, font: Parameters<typeof fontString>[0] = "mono", align: CanvasTextAlign = "left") {
   ctx.save();
   ctx.font = fontString(font, size);
   ctx.fillStyle = color;

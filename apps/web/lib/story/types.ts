@@ -94,6 +94,14 @@ export const TEMPLATE_IDS = [
   "coverbubble",
   "coverpolaroid",
   "notesdark",
+  // The owner's second pin set (templates-pins.ts).
+  "appswitch",
+  "phones",
+  "camlyric",
+  "filmslant",
+  "songbox",
+  "clockit",
+  "doodlefit",
 ] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 

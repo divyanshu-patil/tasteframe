@@ -6,18 +6,18 @@ export const LAYOUT_GROUPS: { id: string; name: string; ids: TemplateId[] }[] = 
   {
     id: "cutouts",
     name: "Cutouts & posters",
-    ids: ["cutout", "playercut", "colorbox", "tornstrip", "focus", "xerox", "yearbook", "cctv", "kissmark", "magazine", "newspaper"],
+    ids: ["cutout", "doodlefit", "clockit", "songbox", "playercut", "colorbox", "tornstrip", "focus", "xerox", "yearbook", "cctv", "kissmark", "magazine", "newspaper"],
   },
-  { id: "screens", name: "Screens & cameras", ids: ["playlist", "desktop", "chat", "viewfinder", "camcorder", "camtilt"] },
+  { id: "screens", name: "Screens & cameras", ids: ["playlist", "appswitch", "phones", "desktop", "chat", "viewfinder", "camcorder", "camtilt"] },
   {
     id: "music",
     name: "Song cover & music",
-    ids: ["coverface", "coversingle", "coverfloat", "coverbubble", "coverpolaroid", "coversepia", "covercorner", "covermouth", "nowplaying", "vinyl"],
+    ids: ["coverface", "camlyric", "coversingle", "coverfloat", "coverbubble", "coverpolaroid", "coversepia", "covercorner", "covermouth", "nowplaying", "vinyl"],
   },
   {
     id: "multi",
     name: "Multi-photo",
-    ids: ["duo", "splitscreen", "booth", "torncollage", "grid", "mosaic", "polaroids", "triptych", "sepiabooth", "daysplit", "halfword", "stackedcards", "bwstack", "wavecut", "diagonal", "stills", "filmstrip", "photodump", "moodboard"],
+    ids: ["duo", "splitscreen", "booth", "torncollage", "grid", "mosaic", "polaroids", "triptych", "sepiabooth", "filmslant", "daysplit", "halfword", "stackedcards", "bwstack", "wavecut", "diagonal", "stills", "filmstrip", "photodump", "moodboard"],
   },
   {
     id: "type",

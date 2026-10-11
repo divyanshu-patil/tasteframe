@@ -20,6 +20,7 @@ import { type FilterId, filteredPhoto, rotatedPhoto } from "./filters";
 import { type Slots, type Template, boxAt, decos, fmtDate, on, pad, stamp, subjectHigh, subjectLow, t, tape, tornRect } from "./kit";
 import { AESTHETIC_TEMPLATES } from "./layouts-aesthetic";
 import { REF_TEMPLATES } from "./templates-refs";
+import { PIN_TEMPLATES } from "./templates-pins";
 import { DEFAULT_COVER, drawCover } from "./cover";
 import { drawSticker } from "./stickers";
 import { MORE_TEMPLATES } from "./templates-more";
@@ -480,6 +481,7 @@ export const TEMPLATES: Record<TemplateId, Template> = {
   ...MULTI_TEMPLATES,
   ...REF_TEMPLATES,
   ...AESTHETIC_TEMPLATES,
+  ...PIN_TEMPLATES,
 } as Record<TemplateId, Template>;
 
 /** Default cover for a layout: song-cover layouts show it; "ig" with no position sits over the subject's face. */

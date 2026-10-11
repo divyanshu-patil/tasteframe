@@ -2,14 +2,14 @@
  {
   "id": "coke",
   "file": "/props/coke.jpg",
-  "w": 1080,
-  "h": 863,
-  "title": "Diet Coke - 48585011302",
-  "creator": "Brett Jordan",
+  "w": 975,
+  "h": 1080,
+  "title": "Hand holding a Diet Coke can (night grade)",
+  "creator": "Thakur Jaideep Singh",
   "creatorUrl": "",
-  "license": "CC BY 2.0",
-  "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
-  "source": "https://commons.wikimedia.org/w/index.php?curid=174632416"
+  "license": "Unsplash License",
+  "licenseUrl": "https://unsplash.com/license",
+  "source": "https://unsplash.com/photos/hand-holding-a-diet-coke-can-with-green-leaves-jLjVxSy2Uak"
  },
  {
   "id": "cantop",

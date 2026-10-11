@@ -15,11 +15,17 @@ export const ELEMENT_FILES = {
   cat: { file: "cat-doodle", w: 260, h: 260 },
   faceheart: { file: "face-heart", w: 120, h: 120 },
   barcode: { file: "barcode", w: 420, h: 170 },
+  chromestar: { file: "chrome-star", w: 300, h: 300 },
+  chromesparkle: { file: "chrome-sparkle", w: 300, h: 300 },
+  exclaim: { file: "exclaim", w: 220, h: 260 },
+  anger: { file: "anger", w: 220, h: 220 },
+  owocat: { file: "owo-cat", w: 300, h: 280 },
+  headcat: { file: "headphone-cat", w: 280, h: 300 },
 } as const;
 export type ElementKind = keyof typeof ELEMENT_FILES;
 
 /** Bump when any element PNG changes, so browsers don't keep a cached old copy. */
-const ELEMENTS_VERSION = 2;
+const ELEMENTS_VERSION = 3;
 
 const images = new Map<ElementKind, HTMLImageElement>();
 let ready: Promise<void> | null = null;
@@ -62,7 +68,12 @@ export function elementsReady(): Promise<void> {
 }
 
 /** Full-Story overlay images (green-screen templates keyed by apps/api/scripts/key_template.py). */
-export const SCREENS = { whatsapp: "/templates/whatsapp-screen.png", playlist: "/templates/playlist-screen.png" } as const;
+export const SCREENS = {
+  whatsapp: "/templates/whatsapp-screen.png",
+  playlist: "/templates/playlist-screen.png",
+  appswitch: "/templates/appswitch-screen.webp",
+  filmslant: "/templates/filmslant-screen.webp",
+} as const;
 const screens = new Map<keyof typeof SCREENS, HTMLImageElement>();
 
 export function drawScreen(ctx: Ctx, name: keyof typeof SCREENS, w: number, h: number): void {

@@ -4,11 +4,12 @@ Recreated from scratch with Pillow, after the looks in design-refs/pinterest/use
 is cut out of reference photos. Run: apps/api/.venv/bin/python apps/api/scripts/make_elements.py
 """
 
+import math
 import random
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 OUT = Path(__file__).resolve().parents[2] / "web" / "public" / "elements"
 SS = 4  # supersampling for smooth edges
@@ -234,6 +235,190 @@ def barcode() -> None:
     save(im, "barcode", (w, h))
 
 
+def _outlined(
+    shape: Image.Image, fill: Image.Image, border: int, border_color: tuple
+) -> Image.Image:
+    """Sticker look: `fill` cut to `shape` (an L mask) on a solid border grown `border` px."""
+    edge = shape.filter(ImageFilter.MaxFilter(border * 2 + 1)) if border else shape
+    out = Image.new("RGBA", shape.size, (0, 0, 0, 0))
+    out.paste(Image.new("RGBA", shape.size, border_color), (0, 0), edge)
+    out.paste(fill, (0, 0), shape)
+    return out
+
+
+def _star_mask(n: int, size: int, points: int, inset: float, round_px: int) -> Image.Image:
+    m = Image.new("L", (n, n), 0)
+    c, r = n / 2, size / 2
+    pts = []
+    for i in range(points * 2):
+        a = -math.pi / 2 + i * math.pi / points
+        rr = r if i % 2 == 0 else r * inset
+        pts.append((c + math.cos(a) * rr, c + math.sin(a) * rr))
+    ImageDraw.Draw(m).polygon(pts, fill=255)
+    # Puffy: blur, then re-threshold, rounds the tips and the inner corners.
+    return m.filter(ImageFilter.GaussianBlur(round_px)).point(lambda v: 255 if v > 110 else 0)
+
+
+def _chrome(name: str, points: int, inset: float) -> None:
+    """Inflated chrome star (u-pin 919789923951050810's stickers), lit from the top left."""
+    n = 300 * SS
+    m = _star_mask(n, int(n * 0.9), points, inset, 9 * SS)
+    soft = m.filter(ImageFilter.GaussianBlur(14 * SS))
+    d = 7 * SS
+    shade = ImageChops.subtract(ImageChops.offset(soft, d, d), ImageChops.offset(soft, -d, -d))
+    lit = ImageChops.subtract(ImageChops.offset(soft, -d, -d), ImageChops.offset(soft, d, d))
+    grad = Image.linear_gradient("L").resize((n, n)).point(lambda v: int(200 - 0.35 * v))
+    rim = ImageChops.invert(soft).point(lambda v: int(v * 0.35))
+    g = ImageChops.add(ImageChops.subtract(grad, rim), lit.point(lambda v: int(v * 1.6)))
+    g = ImageChops.subtract(g, shade.point(lambda v: int(v * 1.3)))
+    # Two bright specular streaks.
+    spec = Image.new("L", (n, n), 0)
+    sd = ImageDraw.Draw(spec)
+    sd.ellipse((n * 0.33, n * 0.2, n * 0.44, n * 0.34), fill=255)
+    sd.ellipse((n * 0.58, n * 0.62, n * 0.64, n * 0.7), fill=200)
+    g = ImageChops.lighter(g, spec.filter(ImageFilter.GaussianBlur(6 * SS)))
+    metal = Image.merge("RGBA", (g, g, g.point(lambda v: min(255, v + 10)), m))
+    shadow = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    shadow.paste((0, 0, 0, 90), (5 * SS, 9 * SS), m.filter(ImageFilter.GaussianBlur(8 * SS)))
+    shadow.alpha_composite(metal)
+    save(shadow, name, (300, 300))
+
+
+def chrome_star() -> None:
+    _chrome("chrome-star", 5, 0.5)
+
+
+def chrome_sparkle() -> None:
+    _chrome("chrome-sparkle", 4, 0.34)
+
+
+def exclaim() -> None:
+    """Hand-drawn red "!!" with a white sticker edge."""
+    w, h = 220, 260
+    m = Image.new("L", (w * SS, h * SS), 0)
+    d = ImageDraw.Draw(m)
+    S = SS
+    for x0, tilt in ((40, -18), (120, -8)):
+        d.polygon(
+            [
+                (x0 * S, 20 * S),
+                ((x0 + 52) * S, 26 * S),
+                ((x0 + 30 + tilt) * S, 170 * S),
+                ((x0 + 12 + tilt) * S, 168 * S),
+            ],
+            fill=255,
+        )
+        d.ellipse(((x0 + tilt) * S, 188 * S, (x0 + 36 + tilt) * S, 224 * S), fill=255)
+    m = m.filter(ImageFilter.GaussianBlur(3 * S)).point(lambda v: 255 if v > 120 else 0)
+    im = _outlined(m, Image.new("RGBA", m.size, (214, 34, 40, 255)), 10 * S, (255, 255, 255, 255))
+    save(im.rotate(-12, resample=Image.BICUBIC), "exclaim", (w, h))
+
+
+def anger() -> None:
+    """The red anger-vein mark: four curved strokes bowing toward the centre."""
+    w = h = 220
+    n = w * SS
+    m = Image.new("L", (n, n), 0)
+    d = ImageDraw.Draw(m)
+    c, R = n / 2, n * 0.27
+    for sx, sy, start in ((-1, -1, 0), (1, -1, 90), (1, 1, 180), (-1, 1, 270)):
+        ox, oy = c + sx * R * 1.2, c + sy * R * 1.2
+        d.arc(
+            (ox - R, oy - R, ox + R, oy + R), start + 10, start + 80, fill=255, width=int(n * 0.075)
+        )
+    im = _outlined(m, Image.new("RGBA", m.size, (210, 40, 46, 255)), 9 * SS, (255, 255, 255, 255))
+    save(im, "anger", (w, h))
+
+
+def owo_cat() -> None:
+    """Chubby white cat with an OwO face, brown outline (u-pin 96757091990974969's sticker)."""
+    w, h = 300, 280
+    S = SS
+    m = Image.new("L", (w * S, h * S), 0)
+    d = ImageDraw.Draw(m)
+    d.ellipse((50 * S, 40 * S, 250 * S, 200 * S), fill=255)  # head
+    d.polygon([(70 * S, 90 * S), (80 * S, 22 * S), (130 * S, 56 * S)], fill=255)
+    d.polygon([(230 * S, 90 * S), (220 * S, 22 * S), (170 * S, 56 * S)], fill=255)
+    d.ellipse((70 * S, 150 * S, 230 * S, 262 * S), fill=255)  # body
+    d.ellipse((222 * S, 190 * S, 286 * S, 230 * S), fill=255)  # tail
+    m = m.filter(ImageFilter.GaussianBlur(4 * S)).point(lambda v: 255 if v > 120 else 0)
+    fill = Image.new("RGBA", m.size, (255, 255, 255, 255))
+    fd = ImageDraw.Draw(fill)
+    grey = (196, 198, 214, 255)
+    fd.ellipse((56 * S, 30 * S, 128 * S, 96 * S), fill=grey)  # ear patches
+    fd.ellipse((180 * S, 30 * S, 250 * S, 96 * S), fill=grey)
+    fd.ellipse((222 * S, 186 * S, 290 * S, 236 * S), fill=grey)
+    ink = (92, 58, 40, 255)
+    for ex in (112, 188):  # o  o
+        fd.ellipse(((ex - 15) * S, 104 * S, (ex + 15) * S, 134 * S), outline=ink, width=6 * S)
+    fd.line(
+        [
+            (136 * S, 132 * S),
+            (143 * S, 144 * S),
+            (150 * S, 134 * S),
+            (157 * S, 144 * S),
+            (164 * S, 132 * S),
+        ],
+        fill=ink,
+        width=5 * S,
+        joint="curve",
+    )  # w
+    for bx in (88, 212):
+        fd.ellipse(((bx - 14) * S, 138 * S, (bx + 14) * S, 152 * S), fill=(244, 170, 176, 255))
+    fd.line([(130 * S, 236 * S), (130 * S, 258 * S)], fill=ink, width=4 * S)
+    fd.line([(170 * S, 236 * S), (170 * S, 258 * S)], fill=ink, width=4 * S)
+    im = _outlined(m, fill, 6 * S, ink)
+    im = _outlined(
+        im.getchannel("A").point(lambda v: 255 if v > 0 else 0), im, 9 * S, (255, 255, 255, 255)
+    )
+    save(im, "owo-cat", (w, h))
+
+
+def headphone_cat() -> None:
+    """A ginger kitten wearing big headphones, as a die-cut sticker."""
+    w, h = 280, 300
+    S = SS
+    m = Image.new("L", (w * S, h * S), 0)
+    d = ImageDraw.Draw(m)
+    d.ellipse((50 * S, 70 * S, 230 * S, 230 * S), fill=255)
+    d.polygon([(66 * S, 120 * S), (78 * S, 40 * S), (130 * S, 84 * S)], fill=255)
+    d.polygon([(214 * S, 120 * S), (202 * S, 40 * S), (150 * S, 84 * S)], fill=255)
+    d.ellipse((80 * S, 200 * S, 200 * S, 290 * S), fill=255)
+    d.rounded_rectangle((26 * S, 120 * S, 70 * S, 200 * S), 18 * S, fill=255)
+    d.rounded_rectangle((210 * S, 120 * S, 254 * S, 200 * S), 18 * S, fill=255)
+    m = m.filter(ImageFilter.GaussianBlur(3 * S)).point(lambda v: 255 if v > 120 else 0)
+    fill = Image.new("RGBA", m.size, (226, 150, 84, 255))
+    fd = ImageDraw.Draw(fill)
+    for k in range(4):  # tabby stripes
+        fd.arc(
+            ((96 + k * 10) * S, (60 + k * 12) * S, (184 - k * 10) * S, (150 + k * 12) * S),
+            230,
+            310,
+            fill=(186, 104, 52, 255),
+            width=5 * S,
+        )
+    fd.ellipse((96 * S, 160 * S, 184 * S, 226 * S), fill=(248, 232, 214, 255))  # muzzle
+    fd.ellipse((84 * S, 210 * S, 196 * S, 292 * S), fill=(240, 214, 186, 255))  # chest
+    for ex in (106, 174):
+        fd.ellipse(((ex - 20) * S, 124 * S, (ex + 20) * S, 166 * S), fill=(36, 30, 26, 255))
+        fd.ellipse(((ex - 8) * S, 130 * S, (ex + 2) * S, 140 * S), fill=(255, 255, 255, 255))
+    fd.polygon(
+        [(132 * S, 176 * S), (148 * S, 176 * S), (140 * S, 186 * S)], fill=(232, 120, 132, 255)
+    )
+    fd.arc(
+        (40 * S, 30 * S, 240 * S, 230 * S), 190, 350, fill=(28, 28, 30, 255), width=14 * S
+    )  # headband
+    for x0 in (26, 210):
+        fd.rounded_rectangle(
+            (x0 * S, 120 * S, (x0 + 44) * S, 200 * S), 18 * S, fill=(28, 28, 30, 255)
+        )
+        fd.rounded_rectangle(
+            ((x0 + 8) * S, 132 * S, (x0 + 18) * S, 186 * S), 5 * S, fill=(70, 70, 76, 255)
+        )
+    im = _outlined(m, fill, 10 * S, (255, 255, 255, 255))
+    save(im, "headphone-cat", (w, h))
+
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     for fn in (
@@ -248,6 +433,12 @@ if __name__ == "__main__":
         cat_doodle,
         face_heart,
         barcode,
+        chrome_star,
+        chrome_sparkle,
+        exclaim,
+        anger,
+        owo_cat,
+        headphone_cat,
     ):
         fn()
     print(sorted(p.name for p in OUT.glob("*.png")))
