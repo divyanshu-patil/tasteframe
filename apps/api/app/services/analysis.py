@@ -15,6 +15,7 @@ from app.schemas.api import (
     Provenance,
     VisualProfile,
 )
+from app.services.insights.likes import like_counts
 from app.services.music.itunes import find_track
 from app.services.qloo.client import QlooClient, QlooEntity
 from app.services.recommendations.layouts import rank_layouts
@@ -163,6 +164,7 @@ async def run_analysis(
             topic=reasoning.about if reasoning else None,
             ai_picks=reasoning.layout_picks if reasoning else None,
             subjects=[(x.subject, x.x, x.y) for x in reasoning.subjects] if reasoning else None,
+            likes=await like_counts(settings),
         )
 
         result = AnalysisOut(

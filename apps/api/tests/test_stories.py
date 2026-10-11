@@ -221,6 +221,7 @@ def test_rejects_invalid_config(setup):
     assert save(client, h, key, {**CONFIG, "accent": "red; background:url(x)"}).status_code == 422
     assert save(client, h, key, {**CONFIG, "html": "<script>"}).status_code == 422
     assert save(client, h, key, {**CONFIG, "seed": 100}).status_code == 422
+    assert save(client, h, key, {**CONFIG, "lines": {"gap": 999, "width": 9}}).status_code == 422
     assert save(client, h, key, {**CONFIG, "boxFilter": "lasers"}).status_code == 422
 
 
@@ -228,7 +229,13 @@ def test_saves_layout_variation_and_box_filter(setup):
     client, _ = setup
     h = headers(client)
     key = upload(client, h, make_image())
-    config = {**CONFIG, "templateId": "songbox", "seed": 7, "boxFilter": "noir"}
+    config = {
+        **CONFIG,
+        "templateId": "songbox",
+        "seed": 7,
+        "boxFilter": "noir",
+        "lines": {"gap": 60, "width": 12},
+    }
     assert save(client, h, key, config).status_code in (200, 201)
     assert client.get("/v1/stories/not-a-uuid/photo", headers=h).status_code == 422
 

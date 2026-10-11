@@ -417,3 +417,12 @@ textarea.input { width: 100%; resize: vertical; }
 .modelProgress progress::-webkit-progress-bar { background: var(--color-bone-cream); }
 .modelProgress progress::-webkit-progress-value { background: var(--color-ember-orange); transition: width 200ms ease; }
 .modelProgress progress::-moz-progress-bar { background: var(--color-ember-orange); }
+/* Layout likes + "New" tag (LikeButton.tsx). */
+.like { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; min-width: 44px; padding: 0 var(--spacing-10); border: 1px solid var(--color-ink-black); border-radius: 999px; background: transparent; color: var(--color-ink-black); font: inherit; font-size: 15px; cursor: pointer; }
+.like > span:first-child { font-size: 18px; line-height: 1; }
+.like:hover { background: var(--color-bone-cream); }
+.likeOn { background: var(--color-ink-black); color: var(--color-parchment); }
+.likeOn:hover { background: var(--color-ink-black); }
+.likeOn > span:first-child { color: #ff7a8a; }
+.newBadge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--color-ember-orange); color: #fff; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; }
+.layoutMeta { display: flex; align-items: center; gap: var(--spacing-10); flex-wrap: wrap; }

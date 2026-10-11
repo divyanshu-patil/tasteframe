@@ -311,3 +311,55 @@ end;
 $$;
 revoke all on function public.admin_stats(int) from public;
 grant execute on function public.admin_stats(int) to authenticated;
+
+-- Layout likes: one per signed-in account (u:<uid>) or anonymous visitor (v:<server-hashed id>)
+-- per layout. No direct table access — only the three functions below.
+-- Note: anonymous likes can't be proven unique (anyone can mint visitor ids); the API rate-limits
+-- them and ranking only uses likes as a small boost on top of photo fit.
+create table if not exists public.layout_likes (
+    layout text not null check (layout ~ '^[a-z0-9]{2,32}$'),
+    liker text not null check (liker ~ '^(u:[0-9a-f-]{36}|v:[0-9a-f]{16})$'),
+    created_at timestamptz not null default now(),
+    primary key (layout, liker)
+);
+alter table public.layout_likes enable row level security;
+revoke all on table public.layout_likes from anon, authenticated;
+
+create or replace function public.layout_liker(p_visitor text) returns text
+language sql stable set search_path = public as $$
+    select case when auth.uid() is not null then 'u:' || auth.uid()::text
+                when p_visitor ~ '^[0-9a-f]{16}$' then 'v:' || p_visitor end
+$$;
+revoke all on function public.layout_liker(text) from public;
+
+create or replace function public.set_layout_like(p_layout text, p_visitor text, p_on boolean) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare who text := public.layout_liker(p_visitor);
+begin
+    if p_layout !~ '^[a-z0-9]{2,32}$' or who is null then
+        raise exception 'BAD_LIKE';
+    end if;
+    if p_on then
+        insert into public.layout_likes (layout, liker) values (p_layout, who) on conflict do nothing;
+    else
+        delete from public.layout_likes where layout = p_layout and liker = who;
+    end if;
+    return (select count(*) from public.layout_likes where layout = p_layout);
+end;
+$$;
+revoke all on function public.set_layout_like(text, text, boolean) from public;
+grant execute on function public.set_layout_like(text, text, boolean) to anon, authenticated;
+
+create or replace function public.layout_like_counts() returns table (layout text, likes bigint)
+language sql stable security definer set search_path = public as $$
+    select l.layout, count(*) from public.layout_likes l group by l.layout
+$$;
+revoke all on function public.layout_like_counts() from public;
+grant execute on function public.layout_like_counts() to anon, authenticated;
+
+create or replace function public.my_layout_likes(p_visitor text) returns setof text
+language sql stable security definer set search_path = public as $$
+    select l.layout from public.layout_likes l where l.liker = public.layout_liker(p_visitor)
+$$;
+revoke all on function public.my_layout_likes(text) from public;
+grant execute on function public.my_layout_likes(text) to anon, authenticated;

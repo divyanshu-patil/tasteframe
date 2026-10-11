@@ -49,6 +49,9 @@ export interface LayoutSuggestion {
   focuses: { x: number; y: number }[];
   /** How many distinct photos this layout shows. */
   photo_slots: number;
+  /** People who liked this layout, and whether it was added recently. */
+  likes: number;
+  is_new: boolean;
 }
 export interface CulturalRecommendation {
   provider: "qloo";
@@ -147,6 +150,8 @@ export function parseAnalysis(v: unknown): Analysis {
       ? l.focuses.slice(0, 4).map((f) => ({ x: unit((f as { x?: unknown })?.x), y: unit((f as { y?: unknown })?.y) }))
       : [];
     l.photo_slots = isNum(l.photo_slots) ? Math.max(1, Math.min(4, Math.round(l.photo_slots))) : 1;
+    l.likes = isNum(l.likes) ? Math.max(0, Math.round(l.likes)) : 0;
+    l.is_new = l.is_new === true;
   }
   const m = v.music;
   if (!["track", "artist", "none"].includes(m.kind as string) || !isStr(m.explanation)) throw bad();
@@ -639,4 +644,53 @@ export async function updateRequest(id: string, status: RequestStatus, adminNote
   const r = parseRequest(v);
   if (!r) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
   return r;
+}
+
+// ---- Layout likes (anonymous or signed in) ---------------------------------------------------
+export interface Likes {
+  enabled: boolean;
+  counts: Partial<Record<TemplateId, number>>;
+  liked: TemplateId[];
+  fresh: TemplateId[];
+}
+const isLayout = (x: unknown): x is TemplateId => (TEMPLATE_IDS as readonly unknown[]).includes(x);
+
+/** Sends the account token when signed in (likes then follow the account), else as a guest. */
+async function likesFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = await accessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  try {
+    return await fetch(`${API}${path}`, { ...init, headers });
+  } catch {
+    throw new ApiError("NETWORK", "Can't reach the server. Check your connection.", true);
+  }
+}
+
+export async function getLikes(visitor: string): Promise<Likes> {
+  const res = await likesFetch(`/v1/layouts/likes?visitor=${encodeURIComponent(visitor)}`);
+  if (!res.ok) throw await errorFrom(res);
+  const v: unknown = await res.json();
+  if (!isObj(v) || !isObj(v.counts)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  const counts: Likes["counts"] = {};
+  for (const [k, n] of Object.entries(v.counts)) if (isLayout(k) && isNum(n)) counts[k] = Math.max(0, Math.round(n));
+  return {
+    enabled: v.enabled === true,
+    counts,
+    liked: Array.isArray(v.liked) ? v.liked.filter(isLayout) : [],
+    fresh: Array.isArray(v.new) ? v.new.filter(isLayout) : [],
+  };
+}
+
+/** Like/unlike; returns the layout's new like count. */
+export async function setLike(id: TemplateId, visitor: string, liked: boolean): Promise<number> {
+  const res = await likesFetch(`/v1/layouts/${id}/like`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ visitor, liked }),
+  });
+  if (!res.ok) throw await errorFrom(res);
+  const v: unknown = await res.json();
+  if (!isObj(v) || !isNum(v.likes)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  return v.likes;
 }

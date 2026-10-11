@@ -9,6 +9,7 @@ import { inputFor } from "../lib/story/input";
 import { useCoverImage } from "./CoverPanel";
 import { PinSource } from "./PinSource";
 import { pinsFor } from "../lib/story/pins";
+import { LikeButton, NewBadge } from "./LikeButton";
 import { useMasks } from "./useMasks";
 import { StoryCanvas } from "./StoryCanvas";
 import s from "./maker.module.css";
@@ -106,6 +107,10 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
             </button>
             <p className={s.optionNo}>No. {(page % pages) * 3 + i + 1}{page % pages === 0 && i === 0 ? " · best match" : ""}</p>
             <h3 className={s.optionName}>{layout.name}</h3>
+            <div className={s.layoutMeta}>
+              <NewBadge id={layout.id} isNew={layout.is_new} />
+              <LikeButton id={layout.id} />
+            </div>
             <p className={s.small}>{layout.reason}</p>
             {pinsFor(layout.id)[0] && <PinSource pin={pinsFor(layout.id)[0]!} />}
             {analysis && (

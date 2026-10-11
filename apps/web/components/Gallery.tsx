@@ -6,6 +6,7 @@ import { LAYOUT_GROUPS } from "../lib/story/groups";
 import { type Pin, PINS, pinsFor } from "../lib/story/pins";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
 import type { TemplateId } from "../lib/story/types";
+import { LikeButton, NewBadge } from "./LikeButton";
 import { PinSource } from "./PinSource";
 import { track } from "../lib/analytics";
 import { StoryCanvas } from "./StoryCanvas";
@@ -87,6 +88,10 @@ export function Gallery({ focus }: { focus?: TemplateId }) {
                   <li key={id} className={s.galleryItem}>
                     {photo && <LazyStory id={id} photo={photo} />}
                     <h3>{TEMPLATES[id].name}</h3>
+                    <div className={s.layoutMeta}>
+                      <NewBadge id={id} />
+                      <LikeButton id={id} />
+                    </div>
                     <p className={s.small}>{TEMPLATES[id].blurb}</p>
                     <a className={s.primary} href={`/create?layout=${id}`} onClick={() => track("gallery_pick", { layout: id })}>Use this layout</a>
                     {pin && <PinSource pin={pin} />}

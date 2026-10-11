@@ -287,6 +287,8 @@ class LayoutSuggestion(BaseModel):
     filter: FilterId = "none"  # suggested photo filter (mood rules / template look)
     focuses: list[SubjectPos] = Field(default_factory=list, max_length=4)  # crop focus per photo
     photo_slots: int = 1  # distinct photos this layout shows
+    likes: int = 0  # people who liked this layout (anonymous or signed in)
+    is_new: bool = False  # added recently (ranked with a small boost)
 
 
 class MusicSuggestion(BaseModel):
@@ -445,6 +447,15 @@ class OutlineConfig(BaseModel):
     margin: float = Field(0, ge=0, le=60)
 
 
+class LinesConfig(BaseModel):
+    """Generated doodle lines (Basic Fit): distance from the subject and thickness, Story px."""
+
+    model_config = {"extra": "forbid"}
+
+    gap: float = Field(ge=0, le=160)
+    width: float = Field(ge=2, le=30)
+
+
 class CoverConfig(BaseModel):
     """Square song cover placed on the Story; the image is refetched by track id."""
 
@@ -494,6 +505,7 @@ class StoryConfig(BaseModel):
     spot: Rect01 | None = None
     tags: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=5)
     seed: int | None = Field(None, ge=0, le=99)
+    lines: LinesConfig | None = None
     boxFilter: FilterId | None = None  # noqa: N815
 
 
@@ -557,6 +569,26 @@ EventType = Literal[
     "pageview", "analysis", "layout_open", "export", "save", "request", "gallery_pick"
 ]
 Device = Literal["mobile", "tablet", "desktop"]
+
+
+class LikesOut(BaseModel):
+    enabled: bool  # likes need persistence (Supabase); the UI hides them otherwise
+    counts: dict[str, int]
+    liked: list[LayoutId]  # by this visitor / account
+    new: list[LayoutId]  # recently added layouts
+
+
+class LikeIn(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    visitor: str = Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")
+    liked: bool
+
+
+class LikeOut(BaseModel):
+    layout: LayoutId
+    likes: int
+    liked: bool
 
 
 class EventIn(BaseModel):

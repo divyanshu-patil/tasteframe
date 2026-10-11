@@ -435,6 +435,8 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           filter: "none" as const,
           focuses: [],
           photo_slots: Math.min(photos.length, 4),
+          likes: 0,
+          is_new: false,
         }));
       return (
         <Results

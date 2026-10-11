@@ -17,6 +17,7 @@ import { CutoutRefiner } from "./CutoutRefiner";
 import { ModelProgress } from "./ModelProgress";
 import { ColorField, Section, Segmented, Slider, Toggle, deg, pct, px, times } from "./controls";
 import { MusicCard } from "./Results";
+import { LikeButton, NewBadge } from "./LikeButton";
 import { PinSource } from "./PinSource";
 import { StoryCanvas } from "./StoryCanvas";
 import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
@@ -316,6 +317,11 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
         </Section>
 
         <Section title="This layout" hint={tpl.blurb} open>
+          <div className={s.layoutMeta}>
+            <NewBadge id={story.templateId} />
+            <LikeButton id={story.templateId} />
+            <span className={s.small}>Like it to help others find it.</span>
+          </div>
           {pins.length > 0 && <PinSource pin={pins[0]!} more={pins.length - 1} moreHref={`/gallery?layout=${story.templateId}`} />}
           {tpl.needsMask && (
             <div className={s.subgroup}>
@@ -361,6 +367,12 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           {tpl.seeded && story.seed !== undefined && (
             <div className={s.subgroup}>
               <p className={s.subhead}>{tpl.seeded}</p>
+              {story.lines && (
+                <>
+                  <Slider label="Distance from you" value={story.lines.gap} min={0} max={160} step={1} nudge={2} format={px} onChange={(v) => dispatch({ type: "lines", patch: { gap: v } })} />
+                  <Slider label="Thickness" value={story.lines.width} min={2} max={30} step={1} nudge={1} format={px} onChange={(v) => dispatch({ type: "lines", patch: { width: v } })} />
+                </>
+              )}
               <Slider label="Variation" value={story.seed} min={0} max={99} step={1} nudge={1} format={(n) => (n ? String(n) : "default")} onChange={(v) => dispatch({ type: "seed", seed: v })} />
               <button type="button" className={s.secondary} onClick={() => dispatch({ type: "seed", seed: 1 + Math.floor(Math.random() * 99) })}>
                 ↻ Shuffle lines

@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     rate_limit_events_per_min: int = 120
     rate_limit_requests_per_hour: int = 6
     rate_limit_pin_preview_per_min: int = 30
+    rate_limit_likes_per_min: int = 30
 
     @property
     def qloo_enabled(self) -> bool:

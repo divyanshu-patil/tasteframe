@@ -15,6 +15,7 @@ export type EditorAction =
   | { type: "filter"; id: FilterId }
   | { type: "box-filter"; id: FilterId }
   | { type: "seed"; seed: number }
+  | { type: "lines"; patch: Partial<NonNullable<StoryState["lines"]>> }
   | { type: "sticker-add"; sticker: Sticker }
   | { type: "sticker"; id: string; patch: Partial<Omit<Sticker, "id" | "kind">> }
   | { type: "sticker-remove"; id: string }
@@ -71,6 +72,11 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
       return { ...s, filter: a.id };
     case "box-filter":
       return s.boxFilter ? { ...s, boxFilter: a.id } : s;
+    case "lines": {
+      if (!s.lines) return s;
+      const l = { ...s.lines, ...a.patch };
+      return { ...s, lines: { gap: clamp(Math.round(l.gap), 0, 160), width: clamp(Math.round(l.width), 2, 30) } };
+    }
     case "seed":
       return s.seed === undefined ? s : { ...s, seed: clamp(Math.round(a.seed), 0, 99) };
     case "sticker-add":

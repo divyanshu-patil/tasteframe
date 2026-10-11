@@ -551,7 +551,8 @@ function doodles(ctx: Ctx, s: StoryState, slots: Slots) {
   const r = rng(seed * 7919 + 3);
   const vary = seed > 0;
   const span = vary ? 9 + r() * 9 : 13;
-  const gap = vary ? 28 + r() * 34 : 40;
+  const gap = (s.lines?.gap ?? 40) + (vary ? (r() - 0.5) * 16 : 0);
+  const width = s.lines?.width ?? 9;
   const count = vary ? 3 + Math.floor(r() * 3) : 4;
   // Lines go on the smoothest stretches of the outline (no dents, on the Story), spread out.
   const cands: { a: number; score: number }[] = [];
@@ -579,7 +580,7 @@ function doodles(ctx: Ctx, s: StoryState, slots: Slots) {
     const a1 = centre + span * deg;
     if (on(s, "lines")) {
       ctx.strokeStyle = s.overlay.color;
-      ctx.lineWidth = 9;
+      ctx.lineWidth = width;
       ctx.beginPath();
       for (let k = 0; k <= 16; k++) {
         const p = at(a0 + ((a1 - a0) * k) / 16, gap);
@@ -593,12 +594,14 @@ function doodles(ctx: Ctx, s: StoryState, slots: Slots) {
       const a = (n + flip) % 2 ? a1 + 6 * deg : a0 - 6 * deg;
       const base = at(a, gap - 10);
       ctx.strokeStyle = "#f5df4d";
-      ctx.lineWidth = 8;
+      // Ticks grow with the line so thick doodles keep crisp sparks, not blobs.
+      ctx.lineWidth = Math.max(2, width * 0.85);
+      const k = Math.max(1, width / 9);
       ctx.beginPath();
       for (const spread of [-28, 0, 28]) {
         const d = a + spread * deg;
-        ctx.moveTo(base.x + Math.cos(d) * 14, base.y + Math.sin(d) * 14);
-        ctx.lineTo(base.x + Math.cos(d) * 58, base.y + Math.sin(d) * 58);
+        ctx.moveTo(base.x + Math.cos(d) * 14 * k, base.y + Math.sin(d) * 14 * k);
+        ctx.lineTo(base.x + Math.cos(d) * 58 * k, base.y + Math.sin(d) * 58 * k);
       }
       ctx.stroke();
     }

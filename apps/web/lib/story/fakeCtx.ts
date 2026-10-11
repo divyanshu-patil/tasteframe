@@ -1,6 +1,7 @@
 // Minimal recording stand-in for CanvasRenderingContext2D (Node has no canvas).
-export function fakeCtx(): { ctx: CanvasRenderingContext2D; calls: string[]; texts: string[] } {
+export function fakeCtx(): { ctx: CanvasRenderingContext2D; calls: string[]; texts: string[]; points: number[][] } {
   const calls: string[] = [];
+  const points: number[][] = []; // moveTo/lineTo coordinates
   const texts: string[] = [];
   const state: Record<string | symbol, unknown> = { font: "10px serif" };
   const ctx = new Proxy(state, {
@@ -19,6 +20,7 @@ export function fakeCtx(): { ctx: CanvasRenderingContext2D; calls: string[]; tex
       return (...args: unknown[]) => {
         calls.push(String(prop));
         if (prop === "fillText" || prop === "strokeText") texts.push(String(args[0]));
+        if (prop === "moveTo" || prop === "lineTo") points.push(args.map(Number));
       };
     },
     set(target, prop, value) {
@@ -26,5 +28,5 @@ export function fakeCtx(): { ctx: CanvasRenderingContext2D; calls: string[]; tex
       return true;
     },
   });
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls, texts };
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls, texts, points };
 }

@@ -231,6 +231,15 @@ sessions or expired Stories.
   - Only Pinterest hosts are contacted, and `pin.it` redirects must stay on Pinterest.
 - `POST /v1/layout-requests`: `{pin_url, note?, email?, visitor?, referrer?, device?}` returns
   201. The pin is verified first. 429 `REQUEST_LIMIT` after 10 per visitor per day.
+- `GET /v1/layouts/likes?visitor=` returns `{enabled, counts: {layout: n}, liked: [layout], new:
+  [layout]}`. `liked` is for the signed-in account (Bearer token) or else this browser's visitor id
+  (HMAC-hashed). `enabled` is false when Supabase isn't configured.
+- `POST /v1/layouts/{layout}/like`: `{visitor, liked}` returns `{layout, likes, liked}`. One like
+  per account or visitor per layout; 422 for unknown layouts; 30/min per client.
+- `POST /v1/analysis` layouts carry `likes` and `is_new`. Ranking multiplies photo fit by
+  `1 + 0.10·popularity + 0.08·newness` (popularity: log-scaled likes; newness: fades over 30 days),
+  and moves one new or well-liked layout that fits the photo (top 9, ≥ 85% of the best score) into
+  the first three.
 
 ## Admin (Supabase login + `public.users.role = 'admin'`; RLS enforced)
 - `GET /v1/admin/me` returns `{admin}`.

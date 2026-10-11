@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from datetime import date
 
 import httpx
 from PIL import Image
@@ -214,13 +215,15 @@ def test_topic_steers_ranking():
     for topic, ids in TOPIC_LAYOUTS.items():
         assert all(i in TEMPLATES_BY_ID for i in ids), topic
     p = profile(mood=["natural"])
-    pet = rank_layouts(p, [], None, topic="pet", scene=["dog", "tiled floor"])
+    later = date(2027, 1, 1)  # outside the new-layout boost window
+    pet = rank_layouts(p, [], None, topic="pet", scene=["dog", "tiled floor"], today=later)
     music = rank_layouts(
         profile(mood=["moody", "cinematic"]),
         [],
         None,
         topic="music",
         scene=["concert", "neon light"],
+        today=later,
     )
     assert pet[0].id in TOPIC_LAYOUTS["pet"][:3] and music[0].id in TOPIC_LAYOUTS["music"][:3]
     assert "Made for pet photos" in pet[0].reason

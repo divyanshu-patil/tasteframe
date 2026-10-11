@@ -1,6 +1,7 @@
 """Vision, ranking and music-metadata services."""
 
 import asyncio
+from datetime import date
 
 import httpx
 from PIL import Image
@@ -10,6 +11,8 @@ from app.schemas.api import VisualProfile
 from app.services.music.itunes import find_track
 from app.services.recommendations.layouts import CATALOGUE, rank_layouts, score_all
 from app.services.vision.analyzer import analyze, merge_manual, mood_labels
+
+SETTLED = date(2027, 1, 1)  # long after every layout's "new" window
 
 
 def profile(**kw) -> VisualProfile:
@@ -44,7 +47,7 @@ def test_mood_rules_default_and_manual_merge():
 
 
 def test_ranking_returns_three_distinct_families_and_formula():
-    out = rank_layouts(profile(mood=["cinematic", "moody"]), [], None)
+    out = rank_layouts(profile(mood=["cinematic", "moody"]), [], None, today=SETTLED)
     fams = {t.id: t.family for t in CATALOGUE}
     assert len(out) == len(CATALOGUE) and len({fams[o.id] for o in out[:3]}) == 3
     s = out[0].score
@@ -174,3 +177,37 @@ def test_sql_template_check_matches_catalogue():
     assert block, "stories_template constraint missing"
     ids = set(re.findall(r"'([a-z0-9]+)'", block.group(1)))
     assert ids == {t.id for t in CATALOGUE}
+
+
+def test_new_and_liked_layouts_get_a_boost_but_fit_still_rules():
+    from app.services.recommendations.layouts import ADDED, newness
+
+    p = profile(mood=["moody", "cinematic"])
+    day = min(ADDED.values())
+    base = {t.id: s.total for t, s, _ in score_all(p, [], today=SETTLED)}
+    fresh = {t.id: s.total for t, s, _ in score_all(p, [], today=day)}
+    assert newness("songbox", day) == 1 and newness("songbox", SETTLED) == 0
+    assert fresh["songbox"] > base["songbox"] and fresh["cinematic"] == base["cinematic"]
+    liked = {t.id: s.total for t, s, _ in score_all(p, [], likes={"vinyl": 40}, today=SETTLED)}
+    assert liked["vinyl"] > base["vinyl"] and liked["cinematic"] == base["cinematic"]
+    # A boost is at most +18%: a poorly fitting layout can't jump a good one.
+    assert max(fresh[k] / base[k] for k in base) <= 1.181
+
+
+def test_a_new_or_liked_layout_that_fits_is_promoted_into_the_first_three():
+    from app.services.recommendations.layouts import ADDED
+
+    p = profile(mood=["moody", "cinematic"])
+    plain = rank_layouts(p, [], None, today=SETTLED)
+    ids = [o.id for o in plain]
+    # Something ranked 4th–9th and liked the most is moved into the first three.
+    candidate = ids[4]
+    boosted = rank_layouts(p, [], None, likes={candidate: 25, ids[30]: 3}, today=SETTLED)
+    first = [o.id for o in boosted[:3]]
+    assert candidate in first and boosted[first.index(candidate)].likes == 25
+    fams = {t.id: t.family for t in CATALOGUE}
+    assert len({fams[i] for i in first}) == 3
+    # New layouts are flagged and named in the reason.
+    new = rank_layouts(p, [], None, today=min(ADDED.values()))
+    flagged = [o for o in new if o.is_new]
+    assert {o.id for o in flagged} == set(ADDED) and "New layout." in flagged[0].reason

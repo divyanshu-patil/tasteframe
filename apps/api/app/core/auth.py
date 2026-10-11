@@ -69,3 +69,18 @@ async def require_user(
     if not isinstance(uid, str) or not UUID_RE.match(uid):
         raise AppError("AUTH_UNAVAILABLE", "Sign-in is temporarily unavailable.", 503, True)
     return AuthUser(id=uid, token=token)
+
+
+async def optional_user(
+    authorization: str = Header(default=""),
+    settings: Settings = Depends(get_settings),
+) -> AuthUser | None:
+    """The signed-in user when a valid token is sent; None for guests (or an expired token)."""
+    if not authorization or not settings.supabase_enabled:
+        return None
+    try:
+        return await require_user(authorization, settings)
+    except AppError as e:
+        if e.code == "AUTH_REQUIRED":
+            return None
+        raise

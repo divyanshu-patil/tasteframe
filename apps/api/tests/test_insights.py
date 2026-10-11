@@ -64,6 +64,7 @@ class FakeRest:
     def __init__(self):
         self.events: list[dict] = []
         self.requests: list[dict] = []
+        self.likes: set[tuple[str, str]] = set()
 
     def handler(self, req: httpx.Request) -> httpx.Response:
         if req.url.host == "www.pinterest.com":
@@ -90,6 +91,26 @@ class FakeRest:
                     "requests": {"pending": len(self.requests)},
                 },
             )
+        if path.startswith("/rpc/") and "layout_like" in path:
+            body = json.loads(req.content or b"{}")
+            signed_in = {ADMIN[0]: ADMIN[1], USER[0]: USER[1]}.get(token)
+            who = f"u:{signed_in}" if signed_in else f"v:{body.get('p_visitor')}"
+            if path == "/rpc/set_layout_like":
+                pair = (body["p_layout"], who)
+                (self.likes.add if body["p_on"] else self.likes.discard)(pair)
+                return httpx.Response(200, json=sum(1 for x in self.likes if x[0] == pair[0]))
+            if path == "/rpc/layout_like_counts":
+                counts: dict[str, int] = {}
+                for layout, _ in self.likes:
+                    counts[layout] = counts.get(layout, 0) + 1
+                return httpx.Response(
+                    200, json=[{"layout": k, "likes": v} for k, v in counts.items()]
+                )
+        if path == "/rpc/my_layout_likes":
+            body = json.loads(req.content)
+            signed_in = {ADMIN[0]: ADMIN[1], USER[0]: USER[1]}.get(token)
+            who = f"u:{signed_in}" if signed_in else f"v:{body['p_visitor']}"
+            return httpx.Response(200, json=[layout for layout, w in self.likes if w == who])
         if path == "/events" and req.method == "POST":
             self.events.append(json.loads(req.content))
             return httpx.Response(201)
@@ -230,3 +251,29 @@ def test_admin_api_requires_admin(api):
         == 422
     )
     assert client.get("/v1/admin/requests/not-a-uuid", headers=admin).status_code == 422
+
+
+def test_likes_anonymous_and_signed_in(api):
+    from app.services.insights import likes
+
+    likes.reset_cache()
+    client, fake = api
+    anon = {"visitor": "abcDEF123456", "liked": True}
+    r = client.post("/v1/layouts/songbox/like", json=anon)
+    assert r.status_code == 200 and r.json() == {"layout": "songbox", "likes": 1, "liked": True}
+    # The raw browser id is never stored: the server hashes it first.
+    assert all(w.startswith("v:") and "abcDEF123456" not in w for _, w in fake.likes)
+    # Liking twice doesn't double count; a signed-in account is a separate liker.
+    assert client.post("/v1/layouts/songbox/like", json=anon).json()["likes"] == 1
+    h = {"Authorization": f"Bearer {USER[0]}"}
+    assert client.post("/v1/layouts/songbox/like", json=anon, headers=h).json()["likes"] == 2
+    got = client.get("/v1/layouts/likes", params={"visitor": "abcDEF123456"}, headers=h).json()
+    assert got["counts"]["songbox"] == 2 and got["liked"] == ["songbox"]
+    # Unlike, unknown layouts and bad visitor ids.
+    off = client.post("/v1/layouts/songbox/like", json={**anon, "liked": False})
+    assert off.json()["likes"] == 1
+    assert client.post("/v1/layouts/nope/like", json=anon).status_code == 422
+    assert client.post("/v1/layouts/songbox/like", json={**anon, "visitor": "x"}).status_code == 422
+    # An expired token just likes anonymously.
+    bad = {"Authorization": "Bearer expired"}
+    assert client.post("/v1/layouts/vinyl/like", json=anon, headers=bad).status_code == 200

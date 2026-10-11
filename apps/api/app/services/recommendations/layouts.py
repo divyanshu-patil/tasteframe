@@ -8,7 +8,9 @@ Signals (all per-photo):
 
 score = 0.30 visual + 0.30 ai_pick + 0.25 cultural + 0.15 readability   (with image reasoning)
 score = 0.45 visual + 0.35 cultural + 0.20 readability                   (without)
-An engineering heuristic — tune by human review; not a validated model.
+then × (1 + 0.10 popularity + 0.08 newness): likes and recently added layouts get a small boost on
+top of photo fit, and one new or well-liked layout that already fits the photo is moved into the
+first three suggestions. An engineering heuristic — tune by human review; not a validated model.
 
 All templates are returned, best first, with families interleaved so every group of three the
 UI shows (initial set + each Shuffle) is compositionally distinct. Rendering lives in
@@ -16,7 +18,9 @@ apps/web/lib/story/templates*.ts; ids must match (a web test checks this).
 """
 
 import hashlib
+import math
 from dataclasses import dataclass, field
+from datetime import date
 
 from app.schemas.api import (
     LayoutId,
@@ -1232,6 +1236,34 @@ CATALOGUE: tuple[Template, ...] = (
 )
 
 TEMPLATES_BY_ID = {t.id: t for t in CATALOGUE}
+
+# When layouts joined the catalogue (everything else: launch). Newness fades over NEW_DAYS.
+LAUNCH = date(2026, 9, 1)
+NEW_DAYS = 30
+ADDED: dict[str, date] = {
+    i: date(2026, 10, 11)
+    for i in ("appswitch", "phones", "camlyric", "filmslant", "songbox", "clockit", "doodlefit")
+}
+W_POPULAR, W_NEW = 0.10, 0.08
+PROMOTE_WITHIN, PROMOTE_MIN = 9, 0.85  # candidates: top 9 by fit, ≥ 85% of the best score
+
+
+def newness(template_id: str, today: date | None = None) -> float:
+    """1 on the day a layout is added, fading to 0 after NEW_DAYS."""
+    age = ((today or date.today()) - ADDED.get(template_id, LAUNCH)).days
+    return max(0.0, 1 - max(0, age) / NEW_DAYS)
+
+
+def new_layout_ids(today: date | None = None) -> list[str]:
+    return [t.id for t in CATALOGUE if newness(t.id, today) > 0]
+
+
+def popularity(template_id: str, likes: dict[str, int]) -> float:
+    """0..1, log-scaled against the most-liked layout."""
+    top = max(likes.values(), default=0)
+    return math.log1p(likes.get(template_id, 0)) / math.log1p(top) if top else 0.0
+
+
 SPLITS_PHOTO = {"stills", "filmstrip", "photodump"}  # shifted crops of one photo can slice a face
 
 HEADLINES: dict[str, str] = {
@@ -1439,9 +1471,12 @@ def score_all(
     subject: str | None = None,
     ai_picks: list[str] | None = None,
     topic: str | None = None,
+    likes: dict[str, int] | None = None,
+    today: date | None = None,
 ) -> list[tuple[Template, LayoutScore, list[str]]]:
     """Every template scored, best first (photo-specific tie-breaks)."""
     scene = scene or []
+    likes = likes or {}
     if people and subject is None:
         subject = "person"
     scored = []
@@ -1459,6 +1494,8 @@ def score_all(
         # Photo-count fit scales the whole score so 2–4 photo Stories lead with layouts that
         # actually show every photo (single-photo layouts stay available, just lower).
         total = total * (0.55 + 0.45 * _count_fit(t, p.photo_count))
+        # Community + freshness: a nudge on top of fit, never a substitute for it.
+        total *= 1 + W_POPULAR * popularity(t.id, likes) + W_NEW * newness(t.id, today)
         total = round(total + _jitter(p, t.id), 3)
         score = LayoutScore(
             visual_fit=v, cultural_style_fit=c, readability_fit=r, total=total, ai_pick=a
@@ -1483,6 +1520,40 @@ def _interleave(scored: list[tuple[Template, LayoutScore, list[str]]]):
     return ordered
 
 
+def _promote(
+    ordered: list[tuple[Template, LayoutScore, list[str]]],
+    likes: dict[str, int],
+    today: date | None,
+) -> list[tuple[Template, LayoutScore, list[str]]]:
+    """Make sure the first three include a new or well-liked layout when one fits this photo."""
+    if len(ordered) < 4:
+        return ordered
+
+    def featured(t: Template) -> bool:
+        return newness(t.id, today) > 0 or popularity(t.id, likes) >= 0.5
+
+    if any(featured(x[0]) for x in ordered[:3]):
+        return ordered
+    best = max(x[1].total for x in ordered[:3])
+    pick = next(
+        (
+            x
+            for x in ordered[3:PROMOTE_WITHIN]
+            if featured(x[0]) and x[1].total >= PROMOTE_MIN * best
+        ),
+        None,
+    )
+    if pick is None:
+        return ordered
+    rest = [x for x in ordered if x is not pick]
+    # Take the third slot, or the second if that keeps the three families distinct.
+    for slot in (2, 1):
+        others = {x[0].family for i, x in enumerate(rest[:3]) if i != slot}
+        if pick[0].family not in others:
+            return [*rest[:slot], pick, *rest[slot:]]
+    return ordered
+
+
 def _accent(p: VisualProfile) -> str:
     def sat(h: str) -> float:
         r, g, b = (int(h[i : i + 2], 16) for i in (1, 3, 5))
@@ -1504,13 +1575,16 @@ def rank_layouts(
     ai_picks: list[str] | None = None,
     subjects: list[tuple[str, float, float]] | None = None,
     topic: str | None = None,
+    likes: dict[str, int] | None = None,
+    today: date | None = None,
 ) -> list[LayoutSuggestion]:
     """All templates ranked for this photo (or the top `k`), families interleaved per 3.
 
     `headlines`: optional ideas from image reasoning; spread across the suggestions.
     `subject`: (kind, x, y) of the main subject from image reasoning — crop focus + ranking.
     `ai_picks`: the vision model's ranked template ids for this photo.
-    `subjects`: per-photo (kind, x, y) for multi-photo Stories (crop focus per photo)."""
+    `subjects`: per-photo (kind, x, y) for multi-photo Stories (crop focus per photo).
+    `likes`: like counts per layout id (community boost); `today` pins newness in tests."""
     people = bool(subject and subject[0] in ("person", "people"))
     per_photo = subjects or ([subject] if subject else [])
     focuses = [
@@ -1521,7 +1595,12 @@ def rank_layouts(
     ]
     focus = (subject[1], subject[2]) if subject and subject[0] != "scene" else (0.5, 0.5)
     kind = subject[0] if subject else None
-    ordered = _interleave(score_all(p, qloo_tags, people, scene, kind, ai_picks, topic))
+    likes = likes or {}
+    ordered = _promote(
+        _interleave(score_all(p, qloo_tags, people, scene, kind, ai_picks, topic, likes, today)),
+        likes,
+        today,
+    )
     if k is not None:
         ordered = ordered[:k]
 
@@ -1545,6 +1624,12 @@ def rank_layouts(
             reason += " The image model picked it for this photo."
         if hits:
             reason += f" Qloo results tagged “{hits[0]}” point to this style."
+        fresh = newness(t.id, today) > 0
+        liked = likes.get(t.id, 0)
+        if fresh:
+            reason += " New layout."
+        if popularity(t.id, likes) >= 0.5 and liked:
+            reason += f" Liked by {liked} {'person' if liked == 1 else 'people'}."
         if t.text_on_photo and score.readability_fit < 0.6:
             reason += " Text sits on an overlay to stay readable."
         n = p.photo_count
@@ -1575,6 +1660,8 @@ def rank_layouts(
                 filter=t.filter or base_filter,
                 focuses=focuses,
                 photo_slots=min(t.capacity, max(1, p.photo_count)),
+                likes=liked,
+                is_new=fresh,
             )
         )
     return out

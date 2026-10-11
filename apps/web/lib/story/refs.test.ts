@@ -75,10 +75,10 @@ describe("layout variations and box looks", () => {
       [0, 1, 2, 3, 4, 5, 6, 7].map((seed) => {
         const f = fakeCtx();
         renderStory(f.ctx, photo, { ...s, seed });
-        return f.calls.join(",");
+        return JSON.stringify(f.points.map((q) => q.map(Math.round)));
       }),
     );
-    expect(seqs.size).toBeGreaterThan(1);
+    expect(seqs.size).toBeGreaterThan(4); // the lines move
   });
 
   it("the song box carries its own filter", () => {
@@ -86,5 +86,15 @@ describe("layout variations and box looks", () => {
     expect(s.boxFilter).toBe("xerox");
     expect(editorReducer(s, { type: "box-filter", id: "noir" }).boxFilter).toBe("noir");
     expect(editorReducer(defaultState("colorbox", input), { type: "box-filter", id: "noir" }).boxFilter).toBeUndefined();
+  });
+});
+
+describe("doodle line controls", () => {
+  it("distance and thickness are adjustable and clamped", () => {
+    const s = defaultState("doodlefit", input);
+    expect(s.lines).toEqual({ gap: 40, width: 9 });
+    const far = editorReducer(s, { type: "lines", patch: { gap: 500, width: 1 } });
+    expect(far.lines).toEqual({ gap: 160, width: 2 });
+    expect(editorReducer(defaultState("cutout", input), { type: "lines", patch: { gap: 10 } }).lines).toBeUndefined();
   });
 });

@@ -5,14 +5,24 @@ import hmac
 import re
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Path, Query, Response
 
+from app.core.auth import AuthUser, optional_user
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
 from app.core.security import rate_limit
-from app.schemas.api import EventIn, LayoutRequestIn, PinPreview
-from app.services.insights import pins
+from app.schemas.api import (
+    EventIn,
+    LayoutId,
+    LayoutRequestIn,
+    LikeIn,
+    LikeOut,
+    LikesOut,
+    PinPreview,
+)
+from app.services.insights import likes, pins
 from app.services.insights.rest import rest
+from app.services.recommendations.layouts import TEMPLATES_BY_ID, new_layout_ids
 
 router = APIRouter(prefix="/v1", tags=["insights"])
 HOST_RE = re.compile(r"^[a-z0-9.-]{1,120}$")
@@ -57,6 +67,53 @@ async def record_event(body: EventIn, settings: Settings = Depends(get_settings)
         except AppError:
             pass  # analytics never breaks the app
     return Response(status_code=204)
+
+
+@router.get("/layouts/likes", response_model=LikesOut)
+async def layout_likes(
+    visitor: str = Query(pattern=r"^[A-Za-z0-9_-]{8,64}$"),
+    user: AuthUser | None = Depends(optional_user),
+    settings: Settings = Depends(get_settings),
+) -> LikesOut:
+    """Like counts for every layout, which of them this visitor/account liked, and what's new."""
+    new = new_layout_ids()
+    if not settings.supabase_enabled:
+        return LikesOut(enabled=False, counts={}, liked=[], new=new)
+    counts = await likes.like_counts(settings)
+    try:
+        mine = await likes.my_likes(
+            settings, visitor_hash(visitor, settings), user.token if user else None
+        )
+    except AppError:
+        mine = []
+    known = set(TEMPLATES_BY_ID)
+    return LikesOut(enabled=True, counts=counts, liked=[x for x in mine if x in known], new=new)  # type: ignore[misc]
+
+
+@router.post(
+    "/layouts/{layout}/like",
+    response_model=LikeOut,
+    dependencies=[Depends(rate_limit("like", "rate_limit_likes_per_min", 60))],
+)
+async def like_layout(
+    body: LikeIn,
+    layout: LayoutId = Path(),
+    user: AuthUser | None = Depends(optional_user),
+    settings: Settings = Depends(get_settings),
+) -> LikeOut:
+    """Like or unlike a layout — as the signed-in account, or anonymously as this browser."""
+    if not settings.supabase_enabled:
+        raise AppError(
+            "PERSISTENCE_NOT_CONFIGURED", "Likes aren't enabled on this deployment.", 503
+        )
+    n = await likes.set_like(
+        settings,
+        layout,
+        visitor_hash(body.visitor, settings),
+        body.liked,
+        user.token if user else None,
+    )
+    return LikeOut(layout=layout, likes=n, liked=body.liked)
 
 
 @router.get(

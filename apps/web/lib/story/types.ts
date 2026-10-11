@@ -165,6 +165,8 @@ export interface StoryState {
   tags?: string[];
   /** Variation of a layout's generated decoration (e.g. Basic Fit's doodle lines), 0..99. */
   seed?: number;
+  /** Generated doodle lines: distance from the subject and stroke thickness (Story px). */
+  lines?: { gap: number; width: number };
   /** Look inside a layout's filter box (Song Box), separate from the photo's own filter. */
   boxFilter?: FilterId;
 }

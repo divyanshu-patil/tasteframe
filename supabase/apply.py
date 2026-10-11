@@ -40,7 +40,7 @@ if __name__ == "__main__":
         with conn.transaction():
             conn.execute((ROOT / "supabase/schema.sql").read_text())
             conn.execute("notify pgrst, 'reload schema'")
-        for table in ("stories", "events", "layout_requests", "users"):
+        for table in ("stories", "events", "layout_requests", "users", "layout_likes"):
             policies = [r[0] for r in conn.execute(
                 "select policyname from pg_policies where tablename = %s order by 1", (table,)).fetchall()]
             rls, anon_sel, auth_upd = conn.execute(
