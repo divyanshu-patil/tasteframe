@@ -35,12 +35,83 @@
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.account {
-  max-width: 22ch;
+/* Profile dropdown (components/AccountNav.tsx). */
+.profile {
+  position: relative;
+  text-align: left;
+}
+.profile > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  min-height: 36px;
+}
+.profile > summary::-webkit-details-marker {
+  display: none;
+}
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-ink-black);
+  color: var(--color-parchment);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+}
+.caret {
+  font-size: 12px;
+  transition: transform 0.15s ease;
+}
+.profile[open] .caret {
+  transform: rotate(180deg);
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+  min-width: 240px;
+  display: grid;
+  background: var(--color-paper);
+  border: 1px solid var(--color-ink-black);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.menuEmail {
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--color-charcoal);
+  border-bottom: 1px solid var(--color-bone-cream);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-charcoal);
+}
+.menuEmail strong {
+  color: var(--color-ink-black);
+  font-weight: 600;
+}
+.menuItem {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.menuItem:hover,
+.menuItem:focus-visible {
+  background: var(--color-bone-cream);
 }
 
 .brand {
