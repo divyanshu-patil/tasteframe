@@ -366,7 +366,8 @@ const songbox: Template = {
   id: "songbox",
   name: "Song Box",
   blurb: "A square of your photo turned stark black-and-white, with the song name under it.",
-  overlayLabel: "Photo tint",
+  overlayLabel: "Box colour",
+  boxFilter: "xerox",
   decorations: [],
   spot: (i) => {
     const f = fp(i);
@@ -379,20 +380,21 @@ const songbox: Template = {
     return {
       headline: t({ text: i.music?.title || i.headline, font: "sans", size: 30, color: WHITE, x, y: y + 0.012, width: 0.5, align: "center" }),
       caption: t({ text: i.music?.artist || i.caption || "", font: "sans", size: 26, color: "#e4e4e4", x, y: y + 0.034, width: 0.5, align: "center" }),
-      overlay: { strength: 0.08, color: "#000000" },
+      // Strength 0 = a plain black-and-white box; raise it to tint the box's whites.
+      overlay: { strength: 0, color: "#e8475f" },
       decorations: {},
     };
   },
   draw(ctx, _p, s, slots) {
     drawPhoto(ctx, slots.photo(0), FULL, slots.crop(0));
-    tint(ctx, s);
     const sp = s.spot ?? { x: 0.5, y: 0.2, w: 0.39, h: 0.219 };
     const r = { x: sp.x * W, y: sp.y * H, w: sp.w * W, h: sp.h * H };
     ctx.save();
     ctx.beginPath();
     ctx.rect(r.x, r.y, r.w, r.h);
     ctx.clip();
-    drawPhoto(ctx, filteredPhoto(slots.photo(0), "xerox"), FULL, slots.crop(0));
+    drawPhoto(ctx, filteredPhoto(slots.photo(0), s.boxFilter ?? "xerox"), FULL, slots.crop(0));
+    tint(ctx, s, r, "multiply");
     ctx.restore();
   },
   text: { headline: { shadow: true, tracking: 0 }, caption: { shadow: true, tracking: 0 } },
@@ -543,34 +545,44 @@ function doodles(ctx: Ctx, s: StoryState, slots: Slots) {
     return { x: c.cx + Math.cos(a) * r, y: c.cy + Math.sin(a) * r };
   };
   const deg = Math.PI / 180;
-  // Four lines on the smoothest stretches of the outline (no dents, on the Story), spread out.
+  // Variation 0 is the tidy default; others jitter which stretches get lines, their length,
+  // gap and spark side (seeded, so preview and export match).
+  const seed = s.seed ?? 0;
+  const r = rng(seed * 7919 + 3);
+  const vary = seed > 0;
+  const span = vary ? 9 + r() * 9 : 13;
+  const gap = vary ? 28 + r() * 34 : 40;
+  const count = vary ? 3 + Math.floor(r() * 3) : 4;
+  // Lines go on the smoothest stretches of the outline (no dents, on the Story), spread out.
   const cands: { a: number; score: number }[] = [];
   for (let d = 0; d < 360; d += 10) {
     const a = c.axis + d * deg;
     const rs = Array.from({ length: 9 }, (_, k) => radius(a + (k - 4) * 3.25 * deg));
     const mean = rs.reduce((x, y) => x + y, 0) / rs.length;
-    const ends = [at(a - 13 * deg, 70), at(a + 13 * deg, 70)];
+    const ends = [at(a - span * deg, gap + 30), at(a + span * deg, gap + 30)];
     if (mean < 60 || ends.some((p) => p.x < 50 || p.x > W - 50 || p.y < 60 || p.y > H - 60)) continue;
-    cands.push({ a, score: (Math.max(...rs) - Math.min(...rs)) / mean });
+    cands.push({ a, score: (Math.max(...rs) - Math.min(...rs)) / mean + (vary ? r() * 0.5 : 0) });
   }
   const picks: number[] = [];
   for (const { a } of cands.sort((x, y) => x.score - y.score)) {
     const apart = picks.every((b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))) > 55 * deg);
     if (apart) picks.push(a);
-    if (picks.length === 4) break;
+    if (picks.length === count) break;
   }
+  const flip = vary && r() < 0.5 ? 1 : 0;
   ctx.save();
+  ctx.globalAlpha = s.overlay.strength;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   picks.forEach((centre, n) => {
-    const a0 = centre - 13 * deg;
-    const a1 = centre + 13 * deg;
+    const a0 = centre - span * deg;
+    const a1 = centre + span * deg;
     if (on(s, "lines")) {
       ctx.strokeStyle = s.overlay.color;
       ctx.lineWidth = 9;
       ctx.beginPath();
       for (let k = 0; k <= 16; k++) {
-        const p = at(a0 + ((a1 - a0) * k) / 16, 40);
+        const p = at(a0 + ((a1 - a0) * k) / 16, gap);
         if (k) ctx.lineTo(p.x, p.y);
         else ctx.moveTo(p.x, p.y);
       }
@@ -578,8 +590,8 @@ function doodles(ctx: Ctx, s: StoryState, slots: Slots) {
     }
     if (on(s, "sparks")) {
       // Three short ticks bursting outwards just past one end of the line.
-      const a = n % 2 ? a1 + 6 * deg : a0 - 6 * deg;
-      const base = at(a, 30);
+      const a = (n + flip) % 2 ? a1 + 6 * deg : a0 - 6 * deg;
+      const base = at(a, gap - 10);
       ctx.strokeStyle = "#f5df4d";
       ctx.lineWidth = 8;
       ctx.beginPath();
@@ -599,6 +611,7 @@ const doodlefit: Template = {
   name: "Basic Fit",
   blurb: "White motion lines and yellow sparks drawn around your outline, pastel vertical words.",
   overlayLabel: "Doodle colour",
+  seeded: "Doodle lines",
   needsMask: true,
   decorations: decos([["lines", "Motion lines", true], ["sparks", "Sparks", true]]),
   defaults: (i) => ({

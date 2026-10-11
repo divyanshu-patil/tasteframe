@@ -344,8 +344,27 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           )}
           {story.spot && (
             <div className={s.subgroup}>
-              <p className={s.subhead}>{story.templateId === "colorbox" ? "Colour box" : "Strip"}</p>
+              <p className={s.subhead}>{story.templateId === "colorbox" ? "Colour box" : story.boxFilter ? "Filter box" : "Strip"}</p>
               {spotControls()}
+              {story.boxFilter && (
+                <div className={s.swatchGrid} role="group" aria-label="Look inside the box">
+                  {FILTERS.filter((f) => f.id !== "none").map((f) => (
+                    <button key={f.id} className={`${s.swatchBtn} ${story.boxFilter === f.id ? s.swatchOn : ""}`} aria-pressed={story.boxFilter === f.id} onClick={() => dispatch({ type: "box-filter", id: f.id })}>
+                      <FilterSwatch photo={photos[order[0] ?? 0] ?? photos[0]!} filter={f.id} />
+                      <span>{f.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {tpl.seeded && story.seed !== undefined && (
+            <div className={s.subgroup}>
+              <p className={s.subhead}>{tpl.seeded}</p>
+              <Slider label="Variation" value={story.seed} min={0} max={99} step={1} nudge={1} format={(n) => (n ? String(n) : "default")} onChange={(v) => dispatch({ type: "seed", seed: v })} />
+              <button type="button" className={s.secondary} onClick={() => dispatch({ type: "seed", seed: 1 + Math.floor(Math.random() * 99) })}>
+                ↻ Shuffle lines
+              </button>
             </div>
           )}
           <div className={s.subgroup}>

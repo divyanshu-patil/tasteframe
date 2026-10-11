@@ -163,6 +163,10 @@ export interface StoryState {
   prop?: string;
   /** Short words from the photo (image reasoning elements) for checklist/receipt layouts. */
   tags?: string[];
+  /** Variation of a layout's generated decoration (e.g. Basic Fit's doodle lines), 0..99. */
+  seed?: number;
+  /** Look inside a layout's filter box (Song Box), separate from the photo's own filter. */
+  boxFilter?: FilterId;
 }
 
 export interface TemplateInput {

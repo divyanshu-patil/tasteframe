@@ -13,6 +13,8 @@ export type EditorAction =
   | { type: "overlay"; patch: Partial<StoryState["overlay"]> }
   | { type: "decoration"; key: string; on: boolean }
   | { type: "filter"; id: FilterId }
+  | { type: "box-filter"; id: FilterId }
+  | { type: "seed"; seed: number }
   | { type: "sticker-add"; sticker: Sticker }
   | { type: "sticker"; id: string; patch: Partial<Omit<Sticker, "id" | "kind">> }
   | { type: "sticker-remove"; id: string }
@@ -67,6 +69,10 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
     }
     case "filter":
       return { ...s, filter: a.id };
+    case "box-filter":
+      return s.boxFilter ? { ...s, boxFilter: a.id } : s;
+    case "seed":
+      return s.seed === undefined ? s : { ...s, seed: clamp(Math.round(a.seed), 0, 99) };
     case "sticker-add":
       return { ...s, stickers: [...(s.stickers ?? []), a.sticker].slice(-24) };
     case "sticker": {

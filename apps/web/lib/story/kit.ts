@@ -65,6 +65,10 @@ export interface Template {
   }[];
   /** Extra boxes showing part of the photo (insets, callouts) — draggable to reframe. */
   views?: (s: StoryState, slots: Slots) => { key: string; r: Rect }[];
+  /** Label for a "variation" control (StoryState.seed) when the layout's decoration is generated. */
+  seeded?: string;
+  /** Default look inside the layout's filter box (StoryState.boxFilter). */
+  boxFilter?: FilterId;
   /** Default colour-window rect (0..1) for layouts that use StoryState.spot. */
   spot?: (i: TemplateInput) => Rect;
   text?: Partial<Record<TextKey, TextOpts>>;

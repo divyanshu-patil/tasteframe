@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AccountNav } from "../components/AccountNav";
 import { BackendStatus } from "../components/BackendStatus";
 import { HeroExample } from "../components/HeroExample";
 import { RequestLayout } from "../components/RequestLayout";
@@ -21,6 +22,7 @@ export default function Home() {
           <RequestLayout />
           <Link href="/gallery" className={styles.homeLink}>Gallery</Link>
           <Link href="/create" className={styles.homeLink}>Open the studio</Link>
+          <AccountNav />
         </nav>
       </header>
 

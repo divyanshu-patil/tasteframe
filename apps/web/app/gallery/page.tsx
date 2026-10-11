@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AccountNav } from "../../components/AccountNav";
 import { Gallery } from "../../components/Gallery";
 import { TEMPLATE_IDS, type TemplateId } from "../../lib/story/types";
 import styles from "../page.module.css";
@@ -18,7 +19,10 @@ export default async function GalleryPage({ searchParams }: { searchParams: Prom
       <header className={styles.masthead}>
         <Link href="/" className={styles.homeLink}>Tasteframe</Link>
         <span className={styles.brand}>Layout gallery</span>
-        <Link href="/create">Open the studio</Link>
+        <nav className={styles.nav} aria-label="Main">
+          <Link href="/create" className={styles.homeLink}>Open the studio</Link>
+          <AccountNav />
+        </nav>
       </header>
       <main className={styles.appMain}>
         <Gallery focus={focus} />

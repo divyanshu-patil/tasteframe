@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { drawSample } from "../lib/sample";
 import { LAYOUT_GROUPS } from "../lib/story/groups";
-import { PINS, pinsFor } from "../lib/story/pins";
+import { type Pin, PINS, pinsFor } from "../lib/story/pins";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
 import type { TemplateId } from "../lib/story/types";
 import { PinSource } from "./PinSource";
@@ -12,6 +12,10 @@ import { StoryCanvas } from "./StoryCanvas";
 import s from "./maker.module.css";
 
 const DATE = new Date(2026, 9, 10);
+const layoutText = (id: TemplateId, group: string) =>
+  [id, TEMPLATES[id].name, TEMPLATES[id].blurb, group, ...pinsFor(id).map((p) => p.author)].join(" ").toLowerCase();
+const pinText = (p: Pin) =>
+  [p.author, p.category, ...p.layouts.flatMap((id) => [id, id in TEMPLATES ? TEMPLATES[id as TemplateId].name : ""])].join(" ").toLowerCase();
 const INPUT = { headline: "golden hour, again", caption: "keep this one.", accent: "#c03f13", palette: ["#c9756b", "#3e2c3d", "#f2b47a"], date: DATE };
 
 /** Renders its Story only once scrolled near the viewport (dozens of canvases on one page). */
@@ -45,7 +49,11 @@ export function Gallery({ focus }: { focus?: TemplateId }) {
       setPhoto(c);
     }
   }, []);
-  const refs = focus ? [...pinsFor(focus), ...PINS.filter((p) => !p.layouts.includes(focus))] : PINS;
+  const [query, setQuery] = useState("");
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = (text: string) => terms.every((t) => text.includes(t));
+  const groups = LAYOUT_GROUPS.map((g) => ({ ...g, ids: g.ids.filter((id) => matches(layoutText(id, g.name))) })).filter((g) => g.ids.length);
+  const refs = (focus ? [...pinsFor(focus), ...PINS.filter((p) => !p.layouts.includes(focus))] : PINS).filter((p) => matches(pinText(p)));
 
   return (
     <div className={s.galleryPage}>
@@ -58,8 +66,18 @@ export function Gallery({ focus }: { focus?: TemplateId }) {
         </button>
       </div>
 
+      <input
+        type="search"
+        className={s.input}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={tab === "layouts" ? "Search layouts — cutout, song, film, phones…" : "Search pins — creator or layout name"}
+        aria-label={tab === "layouts" ? "Search layouts" : "Search Pinterest references"}
+      />
       {tab === "layouts" ? (
-        LAYOUT_GROUPS.map((g) => (
+        groups.length === 0 ? (
+          <p className={s.small}>No layouts match “{query}”.</p>
+        ) : groups.map((g) => (
           <section key={g.id} className={s.galleryGroup} aria-labelledby={`g-${g.id}`}>
             <h2 id={`g-${g.id}`}>{g.name}</h2>
             <ul className={s.galleryGrid}>
@@ -84,6 +102,7 @@ export function Gallery({ focus }: { focus?: TemplateId }) {
             Every Pinterest pin the layouts were modelled on, credited to its creator. Thumbnails come from Pinterest and open the original pin.
             {focus && ` Pins for ${TEMPLATES[focus].name} come first.`}
           </p>
+          {refs.length === 0 && <p className={s.small}>No pins match “{query}”.</p>}
           <ul className={s.refGrid}>
             {refs.map((p) => (
               <li key={p.pin} className={s.refItem}>

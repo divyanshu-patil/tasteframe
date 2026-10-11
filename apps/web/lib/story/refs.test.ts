@@ -61,3 +61,30 @@ describe("auto-fit headlines", () => {
     expect(fit.w).toBeLessThanOrEqual(0.9 * 1080 + 1);
   });
 });
+
+describe("layout variations and box looks", () => {
+  it("doodle lines take a clamped variation seed; other layouts ignore it", async () => {
+    const { fakeCtx } = await import("./fakeCtx");
+    const { renderStory } = await import("./templates");
+    const s = defaultState("doodlefit", input);
+    expect(s.seed).toBe(0);
+    expect(editorReducer(s, { type: "seed", seed: 250 }).seed).toBe(99);
+    expect(editorReducer(defaultState("cutout", input), { type: "seed", seed: 5 }).seed).toBeUndefined();
+    const photo = { width: 1200, height: 1600 } as unknown as CanvasImageSource & { width: number; height: number };
+    const seqs = new Set(
+      [0, 1, 2, 3, 4, 5, 6, 7].map((seed) => {
+        const f = fakeCtx();
+        renderStory(f.ctx, photo, { ...s, seed });
+        return f.calls.join(",");
+      }),
+    );
+    expect(seqs.size).toBeGreaterThan(1);
+  });
+
+  it("the song box carries its own filter", () => {
+    const s = defaultState("songbox", input);
+    expect(s.boxFilter).toBe("xerox");
+    expect(editorReducer(s, { type: "box-filter", id: "noir" }).boxFilter).toBe("noir");
+    expect(editorReducer(defaultState("colorbox", input), { type: "box-filter", id: "noir" }).boxFilter).toBeUndefined();
+  });
+});

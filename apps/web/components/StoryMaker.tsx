@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type Analysis,
@@ -11,7 +10,6 @@ import {
   type Stage,
   type Features,
   type SavedStory,
-  adminMe,
   analyze,
   deleteUpload,
   getFeatures,
@@ -19,7 +17,7 @@ import {
   storyPhoto,
   uploadPhoto,
 } from "../lib/api";
-import { authConfigured, signOut, useAuth } from "../lib/auth";
+import { authConfigured, useAuth } from "../lib/auth";
 import { sampleFile } from "../lib/sample";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
 import { inputFor } from "../lib/story/input";
@@ -88,11 +86,6 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   const [features, setFeatures] = useState<Features | null>(null);
   const [savedVersion, setSavedVersion] = useState(0); // bump to refresh the saved list
   const { user } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    setIsAdmin(false);
-    if (user) adminMe().then(setIsAdmin, () => setIsAdmin(false));
-  }, [user]);
   const [login, setLogin] = useState<{ reason: string; resolve: (ok: boolean) => void } | null>(null);
   const canSave = Boolean(features?.saved_stories && authConfigured);
   /** Opens the login dialog; resolves true once signed in (false if dismissed). */
@@ -641,24 +634,6 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
 
   return (
     <div ref={rootRef} style={{ scrollMarginTop: 16 }}>
-      {canSave && (
-        <div className={s.accountBar}>
-          {user ? (
-            <>
-              <span className={s.muted}>Signed in as {user.email}</span>
-              {isAdmin && <Link className={s.linkBtn} href="/admin">Admin dashboard</Link>}
-              <button className={s.linkBtn} onClick={() => void signOut()}>Log out</button>
-            </>
-          ) : (
-            <>
-              <span className={s.muted}>Create and download freely — log in to save Stories.</span>
-              <button className={s.linkBtn} onClick={() => void requestLogin("Log in to keep your Stories in one place.")}>
-                Log in
-              </button>
-            </>
-          )}
-        </div>
-      )}
       {view}
       <LoginDialog
         open={login !== null}

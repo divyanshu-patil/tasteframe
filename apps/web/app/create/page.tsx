@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AccountNav } from "../../components/AccountNav";
 import { StoryMaker } from "../../components/StoryMaker";
 import { TEMPLATE_IDS, type TemplateId } from "../../lib/story/types";
 import styles from "../page.module.css";
@@ -18,7 +19,10 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
       <header className={styles.masthead}>
         <Link href="/" className={styles.homeLink}>← Tasteframe</Link>
         <span className={styles.brand}>Story Studio</span>
-        <Link href="/gallery">Layout gallery</Link>
+        <nav className={styles.nav} aria-label="Main">
+          <Link href="/gallery" className={styles.homeLink}>Layout gallery</Link>
+          <AccountNav />
+        </nav>
       </header>
       <main className={styles.appMain}>
         <StoryMaker preset={preset} />

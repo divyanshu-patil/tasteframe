@@ -24,6 +24,25 @@
   gap: var(--spacing-14);
 }
 
+/* Account links in the navbar (components/AccountNav.tsx). */
+.navBtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.account {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-charcoal);
+}
+
 .brand {
   font-family: var(--font-display);
   font-weight: 600;

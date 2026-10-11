@@ -493,6 +493,8 @@ class StoryConfig(BaseModel):
     focus: Point01 | None = None
     spot: Rect01 | None = None
     tags: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=5)
+    seed: int | None = Field(None, ge=0, le=99)
+    boxFilter: FilterId | None = None  # noqa: N815
 
 
 class StoryProvenance(BaseModel):

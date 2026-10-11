@@ -538,6 +538,8 @@ export function defaultState(id: TemplateId, input: TemplateInput): StoryState {
     ...(TEMPLATES[id].spot ? { spot: TEMPLATES[id].spot!(input) } : {}),
     tags: (input.scene ?? []).slice(0, 5),
     ...(TEMPLATES[id].prop ? { prop: TEMPLATES[id].prop } : {}),
+    ...(TEMPLATES[id].seeded ? { seed: 0 } : {}),
+    ...(TEMPLATES[id].boxFilter ? { boxFilter: TEMPLATES[id].boxFilter } : {}),
     ...rest,
   };
 }
