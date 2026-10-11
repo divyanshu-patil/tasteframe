@@ -14,7 +14,7 @@ describe("editor reducer", () => {
     expect(s.headline.text).toBe("new words");
     expect(s.headline.align).toBe("center");
     s = editorReducer(s, { type: "text", key: "caption", patch: { size: 9999, color: "#ffffff" } });
-    expect(s.caption.size).toBe(240);
+    expect(s.caption.size).toBe(600);
     expect(s.caption.color).toBe("#ffffff");
     expect(s0.headline.text).toBe("hello"); // immutable
   });
@@ -22,8 +22,8 @@ describe("editor reducer", () => {
   it("clamps moves and crop", () => {
     const s = editorReducer(s0, { type: "move", key: "caption", x: -1, y: 4 });
     expect(s.caption).toMatchObject({ x: 0, y: 0.97 });
-    const c = editorReducer(s0, { type: "crop", patch: { zoom: 10, x: 2, y: -1 } });
-    expect(c.crop).toEqual({ zoom: 4, x: 1, y: 0, fit: "cover" });
+    const c = editorReducer(s0, { type: "crop", patch: { zoom: 50, x: 2, y: -1 } });
+    expect(c.crop).toEqual({ zoom: 10, x: 1, y: 0, fit: "cover" });
     expect(editorReducer(s0, { type: "crop", patch: { fit: "contain" } }).crop.fit).toBe("contain");
   });
 
@@ -67,8 +67,8 @@ describe("filters & stickers in the editor", () => {
   it("adds, moves (clamped), rescales, and removes stickers", () => {
     const sticker = { id: "a", kind: "star" as const, x: 0.5, y: 0.5, scale: 1, rotate: 0, color: "#d9a62e" };
     let s = editorReducer(s0, { type: "sticker-add", sticker });
-    s = editorReducer(s, { type: "sticker", id: "a", patch: { x: 5, scale: 9, rotate: -30 } });
-    expect(s.stickers[0]).toMatchObject({ x: 1, scale: 5, rotate: 330 });
+    s = editorReducer(s, { type: "sticker", id: "a", patch: { x: 5, scale: 99, rotate: -30 } });
+    expect(s.stickers[0]).toMatchObject({ x: 1, scale: 12, rotate: 330 });
     // Switching layout keeps stickers; reset clears them.
     expect(editorReducer(s, { type: "template", id: "vinyl", input }).stickers).toHaveLength(1);
     expect(editorReducer(s, { type: "reset", input }).stickers).toHaveLength(0);

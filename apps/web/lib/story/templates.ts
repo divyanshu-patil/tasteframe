@@ -572,7 +572,7 @@ export function makeSlots(photos: Photo[], s: StoryState, masks: (Mask | null)[]
       const v = s.views?.[key];
       if (!v) return c;
       const cl = (n: number) => Math.min(1, Math.max(0, n));
-      return { ...c, zoom: Math.max(1, Math.min(6, c.zoom * v.zoom)), x: cl(c.x + v.dx), y: cl(c.y + v.dy) };
+      return { ...c, zoom: Math.max(1, Math.min(10, c.zoom * v.zoom)), x: cl(c.x + v.dx), y: cl(c.y + v.dy) };
     },
     mask: (i) => {
       const m = masks[(order[i] ?? i) % n];

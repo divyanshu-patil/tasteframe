@@ -652,6 +652,8 @@ export interface Likes {
   counts: Partial<Record<TemplateId, number>>;
   liked: TemplateId[];
   fresh: TemplateId[];
+  /** ISO date each layout was added. */
+  added: Partial<Record<TemplateId, string>>;
 }
 const isLayout = (x: unknown): x is TemplateId => (TEMPLATE_IDS as readonly unknown[]).includes(x);
 
@@ -679,6 +681,9 @@ export async function getLikes(visitor: string): Promise<Likes> {
     counts,
     liked: Array.isArray(v.liked) ? v.liked.filter(isLayout) : [],
     fresh: Array.isArray(v.new) ? v.new.filter(isLayout) : [],
+    added: isObj(v.added)
+      ? Object.fromEntries(Object.entries(v.added).filter(([k, d]) => isLayout(k) && isStr(d) && /^\d{4}-\d{2}-\d{2}$/.test(d)))
+      : {},
   };
 }
 

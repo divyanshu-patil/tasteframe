@@ -6,7 +6,7 @@ import { visitorId } from "./analytics";
 import { supabase } from "./auth";
 import type { TemplateId } from "./story/types";
 
-const EMPTY: Likes = { enabled: false, counts: {}, liked: [], fresh: [] };
+const EMPTY: Likes = { enabled: false, counts: {}, liked: [], fresh: [], added: {} };
 let state: Likes = EMPTY;
 let loading: Promise<void> | null = null;
 let watching = false;

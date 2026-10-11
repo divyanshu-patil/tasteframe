@@ -105,6 +105,11 @@ export function onAssetLoaded(cb: () => void): () => void {
   return () => listeners.delete(cb);
 }
 
+/** Tell canvases a lazily loaded asset (prop photo, web font) is ready. */
+export function assetLoaded(): void {
+  listeners.forEach((f) => f());
+}
+
 export function propReady(id: string): Promise<HTMLImageElement | null> {
   if (typeof Image === "undefined") return Promise.resolve(null);
   let p = props.get(id);
@@ -115,7 +120,7 @@ export function propReady(id: string): Promise<HTMLImageElement | null> {
       const img = new Image();
       img.onload = () => {
         loadedProps.set(id, img);
-        listeners.forEach((f) => f());
+        assetLoaded();
         resolve(img);
       };
       img.onerror = () => resolve(null);

@@ -46,7 +46,8 @@ describe("layout-placed elements", () => {
 
   it("outline width is configurable and clamped", () => {
     const s = editorReducer(defaultState("cutout", input), { type: "outline", patch: { width: 99, color: "#ff0000" } });
-    expect(s.outline).toEqual({ show: true, color: "#ff0000", width: 40, margin: 0 });
+    expect(s.outline).toEqual({ show: true, color: "#ff0000", width: 99, margin: 0 }); // past the slider via +
+    expect(editorReducer(s, { type: "outline", patch: { width: 999 } }).outline!.width).toBe(120);
   });
 });
 
@@ -68,7 +69,8 @@ describe("layout variations and box looks", () => {
     const { renderStory } = await import("./templates");
     const s = defaultState("doodlefit", input);
     expect(s.seed).toBe(0);
-    expect(editorReducer(s, { type: "seed", seed: 250 }).seed).toBe(99);
+    expect(editorReducer(s, { type: "seed", seed: 250 }).seed).toBe(250);
+    expect(editorReducer(s, { type: "seed", seed: 1e6 }).seed).toBe(9999);
     expect(editorReducer(defaultState("cutout", input), { type: "seed", seed: 5 }).seed).toBeUndefined();
     const photo = { width: 1200, height: 1600 } as unknown as CanvasImageSource & { width: number; height: number };
     const seqs = new Set(
@@ -93,8 +95,33 @@ describe("doodle line controls", () => {
   it("distance and thickness are adjustable and clamped", () => {
     const s = defaultState("doodlefit", input);
     expect(s.lines).toEqual({ gap: 40, width: 9 });
-    const far = editorReducer(s, { type: "lines", patch: { gap: 500, width: 1 } });
-    expect(far.lines).toEqual({ gap: 160, width: 2 });
+    const far = editorReducer(s, { type: "lines", patch: { gap: 900, width: 0 } });
+    expect(far.lines).toEqual({ gap: 400, width: 1 });
     expect(editorReducer(defaultState("cutout", input), { type: "lines", patch: { gap: 10 } }).lines).toBeUndefined();
+  });
+});
+
+describe("fonts", () => {
+  it("a Google Font overrides the layout font until the layout changes", async () => {
+    const { drawText } = await import("./draw");
+    const { fakeCtx } = await import("./fakeCtx");
+    let s = defaultState("songbox", input);
+    s = editorReducer(s, { type: "text", key: "headline", patch: { family: "Bebas Neue" } });
+    expect(s.headline.family).toBe("Bebas Neue");
+    const f = fakeCtx();
+    drawText(f.ctx, s.headline);
+    expect(String(f.ctx.font)).toContain('"Bebas Neue"');
+    // Bad names and "layout default" clear it; switching layouts restores that layout's font.
+    expect(editorReducer(s, { type: "text", key: "headline", patch: { family: "x<script>" } }).headline.family).toBeUndefined();
+    expect(editorReducer(s, { type: "text", key: "headline", patch: { family: undefined } }).headline).not.toHaveProperty("family");
+    const next = editorReducer(s, { type: "template", id: "cutout", input });
+    expect(next.headline.family).toBeUndefined();
+    expect(next.headline.font).toBe(defaultState("cutout", input).headline.font);
+  });
+
+  it("text can be sized past the slider with + (up to 600px)", () => {
+    const s = defaultState("songbox", input);
+    expect(editorReducer(s, { type: "text", key: "headline", patch: { size: 320 } }).headline.size).toBe(320);
+    expect(editorReducer(s, { type: "text", key: "headline", patch: { size: 5000 } }).headline.size).toBe(600);
   });
 });

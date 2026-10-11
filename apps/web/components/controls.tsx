@@ -17,7 +17,8 @@ export function Section({ title, hint, open, children }: { title: string; hint?:
   );
 }
 
-/** Range slider with a readout and −/+ buttons for precise steps. */
+/** Range slider with a readout and −/+ buttons for precise steps. The slider covers the usual
+ *  range; −/+ keep going past it (the editor state has its own, wider limits). */
 export function Slider({
   label,
   value,
@@ -38,14 +39,15 @@ export function Slider({
   nudge?: number;
 }) {
   const id = useId();
-  const set = (v: number) => onChange(Math.min(max, Math.max(min, Number(v.toFixed(4)))));
+  const round = (v: number) => Number(v.toFixed(4));
+  const set = (v: number) => onChange(Math.min(max, Math.max(min, round(v))));
   return (
     <div className={s.slider}>
       <label htmlFor={id}>{label}</label>
       <output htmlFor={id}>{format(value)}</output>
-      <button type="button" aria-label={`Decrease ${label}`} onClick={() => set(value - nudge)}>−</button>
-      <input id={id} type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(Number(e.target.value))} />
-      <button type="button" aria-label={`Increase ${label}`} onClick={() => set(value + nudge)}>+</button>
+      <button type="button" aria-label={`Decrease ${label}`} onClick={() => onChange(round(value - nudge))}>−</button>
+      <input id={id} type="range" min={min} max={max} step={step} value={Math.min(max, Math.max(min, value))} onChange={(e) => set(Number(e.target.value))} />
+      <button type="button" aria-label={`Increase ${label}`} onClick={() => onChange(round(value + nudge))}>+</button>
     </div>
   );
 }

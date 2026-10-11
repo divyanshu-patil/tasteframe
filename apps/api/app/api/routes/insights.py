@@ -22,7 +22,13 @@ from app.schemas.api import (
 )
 from app.services.insights import likes, pins
 from app.services.insights.rest import rest
-from app.services.recommendations.layouts import TEMPLATES_BY_ID, new_layout_ids
+from app.services.recommendations.layouts import (
+    ADDED,
+    CATALOGUE,
+    LAUNCH,
+    TEMPLATES_BY_ID,
+    new_layout_ids,
+)
 
 router = APIRouter(prefix="/v1", tags=["insights"])
 HOST_RE = re.compile(r"^[a-z0-9.-]{1,120}$")
@@ -77,8 +83,9 @@ async def layout_likes(
 ) -> LikesOut:
     """Like counts for every layout, which of them this visitor/account liked, and what's new."""
     new = new_layout_ids()
+    added = {t.id: ADDED.get(t.id, LAUNCH).isoformat() for t in CATALOGUE}
     if not settings.supabase_enabled:
-        return LikesOut(enabled=False, counts={}, liked=[], new=new)
+        return LikesOut(enabled=False, counts={}, liked=[], new=new, added=added)
     counts = await likes.like_counts(settings)
     try:
         mine = await likes.my_likes(
@@ -87,7 +94,13 @@ async def layout_likes(
     except AppError:
         mine = []
     known = set(TEMPLATES_BY_ID)
-    return LikesOut(enabled=True, counts=counts, liked=[x for x in mine if x in known], new=new)  # type: ignore[misc]
+    return LikesOut(
+        enabled=True,
+        counts=counts,
+        liked=[x for x in mine if x in known],  # type: ignore[misc]
+        new=new,  # type: ignore[arg-type]
+        added=added,
+    )
 
 
 @router.post(

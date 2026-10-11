@@ -117,6 +117,8 @@ export interface TextLayer {
   y: number; // 0..1 top of the text block
   width: number; // 0..1 max line width
   font: FontRole;
+  /** A Google Font chosen in the editor; unset = the layout's own font for `font`. */
+  family?: string;
 }
 
 export interface Crop {

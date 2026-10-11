@@ -231,7 +231,7 @@ sessions or expired Stories.
   - Only Pinterest hosts are contacted, and `pin.it` redirects must stay on Pinterest.
 - `POST /v1/layout-requests`: `{pin_url, note?, email?, visitor?, referrer?, device?}` returns
   201. The pin is verified first. 429 `REQUEST_LIMIT` after 10 per visitor per day.
-- `GET /v1/layouts/likes?visitor=` returns `{enabled, counts: {layout: n}, liked: [layout], new:
+- `GET /v1/layouts/likes?visitor=` returns `{enabled, counts: {layout: n}, liked: [layout], added: {layout: ISO date}, new:
   [layout]}`. `liked` is for the signed-in account (Bearer token) or else this browser's visitor id
   (HMAC-hashed). `enabled` is false when Supabase isn't configured.
 - `POST /v1/layouts/{layout}/like`: `{visitor, liked}` returns `{layout, likes, liked}`. One like

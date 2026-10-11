@@ -2,6 +2,7 @@
 import type { CoverState } from "./cover";
 import type { FilterId } from "./filters";
 import type { Sticker } from "./stickers";
+import { FAMILY_RE } from "./fonts";
 import { TEMPLATES, defaultState } from "./templates";
 import type { StoryState, TemplateId, TemplateInput, TextKey, TextLayer } from "./types";
 
@@ -41,7 +42,9 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
   switch (a.type) {
     case "text": {
       const next = { ...s[a.key], ...a.patch };
-      next.size = clamp(next.size, 12, 240);
+      next.size = clamp(next.size, 8, 600);
+      next.width = clamp(next.width, 0.1, 2);
+      if (!next.family || !FAMILY_RE.test(next.family)) delete next.family; // back to the layout font
       return { ...s, [a.key]: next };
     }
     case "move":
@@ -51,7 +54,7 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
       const cur = slot === 0 ? s.crop : (s.crops?.[slot - 1] ?? s.crop);
       const c = { ...cur, ...a.patch };
       const rot = ([0, 90, 180, 270] as const).find((r) => r === (((c.rot ?? 0) % 360) + 360) % 360) ?? 0;
-      const next = { zoom: clamp(c.zoom, 1, 4), x: clamp(c.x, 0, 1), y: clamp(c.y, 0, 1), fit: c.fit === "contain" ? "contain" : "cover", ...(rot ? { rot } : {}) } as const;
+      const next = { zoom: clamp(c.zoom, 1, 10), x: clamp(c.x, 0, 1), y: clamp(c.y, 0, 1), fit: c.fit === "contain" ? "contain" : "cover", ...(rot ? { rot } : {}) } as const;
       if (slot === 0) return { ...s, crop: next };
       const crops = [...(s.crops ?? [])];
       while (crops.length < slot) crops.push({ zoom: 1, x: 0.5, y: 0.5, fit: "cover" });
@@ -75,17 +78,17 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
     case "lines": {
       if (!s.lines) return s;
       const l = { ...s.lines, ...a.patch };
-      return { ...s, lines: { gap: clamp(Math.round(l.gap), 0, 160), width: clamp(Math.round(l.width), 2, 30) } };
+      return { ...s, lines: { gap: clamp(Math.round(l.gap), 0, 400), width: clamp(Math.round(l.width), 1, 80) } };
     }
     case "seed":
-      return s.seed === undefined ? s : { ...s, seed: clamp(Math.round(a.seed), 0, 99) };
+      return s.seed === undefined ? s : { ...s, seed: clamp(Math.round(a.seed), 0, 9999) };
     case "sticker-add":
       return { ...s, stickers: [...(s.stickers ?? []), a.sticker].slice(-24) };
     case "sticker": {
       const stickers = (s.stickers ?? []).map((st) => {
         if (st.id !== a.id) return st;
         const n = { ...st, ...a.patch };
-        return { ...n, x: clamp(n.x, 0, 1), y: clamp(n.y, 0, 1), scale: clamp(n.scale, 0.3, 5), rotate: ((n.rotate % 360) + 360) % 360 };
+        return { ...n, x: clamp(n.x, 0, 1), y: clamp(n.y, 0, 1), scale: clamp(n.scale, 0.1, 12), rotate: ((n.rotate % 360) + 360) % 360 };
       });
       return { ...s, stickers };
     }
@@ -110,11 +113,11 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
     case "cover": {
       if (!s.cover) return s;
       const c = { ...s.cover, ...a.patch };
-      return { ...s, cover: { ...c, x: clamp(c.x, 0, 1), y: clamp(c.y, 0, 1), scale: clamp(c.scale, 0.3, 4), rotate: clamp(c.rotate, -180, 180) } };
+      return { ...s, cover: { ...c, x: clamp(c.x, 0, 1), y: clamp(c.y, 0, 1), scale: clamp(c.scale, 0.1, 10), rotate: clamp(c.rotate, -180, 180) } };
     }
     case "outline": {
       const o = { show: true, color: "#ffffff", width: 14, margin: 0, ...s.outline, ...a.patch };
-      return { ...s, outline: { ...o, width: clamp(o.width, 0, 40), margin: clamp(o.margin ?? 0, 0, 60) } };
+      return { ...s, outline: { ...o, width: clamp(o.width, 0, 120), margin: clamp(o.margin ?? 0, 0, 200) } };
     }
     case "spot": {
       if (!s.spot) return s;
@@ -148,7 +151,7 @@ export function editorReducer(s: StoryState, a: EditorAction): StoryState {
       views[a.key] = {
         dx: clamp(v.dx + (a.dx ?? 0), -1, 1),
         dy: clamp(v.dy + (a.dy ?? 0), -1, 1),
-        zoom: clamp(v.zoom * (a.zoom ?? 1), 0.5, 4),
+        zoom: clamp(v.zoom * (a.zoom ?? 1), 0.25, 10),
       };
       return { ...s, views };
     }

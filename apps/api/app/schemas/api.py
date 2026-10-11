@@ -358,17 +358,18 @@ class FeaturesOut(BaseModel):
 
 class TextLayerConfig(BaseModel):
     text: str = Field(max_length=160)
-    size: float = Field(ge=12, le=240)
+    size: float = Field(ge=8, le=600)
     color: str = Field(pattern=HEX)
     align: Literal["left", "center", "right"]
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
-    width: float = Field(gt=0, le=1)
+    width: float = Field(gt=0, le=2)
     font: Literal["display", "serif", "sans", "hand", "mono", "italic"]
+    family: str | None = Field(None, pattern=r"^[A-Za-z0-9 ]{2,40}$")  # a Google Font name
 
 
 class CropConfig(BaseModel):
-    zoom: float = Field(ge=1, le=4)
+    zoom: float = Field(ge=1, le=10)
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
     fit: Literal["cover", "contain"] = "cover"
@@ -382,7 +383,7 @@ class StickerConfig(BaseModel):
     kind: StickerKind
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
-    scale: float = Field(ge=0.3, le=5)
+    scale: float = Field(ge=0.1, le=12)
     rotate: float = Field(ge=0, lt=360)
     color: str = Field(pattern=HEX)
     text: str | None = Field(None, max_length=40)
@@ -424,7 +425,7 @@ class ViewTweak(BaseModel):
 
     dx: float = Field(ge=-1, le=1)
     dy: float = Field(ge=-1, le=1)
-    zoom: float = Field(ge=0.5, le=4)
+    zoom: float = Field(ge=0.25, le=10)
 
 
 class PanelTrack(BaseModel):
@@ -443,8 +444,8 @@ class OutlineConfig(BaseModel):
 
     show: bool
     color: str = Field(pattern=HEX)
-    width: float = Field(ge=0, le=40)
-    margin: float = Field(0, ge=0, le=60)
+    width: float = Field(ge=0, le=120)
+    margin: float = Field(0, ge=0, le=200)
 
 
 class LinesConfig(BaseModel):
@@ -452,8 +453,8 @@ class LinesConfig(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    gap: float = Field(ge=0, le=160)
-    width: float = Field(ge=2, le=30)
+    gap: float = Field(ge=0, le=400)
+    width: float = Field(ge=1, le=80)
 
 
 class CoverConfig(BaseModel):
@@ -464,7 +465,7 @@ class CoverConfig(BaseModel):
     show: bool
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
-    scale: float = Field(ge=0.3, le=4)
+    scale: float = Field(ge=0.1, le=10)
     rotate: float = Field(ge=-180, le=180)
     style: Literal["ig", "igpill", "igart"]
     textColor: str | None = Field(None, pattern=HEX)  # noqa: N815
@@ -504,7 +505,7 @@ class StoryConfig(BaseModel):
     focus: Point01 | None = None
     spot: Rect01 | None = None
     tags: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=5)
-    seed: int | None = Field(None, ge=0, le=99)
+    seed: int | None = Field(None, ge=0, le=9999)
     lines: LinesConfig | None = None
     boxFilter: FilterId | None = None  # noqa: N815
 
@@ -576,6 +577,7 @@ class LikesOut(BaseModel):
     counts: dict[str, int]
     liked: list[LayoutId]  # by this visitor / account
     new: list[LayoutId]  # recently added layouts
+    added: dict[str, str]  # ISO date each layout joined the catalogue (gallery "Newest" sort)
 
 
 class LikeIn(BaseModel):

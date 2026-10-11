@@ -1,4 +1,5 @@
 // Canvas drawing primitives shared by templates. Pure: same inputs → same pixels.
+import { familyFont } from "./fonts";
 import type { FontRole, Rect, StoryState, TextLayer } from "./types";
 import { STORY_H, STORY_W } from "./types";
 
@@ -38,6 +39,11 @@ export function fontStack(role: FontRole): string {
 
 export function fontString(role: FontRole, size: number): string {
   return `${WEIGHT[role]} ${Math.round(size)}px ${fontStack(role)}`;
+}
+
+/** A text layer's font: its chosen Google Font (layout font as fallback) or the layout font. */
+function layerFont(layer: TextLayer, size: number): string {
+  return layer.family ? familyFont(layer.family, layer.font, size, fontStack(layer.font)) : fontString(layer.font, size);
 }
 
 /** Seeded PRNG (mulberry32) so decorative randomness is identical in preview and export. */
@@ -171,7 +177,7 @@ export function drawText(ctx: Ctx, layer: TextLayer, opts: TextOpts = {}): Rect 
     return { x: layer.x * STORY_W, y: layer.y * STORY_H, w: 0, h: 0 };
   }
   ctx.save();
-  ctx.font = fontString(layer.font, layer.size);
+  ctx.font = layerFont(layer, layer.size);
   if ("letterSpacing" in ctx) {
     const em = opts.tracking ?? (layer.font === "display" || layer.font === "sans" ? -0.03 : 0);
     ctx.letterSpacing = `${(em * layer.size).toFixed(1)}px`;
@@ -185,7 +191,7 @@ export function drawText(ctx: Ctx, layer: TextLayer, opts: TextOpts = {}): Rect 
     const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
     if (widest > maxW) {
       layer = { ...layer, size: Math.max(12, Math.floor(layer.size * (maxW / widest) * 0.99)) };
-      ctx.font = fontString(layer.font, layer.size);
+      ctx.font = layerFont(layer, layer.size);
       if (!opts.oneLine) lines = wrap(ctx, layer.text, maxW);
     }
   }

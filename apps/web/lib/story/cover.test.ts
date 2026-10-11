@@ -25,7 +25,7 @@ describe("song cover", () => {
     renderStory(f.ctx, photo, s);
     expect(f.texts).toContain("golden hour");
     const moved = editorReducer(s, { type: "cover", patch: { x: 2, scale: 99 } });
-    expect(moved.cover).toMatchObject({ x: 1, scale: 4 });
+    expect(moved.cover).toMatchObject({ x: 1, scale: 10 });
   });
 
   it("keeps the chosen song and a user-placed cover across layout switches", () => {

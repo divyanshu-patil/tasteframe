@@ -6,12 +6,13 @@ import type { Photo } from "../lib/story/draw";
 import { type EditorAction, editorReducer } from "../lib/story/editor";
 import { exportFilename, exportPng } from "../lib/story/export";
 import { FILTERS } from "../lib/story/filters";
+import { FAMILY_RE, GOOGLE_FONTS, ROLE_FONTS, fontFailed } from "../lib/story/fonts";
 import { LAYOUT_GROUPS, groupOf } from "../lib/story/groups";
 import { pinsFor } from "../lib/story/pins";
 import type { Selection } from "../lib/story/selection";
 import { STICKER_KINDS, type Sticker, newSticker } from "../lib/story/stickers";
 import { TEMPLATES, layoutBoxes, slotRectsFor } from "../lib/story/templates";
-import type { Align, Crop, FontRole, StoryState, TemplateId, TemplateInput, TextKey } from "../lib/story/types";
+import type { Align, Crop, FontRole, StoryState, TemplateId, TemplateInput, TextKey, TextLayer } from "../lib/story/types";
 import { CoverPanel, useCoverImage, useTrackArt } from "./CoverPanel";
 import { CutoutRefiner } from "./CutoutRefiner";
 import { ModelProgress } from "./ModelProgress";
@@ -629,12 +630,11 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           <textarea className={s.input} rows={2} maxLength={160} value={layer.text} onChange={(e) => dispatch({ type: "text", key: k, patch: { text: e.target.value } })} />
         </label>
         <div className={s.grid2}>
-          <label className={s.field}>
-            <span>Typeface</span>
-            <select className={s.select} value={layer.font} onChange={(e) => dispatch({ type: "text", key: k, patch: { font: e.target.value as FontRole } })}>
-              {FONTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-            </select>
-          </label>
+          <FontPicker
+            layer={layer}
+            layoutRole={TEMPLATES[story.templateId].defaults(input(story.templateId))[k].font}
+            onChange={(patch) => dispatch({ type: "text", key: k, patch })}
+          />
           <ColorField label="Colour" value={layer.color} onChange={(v) => dispatch({ type: "text", key: k, patch: { color: v } })} />
         </div>
         <Slider label="Size" value={layer.size} min={14} max={240} step={1} nudge={2} format={px} onChange={(v) => dispatch({ type: "text", key: k, patch: { size: v } })} />
@@ -805,4 +805,67 @@ function nextProp(cur?: string): string {
 /** How many elements this layout places by default (to offer restoring deleted ones). */
 function defaultElCount(s: StoryState, input: (id: TemplateId) => TemplateInput): number {
   return TEMPLATES[s.templateId].stickers?.(input(s.templateId)).length ?? 0;
+}
+
+/** One font menu: the layout's own fonts (its default first), curated Google Fonts, or any
+ *  Google Font typed in. Switching layouts goes back to that layout's font. */
+function FontPicker({ layer, layoutRole, onChange }: { layer: TextLayer; layoutRole: FontRole; onChange: (p: Partial<TextLayer>) => void }) {
+  const [typing, setTyping] = useState(false);
+  const [name, setName] = useState("");
+  const custom = layer.family && !GOOGLE_FONTS.some((f) => f.family === layer.family) ? layer.family : null;
+  const value = layer.family ? `g:${layer.family}` : layer.font === layoutRole ? "default" : `r:${layer.font}`;
+  const groups = [...new Set(GOOGLE_FONTS.map((f) => f.group))];
+  const pick = (v: string) => {
+    if (v === "other") return setTyping(true);
+    setTyping(false);
+    if (v === "default") onChange({ font: layoutRole, family: undefined });
+    else if (v.startsWith("r:")) onChange({ font: v.slice(2) as FontRole, family: undefined });
+    else onChange({ family: v.slice(2) });
+  };
+  const apply = () => {
+    const f = name.trim().replace(/\s+/g, " ");
+    if (FAMILY_RE.test(f)) {
+      onChange({ family: f });
+      setTyping(false);
+    }
+  };
+  return (
+    <div className={s.field}>
+      <label className={s.field}>
+        <span>Font</span>
+        <select className={s.select} value={typing ? "other" : value} onChange={(e) => pick(e.target.value)}>
+          <optgroup label="This layout">
+            <option value="default">Layout default — {ROLE_FONTS[layoutRole]}</option>
+            {FONTS.filter((f) => f.id !== layoutRole).map((f) => (
+              <option key={f.id} value={`r:${f.id}`}>{f.label} — {ROLE_FONTS[f.id]}</option>
+            ))}
+          </optgroup>
+          {groups.map((g) => (
+            <optgroup key={g} label={`Google Fonts · ${g}`}>
+              {GOOGLE_FONTS.filter((f) => f.group === g).map((f) => (
+                <option key={f.family} value={`g:${f.family}`}>{f.family}</option>
+              ))}
+            </optgroup>
+          ))}
+          {custom && <option value={`g:${custom}`}>{custom}</option>}
+          <option value="other">Other Google Font…</option>
+        </select>
+      </label>
+      {typing && (
+        <div className={s.row}>
+          <input
+            className={s.input}
+            value={name}
+            maxLength={40}
+            placeholder="e.g. Space Grotesk"
+            aria-label="Google Font name"
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && apply()}
+          />
+          <button type="button" className={s.secondary} disabled={!FAMILY_RE.test(name.trim())} onClick={apply}>Use</button>
+        </div>
+      )}
+      {layer.family && fontFailed(layer.family) && <p className={s.error}>Google Fonts has no “{layer.family}” — showing the layout font instead.</p>}
+    </div>
+  );
 }

@@ -7,6 +7,8 @@ import { type Pin, PINS, pinsFor } from "../lib/story/pins";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
 import type { TemplateId } from "../lib/story/types";
 import { LikeButton, NewBadge } from "./LikeButton";
+import { Segmented } from "./controls";
+import { useLikes } from "../lib/likes";
 import { PinSource } from "./PinSource";
 import { track } from "../lib/analytics";
 import { StoryCanvas } from "./StoryCanvas";
@@ -51,9 +53,27 @@ export function Gallery({ focus }: { focus?: TemplateId }) {
     }
   }, []);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<"group" | "liked" | "new">("group");
+  const likes = useLikes();
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   const matches = (text: string) => terms.every((t) => text.includes(t));
-  const groups = LAYOUT_GROUPS.map((g) => ({ ...g, ids: g.ids.filter((id) => matches(layoutText(id, g.name))) })).filter((g) => g.ids.length);
+  const byGroup = LAYOUT_GROUPS.map((g) => ({ ...g, ids: g.ids.filter((id) => matches(layoutText(id, g.name))) })).filter((g) => g.ids.length);
+  // "Most liked" / "Newest" show one flat list; ties keep the gallery's group order.
+  const flat = byGroup.flatMap((g) => g.ids);
+  const groups =
+    sort === "group"
+      ? byGroup
+      : flat.length
+        ? [{
+            id: sort,
+            name: sort === "liked" ? "Most liked" : "Newest",
+            ids: [...flat].sort((a, b) =>
+              sort === "liked"
+                ? (likes.counts[b] ?? 0) - (likes.counts[a] ?? 0)
+                : (likes.added[b] ?? "").localeCompare(likes.added[a] ?? ""),
+            ),
+          }]
+        : [];
   const refs = (focus ? [...pinsFor(focus), ...PINS.filter((p) => !p.layouts.includes(focus))] : PINS).filter((p) => matches(pinText(p)));
 
   return (
@@ -75,6 +95,18 @@ export function Gallery({ focus }: { focus?: TemplateId }) {
         placeholder={tab === "layouts" ? "Search layouts — cutout, song, film, phones…" : "Search pins — creator or layout name"}
         aria-label={tab === "layouts" ? "Search layouts" : "Search Pinterest references"}
       />
+      {tab === "layouts" && (
+        <Segmented
+          label="Sort layouts"
+          value={sort}
+          options={[
+            { id: "group", label: "By type" },
+            ...(likes.enabled ? [{ id: "liked" as const, label: "Most liked" }] : []),
+            { id: "new", label: "Newest" },
+          ]}
+          onChange={setSort}
+        />
+      )}
       {tab === "layouts" ? (
         groups.length === 0 ? (
           <p className={s.small}>No layouts match “{query}”.</p>

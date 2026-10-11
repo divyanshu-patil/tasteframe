@@ -220,7 +220,7 @@ def test_rejects_invalid_config(setup):
     key = upload(client, h, make_image())
     assert save(client, h, key, {**CONFIG, "accent": "red; background:url(x)"}).status_code == 422
     assert save(client, h, key, {**CONFIG, "html": "<script>"}).status_code == 422
-    assert save(client, h, key, {**CONFIG, "seed": 100}).status_code == 422
+    assert save(client, h, key, {**CONFIG, "seed": 10000}).status_code == 422
     assert save(client, h, key, {**CONFIG, "lines": {"gap": 999, "width": 9}}).status_code == 422
     assert save(client, h, key, {**CONFIG, "boxFilter": "lasers"}).status_code == 422
 
