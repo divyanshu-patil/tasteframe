@@ -426,3 +426,18 @@ textarea.input { width: 100%; resize: vertical; }
 .likeOn > span:first-child { color: #ff7a8a; }
 .newBadge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--color-ember-orange); color: #fff; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; }
 .layoutMeta { display: flex; align-items: center; gap: var(--spacing-10); flex-wrap: wrap; }
+/* Font menu (FontPicker.tsx): names set in their own fonts, hover previews on the Story. */
+.fontPicker { position: relative; display: grid; gap: 4px; grid-column: 1 / -1; }
+.fontLabel { font-size: 15px; }
+.fontButton { display: flex; justify-content: space-between; align-items: center; gap: var(--spacing-10); min-height: 44px; padding: 0 var(--spacing-14); border: 1px solid var(--color-ink-black); border-radius: var(--radius-sm); background: var(--color-paper); color: inherit; font-size: 20px; text-align: left; cursor: pointer; }
+.fontButton > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fontPanel { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; display: grid; background: var(--color-paper); border: 1px solid var(--color-ink-black); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden; }
+.fontPanel > [role="listbox"] { max-height: min(360px, 50vh); overflow-y: auto; overscroll-behavior: contain; padding-bottom: 6px; }
+.fontGroup { position: sticky; top: 0; margin: 0; padding: 8px 14px 4px; background: var(--color-paper); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-charcoal); }
+.fontOption { display: block; width: 100%; min-height: 42px; padding: 6px 14px; border: 0; border-left: 3px solid transparent; background: none; color: inherit; font-size: 21px; line-height: 1.2; text-align: left; cursor: pointer; }
+.fontOption:hover, .fontOption:focus-visible { background: var(--color-bone-cream); outline: none; }
+.fontOption[aria-selected="true"] { border-left-color: var(--color-ember-orange); background: var(--color-bone-cream); }
+.fontSearch { padding: var(--spacing-10); border-bottom: 1px solid var(--color-bone-cream); }
+.fontSearch .input { width: 100%; font-size: 15px; }
+.fontEmpty { margin: 0; padding: 12px 14px; font-size: 15px; color: var(--color-charcoal); }
+.fontMeta { float: right; margin-top: 6px; font-family: var(--font-mono); font-size: 11px; font-style: normal; font-weight: 400; color: var(--color-charcoal); text-transform: uppercase; letter-spacing: 0.04em; }

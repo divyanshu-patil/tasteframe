@@ -6,7 +6,6 @@ import type { Photo } from "../lib/story/draw";
 import { type EditorAction, editorReducer } from "../lib/story/editor";
 import { exportFilename, exportPng } from "../lib/story/export";
 import { FILTERS } from "../lib/story/filters";
-import { FAMILY_RE, GOOGLE_FONTS, ROLE_FONTS, fontFailed } from "../lib/story/fonts";
 import { LAYOUT_GROUPS, groupOf } from "../lib/story/groups";
 import { pinsFor } from "../lib/story/pins";
 import type { Selection } from "../lib/story/selection";
@@ -21,6 +20,7 @@ import { MusicCard } from "./Results";
 import { LikeButton, NewBadge } from "./LikeButton";
 import { PinSource } from "./PinSource";
 import { StoryCanvas } from "./StoryCanvas";
+import { FontPicker } from "./FontPicker";
 import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
 import { useMasks } from "./useMasks";
 import { track } from "../lib/analytics";
@@ -44,14 +44,6 @@ interface Props {
   onAddPhotos?: (files: FileList | null) => Promise<void>;
 }
 
-const FONTS: { id: FontRole; label: string }[] = [
-  { id: "display", label: "Didone" },
-  { id: "serif", label: "Book serif" },
-  { id: "italic", label: "Italic serif" },
-  { id: "sans", label: "Grotesk" },
-  { id: "hand", label: "Handwritten" },
-  { id: "mono", label: "Typewriter" },
-];
 const ACCEPT = "image/jpeg,image/jpg,image/pjpeg,image/png,image/webp,.jpg,.jpeg,.jpe,.jfif,.png,.webp";
 const DEFAULT_VIEW = { dx: 0, dy: 0, zoom: 1 };
 
@@ -78,6 +70,9 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
   const tpl = TEMPLATES[story.templateId];
   const [sel, setSel] = useState<Selection>(null);
   const [textTab, setTextTab] = useState<TextKey>("headline");
+  // Font being hovered in the font menu: shown on the canvas only, not saved or exported.
+  const [fontPreview, setFontPreview] = useState<{ k: TextKey; patch: Partial<TextLayer> } | null>(null);
+  const shown = fontPreview ? { ...story, [fontPreview.k]: { ...story[fontPreview.k], ...fontPreview.patch } } : story;
   const [exporting, setExporting] = useState<"idle" | "busy" | "error" | "done">("idle");
   const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
   const [uploadedCover, setUploadedCover] = useState<Photo | null>(null);
@@ -266,7 +261,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
         <StoryCanvas
           className={s.editorCanvas}
           photo={photos}
-          state={story}
+          state={shown}
           cover={coverImg}
           masks={masks}
           width={width}
@@ -634,6 +629,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
             layer={layer}
             layoutRole={TEMPLATES[story.templateId].defaults(input(story.templateId))[k].font}
             onChange={(patch) => dispatch({ type: "text", key: k, patch })}
+            onPreview={(patch) => setFontPreview(patch ? { k, patch } : null)}
           />
           <ColorField label="Colour" value={layer.color} onChange={(v) => dispatch({ type: "text", key: k, patch: { color: v } })} />
         </div>
@@ -807,65 +803,3 @@ function defaultElCount(s: StoryState, input: (id: TemplateId) => TemplateInput)
   return TEMPLATES[s.templateId].stickers?.(input(s.templateId)).length ?? 0;
 }
 
-/** One font menu: the layout's own fonts (its default first), curated Google Fonts, or any
- *  Google Font typed in. Switching layouts goes back to that layout's font. */
-function FontPicker({ layer, layoutRole, onChange }: { layer: TextLayer; layoutRole: FontRole; onChange: (p: Partial<TextLayer>) => void }) {
-  const [typing, setTyping] = useState(false);
-  const [name, setName] = useState("");
-  const custom = layer.family && !GOOGLE_FONTS.some((f) => f.family === layer.family) ? layer.family : null;
-  const value = layer.family ? `g:${layer.family}` : layer.font === layoutRole ? "default" : `r:${layer.font}`;
-  const groups = [...new Set(GOOGLE_FONTS.map((f) => f.group))];
-  const pick = (v: string) => {
-    if (v === "other") return setTyping(true);
-    setTyping(false);
-    if (v === "default") onChange({ font: layoutRole, family: undefined });
-    else if (v.startsWith("r:")) onChange({ font: v.slice(2) as FontRole, family: undefined });
-    else onChange({ family: v.slice(2) });
-  };
-  const apply = () => {
-    const f = name.trim().replace(/\s+/g, " ");
-    if (FAMILY_RE.test(f)) {
-      onChange({ family: f });
-      setTyping(false);
-    }
-  };
-  return (
-    <div className={s.field}>
-      <label className={s.field}>
-        <span>Font</span>
-        <select className={s.select} value={typing ? "other" : value} onChange={(e) => pick(e.target.value)}>
-          <optgroup label="This layout">
-            <option value="default">Layout default — {ROLE_FONTS[layoutRole]}</option>
-            {FONTS.filter((f) => f.id !== layoutRole).map((f) => (
-              <option key={f.id} value={`r:${f.id}`}>{f.label} — {ROLE_FONTS[f.id]}</option>
-            ))}
-          </optgroup>
-          {groups.map((g) => (
-            <optgroup key={g} label={`Google Fonts · ${g}`}>
-              {GOOGLE_FONTS.filter((f) => f.group === g).map((f) => (
-                <option key={f.family} value={`g:${f.family}`}>{f.family}</option>
-              ))}
-            </optgroup>
-          ))}
-          {custom && <option value={`g:${custom}`}>{custom}</option>}
-          <option value="other">Other Google Font…</option>
-        </select>
-      </label>
-      {typing && (
-        <div className={s.row}>
-          <input
-            className={s.input}
-            value={name}
-            maxLength={40}
-            placeholder="e.g. Space Grotesk"
-            aria-label="Google Font name"
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && apply()}
-          />
-          <button type="button" className={s.secondary} disabled={!FAMILY_RE.test(name.trim())} onClick={apply}>Use</button>
-        </div>
-      )}
-      {layer.family && fontFailed(layer.family) && <p className={s.error}>Google Fonts has no “{layer.family}” — showing the layout font instead.</p>}
-    </div>
-  );
-}

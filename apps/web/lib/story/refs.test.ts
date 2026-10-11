@@ -125,3 +125,16 @@ describe("fonts", () => {
     expect(editorReducer(s, { type: "text", key: "headline", patch: { size: 5000 } }).headline.size).toBe(600);
   });
 });
+
+describe("Google Fonts search", () => {
+  it("matches name prefixes first, then names containing the query, from the full catalogue", async () => {
+    const { loadCatalogue, searchFonts } = await import("./fonts");
+    const all = await loadCatalogue();
+    expect(all.length).toBeGreaterThan(1500);
+    const hits = searchFonts(all, "mono").map((f) => f.family);
+    expect(hits[0]!.toLowerCase().startsWith("mono")).toBe(true);
+    expect(hits).toContain("Roboto Mono");
+    expect(searchFonts(all, "  ")).toEqual([]);
+    expect(searchFonts(all, "zzzzqqq")).toEqual([]);
+  });
+});

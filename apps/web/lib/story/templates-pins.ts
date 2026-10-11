@@ -462,7 +462,7 @@ interface Contour {
   /** Long-axis angle (radians). */
   axis: number;
 }
-const N = 90;
+const N = 180; // 2° rays: narrow parts (a head of hair) aren't missed between them
 const contours = new WeakMap<object, Map<string, Contour | null>>();
 
 /** The person's outer outline as a polar profile, read from the mask at 1/8 scale (cached). */
@@ -508,7 +508,12 @@ function contourOf(mask: Mask | null, crop: Crop): Contour | null {
         }
         return far * S;
       });
-      const r = raw.map((_, k) => [-3, -2, -1, 0, 1, 2, 3].reduce((acc, o) => acc + raw[(k + o + N) % N]!, 0) / 7);
+      // Smooth outwards only: averaging alone pulled the outline into narrow parts like the head.
+      const at = (k: number) => raw[(k + N) % N]!;
+      // Each envelope value covers ±8°, so every window mean is ≥ raw: smooth and still outside.
+      const W8 = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+      const env = raw.map((_, k) => Math.max(...W8.map((o) => at(k + o))));
+      const r = env.map((_, k) => W8.reduce((acc, o) => acc + env[(k + o + N) % N]!, 0) / W8.length);
       out = { cx: cx * S, cy: cy * S, r, axis };
     }
   }
@@ -562,7 +567,9 @@ function doodles(ctx: Ctx, s: StoryState, slots: Slots) {
     const mean = rs.reduce((x, y) => x + y, 0) / rs.length;
     const ends = [at(a - span * deg, gap + 30), at(a + span * deg, gap + 30)];
     if (mean < 60 || ends.some((p) => p.x < 50 || p.x > W - 50 || p.y < 60 || p.y > H - 60)) continue;
-    cands.push({ a, score: (Math.max(...rs) - Math.min(...rs)) / mean + (vary ? r() * 0.5 : 0) });
+    const bumpy = (Math.max(...rs) - Math.min(...rs)) / mean;
+    if (bumpy > 0.6) continue; // a sharp corner: a line there would bend too hard
+    cands.push({ a, score: bumpy + (vary ? r() * 0.5 : 0) });
   }
   const picks: number[] = [];
   for (const { a } of cands.sort((x, y) => x.score - y.score)) {
