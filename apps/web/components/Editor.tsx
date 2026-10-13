@@ -45,7 +45,11 @@ interface Props {
   onSongLogin?: () => Promise<boolean>;
   /** Add photos later to fill a multi-photo layout's empty slots. */
   onAddPhotos?: (files: FileList | null) => Promise<void>;
+  /** Set for guests: changes and non-`suggested` layouts need an account. Resolves true once signed in. */
+  onEditLogin?: (reason: string) => Promise<boolean>;
 }
+
+const EDIT_LOGIN = "Log in to edit this Story — the three suggested layouts download free as they are.";
 
 const ACCEPT = "image/jpeg,image/jpg,image/pjpeg,image/png,image/webp,.jpg,.jpeg,.jpe,.jfif,.png,.webp";
 const DEFAULT_VIEW = { dx: 0, dy: 0, zoom: 1 };
@@ -78,9 +82,12 @@ function download(blob: Blob, name: string) {
 
 const stickerName = (st: Sticker) => STICKER_KINDS.find((k) => k.kind === st.kind)?.label ?? "Sticker";
 
-export function Editor({ photos, story, setStory, input, suggested, music, musicPending = false, onBack, onStartOver, onSave, signedIn = false, onSongLogin, onAddPhotos }: Props) {
+export function Editor({ photos, story, setStory, input, suggested, music, musicPending = false, onBack, onStartOver, onSave, signedIn = false, onSongLogin, onAddPhotos, onEditLogin }: Props) {
   const width = usePreviewWidth();
-  const dispatch = (a: EditorAction) => setStory((cur) => (cur ? editorReducer(cur, a) : cur));
+  const apply = (a: EditorAction) => setStory((cur) => (cur ? editorReducer(cur, a) : cur));
+  /** Guests can look and download; any change asks them to log in first, then goes through. */
+  const edit = (fn: () => void) => (onEditLogin ? void onEditLogin(EDIT_LOGIN).then((ok) => ok && fn()) : fn());
+  const dispatch = (a: EditorAction) => edit(() => apply(a));
   const tpl = TEMPLATES[story.templateId];
   const [sel, setSel] = useState<Selection>(null);
   const [textTab, setTextTab] = useState<TextKey>("headline");
@@ -94,7 +101,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
   // Songs can arrive after the editor opened: put this layout's song on the empty sticker.
   useEffect(() => {
     if (music?.kind === "track" && story.cover && !story.cover.title) {
-      dispatch({ type: "cover", patch: { title: music.title ?? "", artist: music.artist ?? "", trackId: music.track_id ?? undefined } });
+      apply({ type: "cover", patch: { title: music.title ?? "", artist: music.artist ?? "", trackId: music.track_id ?? undefined } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the suggestion changes
   }, [music?.title, music?.artist]);
@@ -157,7 +164,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
   const [adding, setAdding] = useState<{ kind: "idle" | "busy" } | { kind: "error"; msg: string }>({ kind: "idle" });
   const addInput = useRef<HTMLInputElement>(null);
   const addPhotos = async (files: FileList | null) => {
-    if (!onAddPhotos) return;
+    if (!onAddPhotos || (onEditLogin && !(await onEditLogin(EDIT_LOGIN)))) return;
     setAdding({ kind: "busy" });
     try {
       await onAddPhotos(files);
@@ -263,9 +270,13 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
   };
 
   const chooseLayout = (id: TemplateId) => {
-    dispatch({ type: "template", id, input: input(id) });
-    track("layout_open", { layout: id });
-    setSel(null);
+    const go = () => {
+      apply({ type: "template", id, input: input(id) });
+      track("layout_open", { layout: id });
+      setSel(null);
+    };
+    if (!onEditLogin || suggested.includes(id)) return go();
+    void onEditLogin(`Log in to use the ${TEMPLATES[id].name} layout — the three suggested for your photo are free.`).then((ok) => ok && go());
   };
 
   // Everything selectable, so each element is reachable without hunting on the canvas.
@@ -333,7 +344,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
         {tpl.needsMask && masks && <ModelProgress task="cutout" label="Sharpening your cutout" working="Sharpening your cutout on your device…" />}
         {tpl.needsMask && masks && !masks[0] && <p className={s.small} role="status">No person found to cut out, so this layout shows the whole photo. Use Refine cutout to paint one in.</p>}
         {tpl.needsMask && autoMasks && (
-          <button type="button" className={s.linkBtn} onClick={() => setRefining(0)}>Cutout not quite right? Refine it</button>
+          <button type="button" className={s.linkBtn} onClick={() => edit(() => setRefining(0))}>Cutout not quite right? Refine it</button>
         )}
       </div>
 
@@ -370,12 +381,12 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
               <p className={s.small}>Paint to add anything the automatic cutout missed, or erase what it caught by mistake.</p>
               <div className={s.row}>
                 {photos.map((p, i) => (
-                  <button key={i} type="button" className={s.secondary} disabled={!autoMasks} onClick={() => setRefining(i)}>
+                  <button key={i} type="button" className={s.secondary} disabled={!autoMasks} onClick={() => edit(() => setRefining(i))}>
                     {photos.length > 1 ? `Refine photo ${i + 1}` : "Refine cutout"}
                   </button>
                 ))}
                 {photos.some((p) => maskEdits.has(p)) && (
-                  <button type="button" className={s.linkBtn} onClick={() => setMaskEdits(new Map())}>Use the automatic cutout</button>
+                  <button type="button" className={s.linkBtn} onClick={() => edit(() => setMaskEdits(new Map()))}>Use the automatic cutout</button>
                 )}
               </div>
             </div>
@@ -562,7 +573,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
             <CoverPanel
               cover={story.cover}
               onChange={(patch) => dispatch({ type: "cover", patch })}
-              onUpload={setUploadedCover}
+              onUpload={(p) => edit(() => setUploadedCover(p))}
               focus={story.focus ?? { x: story.crop.x, y: story.crop.y }}
               hasImage={Boolean(coverImg)}
               songs={songsOf(music)}
@@ -653,6 +664,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
             <button key={id} className={`${s.chip} ${story.templateId === id ? s.chipOn : ""}`} aria-pressed={story.templateId === id} onClick={() => chooseLayout(id)}>
               {TEMPLATES[id].name}
               {suggested.includes(id) && <span className={s.dot} aria-label="suggested" />}
+              {onEditLogin && !suggested.includes(id) && <span role="img" aria-label="needs login"> 🔒</span>}
             </button>
           ))}
         </div>
@@ -732,7 +744,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
             <button className={s.linkBtn} onClick={() => dispatch({ type: "crop", slot: i, patch: { zoom: 1, x: 0.5, y: 0.5, fit: "cover", rot: 0 } })}>Reset framing</button>
           </div>
           {tpl.needsMask && (
-            <button className={s.secondary} disabled={!autoMasks} onClick={() => setRefining((order[i] ?? i) % photos.length)}>Refine cutout (add / erase)</button>
+            <button className={s.secondary} disabled={!autoMasks} onClick={() => edit(() => setRefining((order[i] ?? i) % photos.length))}>Refine cutout (add / erase)</button>
           )}
         </>
       );

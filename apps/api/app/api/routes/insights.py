@@ -1,4 +1,4 @@
-"""Anonymous usage events, Pinterest pin previews and layout requests (public, rate-limited)."""
+"""Usage events, Pinterest pin previews and layout requests (public, rate-limited)."""
 
 import hashlib
 import hmac
@@ -43,12 +43,35 @@ def visitor_hash(visitor: str, settings: Settings) -> str:
     return hmac.new(key, f"visitor:{visitor}".encode(), hashlib.sha256).hexdigest()[:16]
 
 
+# Android apps open links with an android-app://<package>/ referrer; name the common ones.
+APPS = {
+    "com.whatsapp": "whatsapp",
+    "com.whatsapp.w4b": "whatsapp",
+    "org.telegram.messenger": "telegram",
+    "com.instagram.android": "instagram",
+    "com.facebook.katana": "facebook",
+    "com.facebook.orca": "messenger",
+    "com.snapchat.android": "snapchat",
+    "com.linkedin.android": "linkedin",
+    "com.twitter.android": "x.com",
+    "com.google.android.gm": "gmail",
+    "com.reddit.frontpage": "reddit",
+}
+SOURCE_RE = re.compile(r"^[a-z0-9_-]{2,40}$")
+
+
 def referrer_host(ref: str | None) -> str | None:
-    """Only the referring site's host (no path/query), without www."""
+    """Where a visit came from: the referring site's host (no path/query, no www), an app name
+    (android-app:// referrers, in-app browsers) or a ?utm_source / ?ref tag like "whatsapp"."""
     if not ref:
         return None
-    host = (urlparse(ref if "://" in ref else f"https://{ref}").hostname or "").lower()
-    host = host.removeprefix("www.")
+    ref = ref.strip().lower()
+    if SOURCE_RE.match(ref):
+        return ref
+    url = urlparse(ref if "://" in ref else f"https://{ref}")
+    host = (url.hostname or "").removeprefix("www.")
+    if url.scheme == "android-app":
+        return APPS.get(host, host if HOST_RE.match(host) else None)
     return host if HOST_RE.match(host) and "." in host else None
 
 
@@ -58,7 +81,11 @@ def referrer_host(ref: str | None) -> str | None:
     response_class=Response,
     dependencies=[Depends(rate_limit("events", "rate_limit_events_per_min", 60))],
 )
-async def record_event(body: EventIn, settings: Settings = Depends(get_settings)) -> Response:
+async def record_event(
+    body: EventIn,
+    settings: Settings = Depends(get_settings),
+    user: AuthUser | None = Depends(optional_user),
+) -> Response:
     if settings.supabase_enabled:
         row = {
             "type": body.type,
@@ -69,7 +96,16 @@ async def record_event(body: EventIn, settings: Settings = Depends(get_settings)
             "device": body.device,
         }
         try:
-            await rest(settings, "POST", "/events", body=row, prefer="return=minimal")
+            # Signed in: sent as the user, so the row's user_id defaults to auth.uid() (RLS
+            # only accepts your own id) and the admin "Users" tab can count per account.
+            await rest(
+                settings,
+                "POST",
+                "/events",
+                token=user.token if user else None,
+                body=row,
+                prefer="return=minimal",
+            )
         except AppError:
             pass  # analytics never breaks the app
     return Response(status_code=204)

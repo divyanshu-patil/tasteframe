@@ -1,4 +1,4 @@
-"""Admin dashboard API: analytics summary and the layout-request queue.
+"""Admin dashboard API: analytics summary, per-user stats and the layout-request queue.
 
 Every call runs as the signed-in user against PostgREST; RLS and is_admin() decide access, so
 a non-admin token gets 403 even if this layer were bypassed.
@@ -57,6 +57,19 @@ async def stats(
     if not isinstance(data, dict):
         raise AppError("INSIGHTS_UNAVAILABLE", "Analytics are temporarily unavailable.", 503, True)
     return data
+
+
+@router.get("/users")
+async def users(
+    days: int = Query(30, ge=1, le=365),
+    user: AuthUser = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Accounts ranked by activity in the range, with each one's most-used layouts."""
+    data = await rest(settings, "POST", "/rpc/admin_users", token=user.token, body={"days": days})
+    if not isinstance(data, list):
+        raise AppError("INSIGHTS_UNAVAILABLE", "User stats are temporarily unavailable.", 503, True)
+    return {"users": data}
 
 
 @router.get("/requests", response_model=LayoutRequestList)

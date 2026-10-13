@@ -174,8 +174,9 @@ drop policy if exists "users_select_self_or_admin" on public.users;
 create policy "users_select_self_or_admin" on public.users
     for select to authenticated using (id = (select auth.uid()) or (select public.is_admin()));
 
--- Anonymous usage analytics. No IPs, no user ids, no full URLs: a hashed visitor id (HMAC on
--- the API), the referring site's host only, the page path and a coarse device class.
+-- Usage analytics. No IPs, no full URLs: a hashed visitor id (HMAC on the API), the referring
+-- site's host (or app name) only, the page path and a coarse device class. Events from signed-in
+-- users carry their account id (admin "Users" tab); guests stay anonymous.
 create table if not exists public.events (
     id bigint generated always as identity primary key,
     created_at timestamptz not null default now(),
@@ -186,7 +187,11 @@ create table if not exists public.events (
     layout text check (char_length(layout) <= 32),
     device text check (device in ('mobile', 'tablet', 'desktop'))
 );
+alter table public.events add column if not exists user_id uuid default auth.uid()
+    references auth.users (id) on delete set null;
 create index if not exists events_created_idx on public.events (created_at desc);
+create index if not exists events_user_idx on public.events (user_id, created_at desc)
+    where user_id is not null;
 alter table public.events enable row level security;
 revoke all on table public.events from anon, authenticated;
 grant insert on table public.events to anon, authenticated;
@@ -194,7 +199,7 @@ grant select on table public.events to authenticated;
 drop policy if exists "events_insert_any" on public.events;
 drop policy if exists "events_select_admin" on public.events;
 create policy "events_insert_any" on public.events
-    for insert to anon, authenticated with check (true);
+    for insert to anon, authenticated with check (user_id is null or user_id = (select auth.uid()));
 create policy "events_select_admin" on public.events
     for select to authenticated using ((select public.is_admin()));
 
@@ -311,6 +316,38 @@ end;
 $$;
 revoke all on function public.admin_stats(int) from public;
 grant execute on function public.admin_stats(int) to authenticated;
+
+-- Per-account usage for the admin "Users" tab: most active first, with each one's top layouts.
+create or replace function public.admin_users(days int default 30) returns jsonb
+language plpgsql stable security invoker set search_path = public as $$
+declare
+    since timestamptz := now() - make_interval(days => greatest(1, least(days, 365)));
+begin
+    if not public.is_admin() then
+        raise exception 'NOT_ADMIN' using errcode = '42501';
+    end if;
+    return (select coalesce(jsonb_agg(to_jsonb(x) order by x.events desc, x.last_seen desc nulls last), '[]'::jsonb) from (
+        select u.id, u.email, u.role, u.created_at,
+            max(e.created_at) as last_seen,
+            count(e.id) as events,
+            count(e.id) filter (where e.type = 'pageview') as pageviews,
+            count(e.id) filter (where e.type = 'analysis') as analyses,
+            count(e.id) filter (where e.type = 'layout_open') as layout_opens,
+            count(e.id) filter (where e.type = 'export') as exports,
+            count(e.id) filter (where e.type = 'save') as saves,
+            (select coalesce(jsonb_agg(jsonb_build_object('name', l.layout, 'count', l.n)), '[]'::jsonb) from (
+                select layout, count(*) as n from public.events
+                where user_id = u.id and created_at >= since and layout is not null
+                group by 1 order by 2 desc limit 3) l) as layouts
+        from public.users u
+        left join public.events e on e.user_id = u.id and e.created_at >= since
+        group by u.id
+        order by 6 desc, 5 desc nulls last
+        limit 500) x);
+end;
+$$;
+revoke all on function public.admin_users(int) from public;
+grant execute on function public.admin_users(int) to authenticated;
 
 -- Layout likes: one per signed-in account (u:<uid>) or anonymous visitor (v:<server-hashed id>)
 -- per layout. No direct table access — only the three functions below.

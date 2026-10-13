@@ -15,6 +15,7 @@ import {
   analyze,
   deleteUpload,
   getFeatures,
+  moreLayouts,
   saveStory,
   storyPhoto,
   uploadPhoto,
@@ -89,13 +90,25 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   const [features, setFeatures] = useState<Features | null>(null);
   const [savedVersion, setSavedVersion] = useState(0); // bump to refresh the saved list
   const { user } = useAuth();
-  // Favourites are a signed-in feature (when this deployment has accounts); songs never need one.
-  const favouritesLocked = authConfigured && !user;
+  // With accounts configured, guests get the top 3 layouts as-is; favourites, shuffling, other
+  // layouts and any edit need an account. Songs never do.
+  const guest = authConfigured && !user;
   const [login, setLogin] = useState<{ reason: string; resolve: (ok: boolean) => void } | null>(null);
   const canSave = Boolean(features?.saved_stories && authConfigured);
   /** Opens the login dialog; resolves true once signed in (false if dismissed). */
   const requestLogin = (reason: string) =>
     new Promise<boolean>((resolve) => setLogin({ reason, resolve }));
+  const localIds = photos.length > 1 ? LOCAL_MULTI : LOCAL_SINGLE;
+  /** The top 3 suggestions: the layouts a guest can use. */
+  const freeIds = (a: Analysis | null) => (a ? a.layouts.slice(0, 3).map((l) => l.id) : localIds.slice(0, 3));
+  /** Guests log in first (false if they don't); a guest-run analysis then fetches the layouts the API held back. */
+  const unlock = async (reason: string, a = analysis): Promise<Analysis | null | false> => {
+    if (guest && !(await requestLogin(reason))) return false;
+    if (!a?.locked_layouts) return a;
+    const layouts = await moreLayouts(a.analysis_id);
+    setAnalysis((cur) => (cur?.analysis_id === a.analysis_id ? { ...cur, layouts, locked_layouts: 0 } : cur));
+    return { ...a, layouts, locked_layouts: 0 };
+  };
   const runId = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -274,7 +287,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           object_keys: keys,
           manual_mood: moods,
           music_language: language,
-          taste_seeds: (favouritesLocked ? [] : seeds).map(({ entity_id, entity_type, name }) => ({
+          taste_seeds: (guest ? [] : seeds).map(({ entity_id, entity_type, name }) => ({
             entity_id,
             entity_type,
             name,
@@ -296,7 +309,11 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
       track("analysis");
       const date = new Date();
       setStoryDate(date);
-      if (preset) {
+      if (preset && guest && !freeIds(result).includes(preset)) {
+        // Not one of this photo's free three: show them, then ask to log in for this one.
+        setPhase("results");
+        void openEditor(preset, result);
+      } else if (preset) {
         track("layout_open", { layout: preset });
         // Picked from the gallery: go straight to that layout, personalised by the analysis.
         const layout = result.layouts.find((l) => l.id === preset) ?? result.layouts[0] ?? null;
@@ -336,19 +353,25 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     const date = new Date();
     setStoryDate(date);
     setRunError(null);
-    if (preset) {
+    if (preset && guest && !freeIds(null).includes(preset)) {
+      setPhase("results");
+      void openEditor(preset, null);
+    } else if (preset) {
       setStory(defaultState(preset, inputFor(null, null, date)));
       setPhase("edit");
       nav("edit", preset, "replace");
     } else setPhase("results");
   };
 
-  const openEditor = (id: TemplateId) => {
-    const layout =
-      analysis?.layouts.find((l) => l.id === id) ??
-      analysis?.layouts[0] ??
-      null;
-    setStory(defaultState(id, inputFor(layout, analysis, storyDate)));
+  const openEditor = async (id: TemplateId, a = analysis) => {
+    if (!freeIds(a).includes(id) && (guest || a?.locked_layouts)) {
+      // If the held-back layouts can't be fetched (expired), still open it, less personalised.
+      const r = await unlock(`Log in to use the ${TEMPLATES[id].name} layout — the three suggested for your photo are free.`, a).catch(() => a);
+      if (r === false) return;
+      a = r;
+    }
+    const layout = a?.layouts.find((l) => l.id === id) ?? a?.layouts[0] ?? null;
+    setStory(defaultState(id, inputFor(layout, a, storyDate)));
     track("layout_open", { layout: id });
     setPhase("edit");
     nav("edit", id, "push", { from: "results" });
@@ -429,7 +452,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     if (phase === "results" && photo) {
       const suggestions: LayoutSuggestion[] =
         analysis?.layouts ??
-        (photos.length > 1 ? LOCAL_MULTI : LOCAL_SINGLE).map((id) => ({
+        localIds.map((id) => ({
           id,
           name: TEMPLATES[id].name,
           reason: "Local default — personalised analysis was unavailable.",
@@ -457,7 +480,12 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           analysis={analysis}
           suggestions={suggestions}
           date={storyDate}
-          onEdit={openEditor}
+          onEdit={(id) => void openEditor(id)}
+          onUnlock={
+            guest || analysis?.locked_layouts
+              ? () => unlock("Log in to shuffle through every layout — the first three are free.").then((r) => r !== false)
+              : undefined
+          }
           onStartOver={startOver}
           onRetry={analysis ? undefined : generate}
         />
@@ -482,7 +510,8 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
               storyDate,
             )
           }
-          suggested={analysis?.layouts.slice(0, 3).map((l) => l.id) ?? (photos.length > 1 ? LOCAL_MULTI : LOCAL_SINGLE).slice(0, 3)}
+          suggested={freeIds(analysis)}
+          onEditLogin={guest ? (reason) => unlock(reason).then((r) => r !== false, () => true) : undefined}
           music={songFor(analysis?.layouts.find((l) => l.id === story.templateId) ?? null, analysis)}
           musicPending={analysis?.music_pending ?? false}
           onBack={
@@ -499,7 +528,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           onSave={save}
           signedIn={Boolean(user)}
           onSongLogin={
-            favouritesLocked
+            guest
               ? () => requestLogin("Log in to pick a different song — your suggested song is already on the Story.")
               : undefined
           }
@@ -651,9 +680,9 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
 
         <div className={s.step}>
           <p className={s.stepNo}>
-            04 — Favourite artists <span className={s.muted}>(optional{favouritesLocked ? " · log in" : ""})</span>
+            04 — Favourite artists <span className={s.muted}>(optional{guest ? " · log in" : ""})</span>
           </p>
-          {favouritesLocked ? (
+          {guest ? (
             <p className={s.muted}>
               Add favourite artists, films or brands and Qloo blends your taste into the song pick.{" "}
               <button className={s.linkBtn} onClick={() => void requestLogin("Log in to add favourite artists — song suggestions work without an account.")}>

@@ -192,7 +192,12 @@ score = 0.30 visual + 0.30 AI pick + 0.25 cultural + 0.15 readability
 ```
 
 - **Ranked for this photo.** Different photos get different sets; *Shuffle* moves through the
-  rest of the ranked list three at a time, each set from different layout families.
+  rest of the ranked list three at a time, each set from different layout families. Guests get
+  the top three to download as they are; shuffling, other layouts and editing need a login
+  (the API only sends the rest of the list to a signed-in user).
+- **Know where visits come from.** Share links as `…/?utm_source=whatsapp` (or `?ref=`): iOS
+  apps send no referrer at all. Android app opens (`android-app://com.whatsapp/`) and in-app
+  browsers are recognised on their own.
 - **The original is one tap away.** Every suggestion shows the pin it was modelled on, with
   the creator credited and a link to Pinterest.
 - **One to four photos.** Multi-photo layouts suggest themselves when you upload more, and
@@ -277,7 +282,8 @@ it lands in the admin queue.
     <td valign="top">
       <h4>🛡️ An admin dashboard</h4>
       Traffic, referrers, devices, the most-downloaded layouts and the request queue, each
-      request opening with the pin, the note and where it came from. Accounts live in a users
+      request opening with the pin, the note and where it came from. A Users tab ranks accounts by
+      activity, with the layouts each one uses most. Accounts live in a users
       table with a <code>user</code> or <code>admin</code> role, enforced by the database, not the page.
     </td>
     <td valign="top">

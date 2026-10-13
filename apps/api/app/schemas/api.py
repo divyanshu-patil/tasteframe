@@ -370,6 +370,9 @@ class AnalysisOut(BaseModel):
     music: MusicSuggestion
     # True while songs are still being picked; they follow as a separate {"music": …} event.
     music_pending: bool = False
+    # Guests get the top 3 layouts; this many more unlock after login
+    # (GET /v1/analysis/{analysis_id}/layouts).
+    locked_layouts: int = 0
     image_reasoning: ImageReasoning | None = None
     provenance: Provenance
 
@@ -623,7 +626,8 @@ class LikeOut(BaseModel):
 
 
 class EventIn(BaseModel):
-    """One anonymous usage event. `visitor` is a random id kept in the browser; it's hashed here."""
+    """One usage event. `visitor` is a random id kept in the browser; it's hashed here. Signed-in
+    users' events also carry their account id (set by the database from their token)."""
 
     model_config = {"extra": "forbid"}
 

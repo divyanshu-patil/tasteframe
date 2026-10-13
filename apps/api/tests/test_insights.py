@@ -111,8 +111,12 @@ class FakeRest:
             signed_in = {ADMIN[0]: ADMIN[1], USER[0]: USER[1]}.get(token)
             who = f"u:{signed_in}" if signed_in else f"v:{body['p_visitor']}"
             return httpx.Response(200, json=[layout for layout, w in self.likes if w == who])
+        if path == "/rpc/admin_users":
+            if token != ADMIN[0]:
+                return httpx.Response(403, json={"message": "NOT_ADMIN"})
+            return httpx.Response(200, json=[{"id": USER[1], "email": "u@x.io", "events": 3}])
         if path == "/events" and req.method == "POST":
-            self.events.append(json.loads(req.content))
+            self.events.append({**json.loads(req.content), "_token": token})
             return httpx.Response(201)
         if path == "/layout_requests":
             if req.method == "POST":
@@ -179,6 +183,7 @@ def test_events_store_only_anonymous_fields(api):
     ev = fake.events[0]
     assert ev["referrer"] == "instagram.com"  # host only
     assert len(ev["visitor"]) == 16 and ev["visitor"] != "abcDEF123456"  # hashed
+    assert ev["_token"] == "sb_publishable_test"  # guest: inserted anonymously
     assert (
         client.post("/v1/events", json={"type": "hack", "visitor": "abcDEF123456"}).status_code
         == 422
@@ -277,3 +282,32 @@ def test_likes_anonymous_and_signed_in(api):
     # An expired token just likes anonymously.
     bad = {"Authorization": "Bearer expired"}
     assert client.post("/v1/layouts/vinyl/like", json=anon, headers=bad).status_code == 200
+
+
+def test_signed_in_events_are_sent_as_the_user(api):
+    client, fake = api
+    ev = {"type": "export", "visitor": "abcDEF123456", "layout": "editorial"}
+    r = client.post("/v1/events", json=ev, headers={"Authorization": f"Bearer {USER[0]}"})
+    assert r.status_code == 204
+    assert fake.events[-1]["_token"] == USER[0]  # RLS sets user_id = auth.uid() from this
+
+
+def test_referrer_sources():
+    from app.api.routes.insights import referrer_host
+
+    assert referrer_host("android-app://com.whatsapp/") == "whatsapp"  # Android app links
+    assert referrer_host("android-app://com.whatsapp.w4b") == "whatsapp"
+    assert referrer_host("android-app://org.example.app/") == "org.example.app"
+    assert referrer_host("WhatsApp") == "whatsapp"  # ?utm_source= tags, in-app browsers
+    assert referrer_host("https://web.whatsapp.com/") == "web.whatsapp.com"
+    assert referrer_host("null") == "null" and referrer_host("<script>") is None
+    assert referrer_host("https://a b/") is None
+
+
+def test_admin_users_requires_admin(api):
+    client, _ = api
+    assert client.get("/v1/admin/users").status_code == 401
+    user = {"Authorization": f"Bearer {USER[0]}"}
+    assert client.get("/v1/admin/users", headers=user).status_code == 403
+    admin = {"Authorization": f"Bearer {ADMIN[0]}"}
+    assert client.get("/v1/admin/users?days=7", headers=admin).json()["users"][0]["events"] == 3

@@ -22,6 +22,8 @@ interface Props {
   onEdit: (id: TemplateId) => void;
   onStartOver: () => void;
   onRetry?: () => void;
+  /** Set when shuffling needs a login (guests): resolves true once signed in and unlocked. */
+  onUnlock?: () => Promise<boolean>;
 }
 
 const TREND_LABEL = { chart: "🔥 Top on Apple Music now", reels: "🔥 Trending on Reels" } as const;
@@ -92,9 +94,20 @@ function Bar({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function Results({ photo, analysis, suggestions, date, onEdit, onStartOver, onRetry }: Props) {
-  // `suggestions` is the full ranked list (best first, families interleaved); show 3 at a time.
+export function Results({ photo, analysis, suggestions, date, onEdit, onStartOver, onRetry, onUnlock }: Props) {
+  // `suggestions` is the ranked list (best first, families interleaved; a guest's holds the top 3
+  // until they log in); show 3 at a time.
   const [page, setPage] = useState(0);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const shuffle = async () => {
+    setUnlockError(null);
+    try {
+      if (onUnlock && !(await onUnlock())) return;
+      setPage((p) => p + 1); // pages may have just grown: always read `page % pages`
+    } catch (e) {
+      setUnlockError(e instanceof Error && e.message ? e.message : "Couldn't load more layouts.");
+    }
+  };
   const pages = Math.max(1, Math.ceil(suggestions.length / 3));
   const shown = suggestions.slice((page % pages) * 3, (page % pages) * 3 + 3);
   const previews = useMemo(
@@ -111,9 +124,9 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
       <div className={s.resultsHead}>
         <h2 className={s.sectionTitle}>Three Stories for this photo</h2>
         <div className={s.row}>
-          {pages > 1 && (
-            <button className={s.secondary} onClick={() => setPage((p) => (p + 1) % pages)} aria-label="Shuffle: show three different layouts">
-              ↻ Shuffle layouts <span className={s.mono}>&nbsp;{(page % pages) + 1}/{pages}</span>
+          {(pages > 1 || onUnlock) && (
+            <button className={s.secondary} onClick={() => void shuffle()} aria-label={`Shuffle: show three different layouts${onUnlock ? " (needs login)" : ""}`}>
+              ↻ Shuffle layouts {onUnlock ? "🔒" : <span className={s.mono}>&nbsp;{(page % pages) + 1}/{pages}</span>}
             </button>
           )}
           {onRetry && <button className={s.secondary} onClick={onRetry}>Retry personalisation</button>}
@@ -121,6 +134,7 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
         </div>
       </div>
 
+      {unlockError && <p role="alert" className={s.notice}>{unlockError}</p>}
       {!analysis && (
         <p role="status" className={s.notice}>
           Personalised analysis is unavailable right now, so these are standard layouts — no visual or
@@ -164,7 +178,7 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
       </ol>
 
       <div className={s.others}>
-        <p className={s.kicker}>Or start from another layout</p>
+        <p className={s.kicker}>Or start from another layout{onUnlock ? " · log in" : ""}</p>
         <div className={s.chips}>
           {others.map((id) => (
             <button key={id} className={s.chip} onClick={() => onEdit(id)}>{TEMPLATES[id].name}</button>

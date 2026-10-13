@@ -121,7 +121,12 @@ vision model. The UI gives each layout its own song (lead first, then the altern
 and fills the layout's caption with it.
 
 `layouts` contains **every** template, ranked for this photo; each consecutive group of three has
-distinct families (the UI shows three at a time and Shuffle moves to the next group). Each layout
+distinct families (the UI shows three at a time and Shuffle moves to the next group). When
+Supabase is configured and the request has no valid `Authorization: Bearer <access token>`, a
+guest gets only the top three plus `locked_layouts` (how many more there are); the rest are held
+for an hour in the API process and returned by `GET /v1/analysis/{analysis_id}/layouts` (same
+session + login required → `{"layouts": [...]}`; 401 `AUTH_REQUIRED`, 404 `ANALYSIS_EXPIRED`).
+The web app also asks guests to log in before any edit or opening a non-top-three layout. Each layout
 also has `filter` (suggested photo look) and `score.ai_pick` (the vision model's pick weight, or
 null without image reasoning). `score` is an internal heuristic, never a provider score. `focus_x`/`focus_y` (0..1) is the default
 crop focus: the main subject's position from image reasoning, or 0.5/0.5 when unknown. Layout `id`s are rendered by
@@ -243,7 +248,9 @@ sessions or expired Stories.
 ## Insights (public, rate-limited)
 - `POST /v1/events`: `{type: pageview|analysis|layout_open|export|save|request|gallery_pick,
   visitor, path?, referrer?, layout?, device?}` returns 204. The visitor id is HMAC-hashed and the
-  referrer is reduced to its host. It's a no-op when Supabase isn't configured, and never fails
+  referrer is reduced to its host, an app name (`android-app://com.whatsapp/` → `whatsapp`) or a
+  `?utm_source=` / `?ref=` tag the page was opened with. With a valid Bearer token the event is
+  inserted as that user, so the row's `user_id` defaults to `auth.uid()` (RLS rejects any other id). It's a no-op when Supabase isn't configured, and never fails
   the app.
 - `GET /v1/pins/preview?url=` returns
   `{pin_id, pin_url, title, author, author_url, thumbnail_url, width, height}`.
@@ -266,6 +273,9 @@ sessions or expired Stories.
 - `GET /v1/admin/me` returns `{admin}`.
 - `GET /v1/admin/stats?days=1..365` returns
   `{totals, daily[], referrers[], pages[], layouts[], devices{}, accounts{users, admins, new}, requests{}}`.
+- `GET /v1/admin/users?days=1..365` returns `{users: [{id, email, role, created_at, last_seen,
+  events, pageviews, analyses, layout_opens, exports, saves, layouts: [{name, count}]}]}`, most
+  active first (signed-in activity only; top 3 layouts each).
 - `GET /v1/admin/requests?status=pending|accepted|rejected|done` returns `{requests[]}`.
 - `GET /v1/admin/requests/{id}` returns one request.
 - `PATCH /v1/admin/requests/{id}`: `{status, admin_note?}` returns the updated request (stamps

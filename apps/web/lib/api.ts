@@ -123,6 +123,8 @@ export interface Analysis {
   music: Music;
   /** Songs are still being picked; they arrive through `analyze`'s `onMusic`. */
   music_pending: boolean;
+  /** Guests get the top 3 layouts; this many more unlock after login (`moreLayouts`). */
+  locked_layouts: number;
   provenance: {
     qloo_used: boolean;
     qloo_error: string | null;
@@ -209,23 +211,14 @@ export function musicFor(music: Music, index: number): Music {
   };
 }
 
-export function parseAnalysis(v: unknown): Analysis {
-  const bad = () => new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
-  if (!isObj(v) || !isObj(v.visual_profile) || !Array.isArray(v.layouts) || !isObj(v.music)) {
-    throw bad();
-  }
-  const vp = v.visual_profile;
-  if (!isStrArr(vp.palette) || !vp.palette.every((c) => HEX.test(c)) || !isNum(vp.brightness)) {
-    throw bad();
-  }
-  const layouts = v.layouts.filter(
+function parseLayouts(v: unknown[]): LayoutSuggestion[] {
+  const layouts = v.filter(
     (l): l is LayoutSuggestion =>
       isObj(l) &&
       (TEMPLATE_IDS as readonly unknown[]).includes(l.id) &&
       isStr(l.name) && isStr(l.reason) && isStr(l.headline) && isStr(l.caption) &&
       isStr(l.accent) && HEX.test(l.accent) && isObj(l.score),
   );
-  if (!layouts.length) throw bad();
   const unit = (n: unknown) => (isNum(n) ? Math.min(1, Math.max(0, n)) : 0.5);
   for (const l of layouts) {
     l.focus_x = unit(l.focus_x);
@@ -238,6 +231,20 @@ export function parseAnalysis(v: unknown): Analysis {
     l.likes = isNum(l.likes) ? Math.max(0, Math.round(l.likes)) : 0;
     l.is_new = l.is_new === true;
   }
+  return layouts;
+}
+
+export function parseAnalysis(v: unknown): Analysis {
+  const bad = () => new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  if (!isObj(v) || !isObj(v.visual_profile) || !Array.isArray(v.layouts) || !isObj(v.music)) {
+    throw bad();
+  }
+  const vp = v.visual_profile;
+  if (!isStrArr(vp.palette) || !vp.palette.every((c) => HEX.test(c)) || !isNum(vp.brightness)) {
+    throw bad();
+  }
+  const layouts = parseLayouts(v.layouts);
+  if (!layouts.length) throw bad();
   const music = parseMusic(v.music);
   const recs = Array.isArray(v.cultural_recommendations)
     ? v.cultural_recommendations.filter(
@@ -261,6 +268,7 @@ export function parseAnalysis(v: unknown): Analysis {
       : null;
   return {
     ...(v as unknown as Analysis), layouts, music, music_pending: v.music_pending === true,
+    locked_layouts: isNum(v.locked_layouts) ? Math.max(0, v.locked_layouts) : 0,
     cultural_recommendations: recs, image_reasoning,
   };
 }
@@ -321,12 +329,11 @@ export function sessionToken(): Promise<string> {
 async function authed(path: string, init: RequestInit = {}, asUser = false): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("X-Session-Token", await sessionToken());
-  if (asUser) {
-    // Saved Stories belong to a Supabase account; the API verifies this token and RLS enforces it.
-    const token = await accessToken();
-    if (!token) throw new ApiError("AUTH_REQUIRED", "Log in to save Stories to your account.");
-    headers.set("Authorization", `Bearer ${token}`);
-  }
+  // Signed in: always send the account token (favourites, song search, all layouts need it);
+  // `asUser` calls need it. The API verifies it with Supabase and RLS enforces it again.
+  const token = await accessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  else if (asUser) throw new ApiError("AUTH_REQUIRED", "Log in to save Stories to your account.");
   let res: Response;
   try {
     res = await fetch(`${API}${path}`, { ...init, headers });
@@ -476,6 +483,16 @@ export async function readAnalysisStream(
     }
   }
   throw new ApiError("BAD_RESPONSE", "The analysis ended unexpectedly. Please retry.", true);
+}
+
+/** Every ranked layout for this analysis (a guest got the top 3); needs a signed-in user. */
+export async function moreLayouts(analysisId: string): Promise<LayoutSuggestion[]> {
+  const res = await authed(`/v1/analysis/${encodeURIComponent(analysisId)}/layouts`, {}, true);
+  if (!res.ok) throw await errorFrom(res);
+  const v: unknown = await res.json();
+  const layouts = isObj(v) && Array.isArray(v.layouts) ? parseLayouts(v.layouts) : [];
+  if (!layouts.length) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  return layouts;
 }
 
 export async function deleteUpload(objectKey: string): Promise<void> {
@@ -683,6 +700,21 @@ export interface AdminStats {
   requests: Record<RequestStatus, number>;
 }
 
+export interface AdminUser {
+  id: string;
+  email: string | null;
+  role: "user" | "admin";
+  created_at: string;
+  last_seen: string | null;
+  events: number;
+  pageviews: number;
+  analyses: number;
+  layout_opens: number;
+  exports: number;
+  saves: number;
+  layouts: { name: string; count: number }[];
+}
+
 const STATUSES: RequestStatus[] = ["pending", "accepted", "rejected", "done"];
 function parseRequest(v: unknown): LayoutRequest | null {
   if (!isObj(v) || !isStr(v.id) || !isStr(v.pin_url) || !STATUSES.includes(v.status as RequestStatus)) return null;
@@ -738,6 +770,28 @@ export async function adminStats(days: number): Promise<AdminStats> {
     accounts: (isObj(v.accounts) ? v.accounts : { users: 0, admins: 0, new: 0 }) as AdminStats["accounts"],
     requests: (isObj(v.requests) ? v.requests : { pending: 0, accepted: 0, rejected: 0, done: 0 }) as AdminStats["requests"],
   };
+}
+
+export async function adminUsers(days: number): Promise<AdminUser[]> {
+  const v = await adminGet(`/users?days=${days}`);
+  if (!isObj(v) || !Array.isArray(v.users)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  const n = (x: unknown) => (isNum(x) ? x : 0);
+  return v.users.filter((u): u is Record<string, unknown> => isObj(u) && isStr(u.id)).map((u) => ({
+    id: u.id as string,
+    email: isStr(u.email) ? u.email : null,
+    role: u.role === "admin" ? "admin" : "user",
+    created_at: isStr(u.created_at) ? u.created_at : "",
+    last_seen: isStr(u.last_seen) ? u.last_seen : null,
+    events: n(u.events),
+    pageviews: n(u.pageviews),
+    analyses: n(u.analyses),
+    layout_opens: n(u.layout_opens),
+    exports: n(u.exports),
+    saves: n(u.saves),
+    layouts: Array.isArray(u.layouts)
+      ? u.layouts.filter((l): l is { name: string; count: number } => isObj(l) && isStr(l.name) && isNum(l.count))
+      : [],
+  }));
 }
 
 export async function adminRequests(status?: RequestStatus): Promise<LayoutRequest[]> {

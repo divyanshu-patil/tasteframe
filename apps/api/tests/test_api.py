@@ -354,6 +354,41 @@ def test_favourites_need_login_when_accounts_exist(client, monkeypatch):
     assert result_of(stream(client.post("/v1/analysis", headers=h, json=body)))["layouts"]
 
 
+def test_guests_get_three_layouts_and_the_rest_after_login(client, monkeypatch):
+    from app.core import auth
+    from app.core.config import get_settings
+    from app.services.insights import rest
+
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "pk")
+    get_settings.cache_clear()
+
+    def supabase(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/auth/v1/user":
+            ok = req.headers["authorization"] == "Bearer tok"
+            uid = "bbbbbbbb-0000-0000-0000-000000000002"
+            return httpx.Response(200, json={"id": uid}) if ok else httpx.Response(401)
+        return httpx.Response(200, json=[])  # like counts
+
+    t = httpx.MockTransport(supabase)
+    monkeypatch.setattr(auth, "auth_transport", t)
+    monkeypatch.setattr(rest, "rest_transport", t)
+    h = new_session(client)
+    body = {"object_key": upload(client, h, make_image())}
+    res = result_of(stream(client.post("/v1/analysis", headers=h, json=body)))
+    assert len(res["layouts"]) == 3 and res["locked_layouts"] > 0
+    more = f"/v1/analysis/{res['analysis_id']}/layouts"
+    assert client.get(more, headers=h).status_code == 401  # shuffle needs a login
+    user = {**h, "Authorization": "Bearer tok"}
+    full = client.get(more, headers=user).json()["layouts"]
+    assert len(full) == 3 + res["locked_layouts"] and full[:3] == res["layouts"]
+    other = {**new_session(client), "Authorization": "Bearer tok"}
+    assert client.get(more, headers=other).status_code == 404  # another session's analysis
+    # Signed in from the start: every layout right away.
+    res = result_of(stream(client.post("/v1/analysis", headers=user, json=body)))
+    assert len(res["layouts"]) == len(full) and res["locked_layouts"] == 0
+
+
 def test_vibe_from_pose_cues():
     from app.services.music.vibes import vibe_from_cues
 

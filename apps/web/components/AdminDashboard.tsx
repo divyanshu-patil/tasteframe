@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type AdminStats, type LayoutRequest, type RequestStatus, adminMe, adminRequests, adminStats, updateRequest } from "../lib/api";
+import { type AdminStats, type AdminUser, type LayoutRequest, type RequestStatus, adminMe, adminRequests, adminStats, adminUsers, updateRequest } from "../lib/api";
 import { authConfigured, signOut, useAuth } from "../lib/auth";
 import { TEMPLATES } from "../lib/story/templates";
 import { LoginDialog } from "./LoginDialog";
@@ -64,6 +64,7 @@ export function AdminDashboard() {
 }
 
 function Dashboard({ email }: { email: string }) {
+  const [view, setView] = useState<"overview" | "users">("overview");
   const [days, setDays] = useState<(typeof RANGES)[number]>(30);
   const [stats, setStats] = useState<AdminStats | { error: string } | null>(null);
   const [tab, setTab] = useState<RequestStatus | "all">("pending");
@@ -92,6 +93,13 @@ function Dashboard({ email }: { email: string }) {
       <header className={s.head}>
         <h1 className={s.title}>Admin</h1>
         <div className={s.headTools}>
+          <div className={s.segment} role="tablist" aria-label="View">
+            {(["overview", "users"] as const).map((v) => (
+              <button key={v} role="tab" aria-selected={view === v} className={view === v ? s.segOn : ""} onClick={() => setView(v)}>
+                {v === "overview" ? "Overview" : "Users"}
+              </button>
+            ))}
+          </div>
           <div className={s.segment} role="group" aria-label="Date range">
             {RANGES.map((d) => (
               <button key={d} aria-pressed={days === d} className={days === d ? s.segOn : ""} onClick={() => setDays(d)}>
@@ -104,57 +112,118 @@ function Dashboard({ email }: { email: string }) {
         </div>
       </header>
 
-      {stats === null && <p className={s.note}>Loading analytics…</p>}
-      {stats && "error" in stats && (
-        <p className={s.error}>
-          {stats.error} <button className={s.linkBtn} onClick={loadStats}>Try again</button>
-        </p>
-      )}
-      {stats && !("error" in stats) && <Overview stats={stats} days={days} />}
+      {view === "users" ? (
+        <Users days={days} />
+      ) : (
+        <>
+          {stats === null && <p className={s.note}>Loading analytics…</p>}
+          {stats && "error" in stats && (
+            <p className={s.error}>
+              {stats.error} <button className={s.linkBtn} onClick={loadStats}>Try again</button>
+            </p>
+          )}
+          {stats && !("error" in stats) && <Overview stats={stats} days={days} />}
 
-      <section className={s.queue} aria-labelledby="queue-title">
-        <div className={s.queueHead}>
-          <h2 id="queue-title">Layout requests</h2>
-          <div className={s.tabs} role="tablist">
-            {TABS.map((t) => (
-              <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? s.tabOn : ""} onClick={() => setTab(t.id)}>
-                {t.label}
-                {stats && !("error" in stats) && t.id !== "all" && <span className={s.count}>{stats.requests[t.id] ?? 0}</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-        {rows === null && <p className={s.note}>Loading requests…</p>}
-        {rows && "error" in rows && (
-          <p className={s.error}>
-            {rows.error} <button className={s.linkBtn} onClick={loadRows}>Try again</button>
-          </p>
-        )}
-        {Array.isArray(rows) && rows.length === 0 && <p className={s.note}>No {tab === "all" ? "" : `${tab} `}requests yet.</p>}
-        {Array.isArray(rows) && rows.length > 0 && (
-          <ul className={s.reqList}>
-            {rows.map((r) => (
-              <li key={r.id}>
-                <button className={s.reqRow} onClick={() => setOpen(r)} aria-label={`Open request from ${ago(r.created_at)}`}>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- Pinterest thumbnail */}
-                  {r.pin_thumb ? <img src={r.pin_thumb} alt="" loading="lazy" /> : <span className={s.noThumb} />}
-                  <span className={s.reqMain}>
-                    <span className={s.reqNote}>{r.note || <em className={s.muted}>No note</em>}</span>
-                    <span className={s.muted}>
-                      Pin by {r.pin_author || "unknown"} · {ago(r.created_at)}
-                      {r.email ? " · wants an email" : ""}
-                    </span>
-                  </span>
-                  <span className={`${s.status} ${s[`st_${r.status}`]}`}>{r.status}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          <section className={s.queue} aria-labelledby="queue-title">
+            <div className={s.queueHead}>
+              <h2 id="queue-title">Layout requests</h2>
+              <div className={s.tabs} role="tablist">
+                {TABS.map((t) => (
+                  <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? s.tabOn : ""} onClick={() => setTab(t.id)}>
+                    {t.label}
+                    {stats && !("error" in stats) && t.id !== "all" && <span className={s.count}>{stats.requests[t.id] ?? 0}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {rows === null && <p className={s.note}>Loading requests…</p>}
+            {rows && "error" in rows && (
+              <p className={s.error}>
+                {rows.error} <button className={s.linkBtn} onClick={loadRows}>Try again</button>
+              </p>
+            )}
+            {Array.isArray(rows) && rows.length === 0 && <p className={s.note}>No {tab === "all" ? "" : `${tab} `}requests yet.</p>}
+            {Array.isArray(rows) && rows.length > 0 && (
+              <ul className={s.reqList}>
+                {rows.map((r) => (
+                  <li key={r.id}>
+                    <button className={s.reqRow} onClick={() => setOpen(r)} aria-label={`Open request from ${ago(r.created_at)}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- Pinterest thumbnail */}
+                      {r.pin_thumb ? <img src={r.pin_thumb} alt="" loading="lazy" /> : <span className={s.noThumb} />}
+                      <span className={s.reqMain}>
+                        <span className={s.reqNote}>{r.note || <em className={s.muted}>No note</em>}</span>
+                        <span className={s.muted}>
+                          Pin by {r.pin_author || "unknown"} · {ago(r.created_at)}
+                          {r.email ? " · wants an email" : ""}
+                        </span>
+                      </span>
+                      <span className={`${s.status} ${s[`st_${r.status}`]}`}>{r.status}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
 
       <RequestDetail request={open} onClose={() => setOpen(null)} onUpdated={onUpdated} />
     </div>
+  );
+}
+
+/** Accounts ranked by what they did while signed in, with the layouts each uses most. */
+function Users({ days }: { days: number }) {
+  const [rows, setRows] = useState<AdminUser[] | { error: string } | null>(null);
+  const load = useCallback(() => {
+    setRows(null);
+    adminUsers(days).then(setRows).catch((e) => setRows({ error: e instanceof Error ? e.message : "Couldn't load users." }));
+  }, [days]);
+  useEffect(load, [load]);
+
+  if (rows === null) return <p className={s.note}>Loading users…</p>;
+  if ("error" in rows)
+    return (
+      <p className={s.error}>
+        {rows.error} <button className={s.linkBtn} onClick={load}>Try again</button>
+      </p>
+    );
+  const active = rows.filter((u) => u.events > 0).length;
+  return (
+    <section className={s.panel} aria-labelledby="users-title">
+      <h2 id="users-title">Users, last {days} days</h2>
+      <p className={s.muted}>
+        {fmt.format(rows.length)} accounts, {fmt.format(active)} active. Counts only what people do while signed in; guests stay anonymous.
+      </p>
+      {rows.length === 0 ? (
+        <p className={s.note}>No accounts yet.</p>
+      ) : (
+        <div className={s.tableWrap}>
+          <table className={s.table}>
+            <thead>
+              <tr>
+                <th>Account</th><th>Activity</th><th>Stories made</th><th>Layouts opened</th><th>Downloads</th><th>Saves</th><th>Top layouts</th><th>Last seen</th><th>Joined</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.email ?? <em className={s.muted}>no email</em>}{u.role === "admin" && <span className={s.muted}> · admin</span>}</td>
+                  <td>{fmt.format(u.events)}</td>
+                  <td>{fmt.format(u.analyses)}</td>
+                  <td>{fmt.format(u.layout_opens)}</td>
+                  <td>{fmt.format(u.exports)}</td>
+                  <td>{fmt.format(u.saves)}</td>
+                  <td>{u.layouts.length ? u.layouts.map((l) => `${layoutName(l.name)} (${l.count})`).join(", ") : <span className={s.muted}>—</span>}</td>
+                  <td>{u.last_seen ? ago(u.last_seen) : <span className={s.muted}>—</span>}</td>
+                  <td>{when(u.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
