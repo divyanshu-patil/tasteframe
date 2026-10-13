@@ -54,6 +54,10 @@ async def rest(
             raise AppError(
                 "REQUEST_LIMIT", "You've sent a lot of requests today. Try again tomorrow.", 429
             )
+        if message == "NOT_SELF":
+            raise AppError("NOT_SELF", "You can't change your own account.", 400)
+        if message == "USER_NOT_FOUND":
+            raise AppError("NOT_FOUND", "That account doesn't exist.", 404)
         if message == "NOT_ADMIN" or resp.status_code == 403:
             raise AppError("NOT_ADMIN", "This page is for admins.", 403)
         if resp.status_code == 401:

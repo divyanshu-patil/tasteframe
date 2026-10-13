@@ -133,6 +133,8 @@ begin
 end
 $$;
 create index if not exists users_role_idx on public.users (role);
+-- Set by admin_set_user(); suspended accounts are also banned in Supabase Auth.
+alter table public.users add column if not exists suspended_at timestamptz;
 
 -- New sign-ups get a 'user' row (definer: runs with the table owner's rights, not the caller's).
 create or replace function public.handle_new_user() returns trigger
@@ -162,7 +164,7 @@ $$;
 -- Definer so RLS policies can ask "is the caller an admin?" without exposing the table.
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
-    select exists (select 1 from public.users where id = auth.uid() and role = 'admin')
+    select exists (select 1 from public.users where id = auth.uid() and role = 'admin' and suspended_at is null)
 $$;
 revoke all on function public.is_admin() from public;
 grant execute on function public.is_admin() to anon, authenticated;
@@ -338,7 +340,8 @@ begin
             (select coalesce(jsonb_agg(jsonb_build_object('name', l.layout, 'count', l.n)), '[]'::jsonb) from (
                 select layout, count(*) as n from public.events
                 where user_id = u.id and created_at >= since and layout is not null
-                group by 1 order by 2 desc limit 3) l) as layouts
+                group by 1 order by 2 desc limit 3) l) as layouts,
+            u.suspended_at is not null as suspended
         from public.users u
         left join public.events e on e.user_id = u.id and e.created_at >= since
         group by u.id
@@ -348,6 +351,43 @@ end;
 $$;
 revoke all on function public.admin_users(int) from public;
 grant execute on function public.admin_users(int) to authenticated;
+
+-- Admins change another account's role and/or suspend it (null = leave as is). Suspending bans the
+-- account in Supabase Auth (no sign-in or token refresh) and ends its sessions, so its access
+-- token stops working at /auth/v1/user right away. Definer: it writes auth.users / auth.sessions.
+create or replace function public.admin_set_user(p_id uuid, p_role public.user_role default null,
+    p_suspended boolean default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+    r public.users;
+begin
+    if not public.is_admin() then
+        raise exception 'NOT_ADMIN' using errcode = '42501';
+    end if;
+    if p_id = auth.uid() then
+        raise exception 'NOT_SELF' using errcode = 'P0001';  -- no locking yourself out
+    end if;
+    update public.users set
+        role = coalesce(p_role, role),
+        suspended_at = case when p_suspended then coalesce(suspended_at, now())
+                            when not p_suspended then null else suspended_at end
+    where id = p_id returning * into r;
+    if not found then
+        raise exception 'USER_NOT_FOUND' using errcode = 'P0001';
+    end if;
+    if p_suspended is not null then
+        -- A far-future date rather than 'infinity', which Auth can't parse.
+        update auth.users set banned_until = case when p_suspended then now() + interval '100 years' end
+        where id = p_id;
+        if p_suspended then
+            delete from auth.sessions where user_id = p_id;
+        end if;
+    end if;
+    return jsonb_build_object('id', r.id, 'role', r.role, 'suspended', r.suspended_at is not null);
+end;
+$$;
+revoke all on function public.admin_set_user(uuid, public.user_role, boolean) from public;
+grant execute on function public.admin_set_user(uuid, public.user_role, boolean) to authenticated;
 
 -- Layout likes: one per signed-in account (u:<uid>) or anonymous visitor (v:<server-hashed id>)
 -- per layout. No direct table access — only the three functions below.

@@ -15,6 +15,9 @@
 .secondary { background: transparent; color: inherit; border: 1px solid var(--color-ink-black); }
 .danger { background: transparent; color: var(--color-ember-orange); border: 1px solid var(--color-ember-orange); }
 .primary:disabled, .secondary:disabled, .danger:disabled { opacity: 0.5; cursor: not-allowed; }
+.suspend { min-height: 30px; padding: 0 var(--spacing-14); border-radius: var(--radius-sm); font: inherit; font-size: 14px; cursor: pointer; background: #b3261e; color: #fff; border: 1px solid #b3261e; }
+.suspend:hover { background: #8c1d18; border-color: #8c1d18; }
+.suspend:disabled, .primary:disabled { opacity: 0.6; cursor: default; }
 .linkBtn { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 :is(.primary, .secondary, .danger, .linkBtn, .segment button, .tabs button, .reqRow):focus-visible { outline: 2px solid var(--color-ember-orange); outline-offset: 2px; }
 
@@ -79,6 +82,10 @@
 .drawerBody { display: grid; gap: var(--spacing-14); padding: var(--spacing-22); }
 .drawerHead { display: flex; align-items: center; gap: var(--spacing-14); }
 .drawerHead h2 { font-family: var(--font-display); font-weight: 600; font-size: 32px; margin-right: auto; }
+.confirm { margin: auto; width: min(440px, calc(100vw - 32px)); border: 1px solid var(--color-ink-black); border-radius: var(--radius-sm); padding: var(--spacing-22); background: var(--color-parchment); color: var(--color-ink-black); box-shadow: var(--shadow-sm); }
+.confirm::backdrop { background: rgba(29, 29, 27, 0.45); }
+.confirm h2 { font-family: var(--font-display); font-weight: 600; font-size: 26px; margin-bottom: var(--spacing-10); }
+.confirm p { margin-bottom: var(--spacing-22); }
 .drawerPin img { width: 100%; max-width: 300px; height: auto; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); display: block; }
 .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px var(--spacing-14); font-size: 15px; }
 .facts dt { color: var(--color-charcoal); }

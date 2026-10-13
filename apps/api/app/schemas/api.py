@@ -686,6 +686,21 @@ class LayoutRequestList(BaseModel):
     requests: list[LayoutRequestOut]
 
 
+class AdminUserPatch(BaseModel):
+    """Leave a field out to keep it as is; at least one is required."""
+
+    model_config = {"extra": "forbid"}
+
+    role: Literal["user", "admin"] | None = None
+    suspended: bool | None = None
+
+    @model_validator(mode="after")
+    def _something(self) -> "AdminUserPatch":
+        if self.role is None and self.suspended is None:
+            raise ValueError("send role and/or suspended")
+        return self
+
+
 class LayoutRequestPatch(BaseModel):
     model_config = {"extra": "forbid"}
 

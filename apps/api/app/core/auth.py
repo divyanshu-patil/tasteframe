@@ -8,6 +8,7 @@ PostgREST, where RLS (auth.uid()) enforces ownership again.
 import logging
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import Depends, Header
@@ -63,24 +64,38 @@ async def require_user(
         log.warning("supabase auth status=%d", resp.status_code)
         raise AppError("AUTH_UNAVAILABLE", "Sign-in is temporarily unavailable.", 503, True)
     try:
-        uid = resp.json().get("id")
+        data = resp.json()
+        uid, banned = data.get("id"), data.get("banned_until")
     except (ValueError, AttributeError):
-        uid = None
+        uid = banned = None
     if not isinstance(uid, str) or not UUID_RE.match(uid):
         raise AppError("AUTH_UNAVAILABLE", "Sign-in is temporarily unavailable.", 503, True)
+    if _banned(banned):
+        raise AppError("ACCOUNT_SUSPENDED", "This account is suspended.", 403)
     return AuthUser(id=uid, token=token)
+
+
+def _banned(until: object) -> bool:
+    """Suspended by an admin (public.admin_set_user bans the account in Supabase Auth)."""
+    if not isinstance(until, str):
+        return False
+    try:
+        return datetime.fromisoformat(until.replace("Z", "+00:00")) > datetime.now(UTC)
+    except ValueError:
+        return True  # set but unreadable: treat as banned
 
 
 async def optional_user(
     authorization: str = Header(default=""),
     settings: Settings = Depends(get_settings),
 ) -> AuthUser | None:
-    """The signed-in user when a valid token is sent; None for guests (or an expired token)."""
+    """The signed-in user when a valid token is sent; None for guests (or an expired token, or a
+    suspended account, which can still use the app as a guest)."""
     if not authorization or not settings.supabase_enabled:
         return None
     try:
         return await require_user(authorization, settings)
     except AppError as e:
-        if e.code == "AUTH_REQUIRED":
+        if e.code in ("AUTH_REQUIRED", "ACCOUNT_SUSPENDED"):
             return None
         raise

@@ -11,7 +11,12 @@ from fastapi import APIRouter, Depends, Path, Query
 from app.core.auth import AuthUser, require_user
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
-from app.schemas.api import LayoutRequestList, LayoutRequestOut, LayoutRequestPatch
+from app.schemas.api import (
+    AdminUserPatch,
+    LayoutRequestList,
+    LayoutRequestOut,
+    LayoutRequestPatch,
+)
 from app.services.insights.rest import rest
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
@@ -70,6 +75,28 @@ async def users(
     if not isinstance(data, list):
         raise AppError("INSIGHTS_UNAVAILABLE", "User stats are temporarily unavailable.", 503, True)
     return {"users": data}
+
+
+@router.patch("/users/{user_id}")
+async def update_user(
+    body: AdminUserPatch,
+    user_id: str = Path(pattern=UUID),
+    user: AuthUser = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Make an account admin (or back to user) and/or suspend it. Not your own account."""
+    if user_id == user.id:
+        raise AppError("NOT_SELF", "You can't change your own account.", 400)
+    data = await rest(
+        settings,
+        "POST",
+        "/rpc/admin_set_user",
+        token=user.token,
+        body={"p_id": user_id, "p_role": body.role, "p_suspended": body.suspended},
+    )
+    if not isinstance(data, dict):
+        raise AppError("INSIGHTS_UNAVAILABLE", "Couldn't update that account.", 503, True)
+    return data
 
 
 @router.get("/requests", response_model=LayoutRequestList)

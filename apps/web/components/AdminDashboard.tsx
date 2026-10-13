@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type AdminStats, type AdminUser, type LayoutRequest, type RequestStatus, adminMe, adminRequests, adminStats, adminUsers, updateRequest } from "../lib/api";
+import { type AdminStats, type AdminUser, type LayoutRequest, type RequestStatus, adminMe, adminRequests, adminStats, adminUsers, updateRequest, updateUser } from "../lib/api";
 import { authConfigured, signOut, useAuth } from "../lib/auth";
 import { TEMPLATES } from "../lib/story/templates";
 import { LoginDialog } from "./LoginDialog";
@@ -60,10 +60,10 @@ export function AdminDashboard() {
       </div>
     );
   if (typeof role === "object") return <p className={s.error}>{role.error}</p>;
-  return <Dashboard email={user.email ?? ""} />;
+  return <Dashboard email={user.email ?? ""} userId={user.id} />;
 }
 
-function Dashboard({ email }: { email: string }) {
+function Dashboard({ email, userId }: { email: string; userId: string }) {
   const [view, setView] = useState<"overview" | "users">("overview");
   const [days, setDays] = useState<(typeof RANGES)[number]>(30);
   const [stats, setStats] = useState<AdminStats | { error: string } | null>(null);
@@ -113,7 +113,7 @@ function Dashboard({ email }: { email: string }) {
       </header>
 
       {view === "users" ? (
-        <Users days={days} />
+        <Users days={days} me={userId} />
       ) : (
         <>
           {stats === null && <p className={s.note}>Loading analytics…</p>}
@@ -173,8 +173,24 @@ function Dashboard({ email }: { email: string }) {
 }
 
 /** Accounts ranked by what they did while signed in, with the layouts each uses most. */
-function Users({ days }: { days: number }) {
+function Users({ days, me }: { days: number; me: string }) {
   const [rows, setRows] = useState<AdminUser[] | { error: string } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [ask, setAsk] = useState<Ask | null>(null);
+  const change = async ({ u, patch }: Ask) => {
+    setAsk(null);
+    setBusy(u.id);
+    setActionError(null);
+    try {
+      const next = await updateUser(u.id, patch);
+      setRows((cur) => (Array.isArray(cur) ? cur.map((x) => (x.id === u.id ? { ...x, ...next } : x)) : cur));
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Couldn't update that account.");
+    } finally {
+      setBusy(null);
+    }
+  };
   const load = useCallback(() => {
     setRows(null);
     adminUsers(days).then(setRows).catch((e) => setRows({ error: e instanceof Error ? e.message : "Couldn't load users." }));
@@ -195,6 +211,7 @@ function Users({ days }: { days: number }) {
       <p className={s.muted}>
         {fmt.format(rows.length)} accounts, {fmt.format(active)} active. Counts only what people do while signed in; guests stay anonymous.
       </p>
+      {actionError && <p role="alert" className={s.error}>{actionError}</p>}
       {rows.length === 0 ? (
         <p className={s.note}>No accounts yet.</p>
       ) : (
@@ -202,13 +219,17 @@ function Users({ days }: { days: number }) {
           <table className={s.table}>
             <thead>
               <tr>
-                <th>Account</th><th>Activity</th><th>Stories made</th><th>Layouts opened</th><th>Downloads</th><th>Saves</th><th>Top layouts</th><th>Last seen</th><th>Joined</th>
+                <th>Account</th><th>Activity</th><th>Stories made</th><th>Layouts opened</th><th>Downloads</th><th>Saves</th><th>Top layouts</th><th>Last seen</th><th>Joined</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.email ?? <em className={s.muted}>no email</em>}{u.role === "admin" && <span className={s.muted}> · admin</span>}</td>
+                <tr key={u.id} className={u.suspended ? s.muted : undefined}>
+                  <td>
+                    {u.email ?? <em className={s.muted}>no email</em>}
+                    {u.role === "admin" && <span className={s.muted}> · admin</span>}
+                    {u.suspended && <span className={s.error}> · suspended</span>}
+                  </td>
                   <td>{fmt.format(u.events)}</td>
                   <td>{fmt.format(u.analyses)}</td>
                   <td>{fmt.format(u.layout_opens)}</td>
@@ -217,13 +238,63 @@ function Users({ days }: { days: number }) {
                   <td>{u.layouts.length ? u.layouts.map((l) => `${layoutName(l.name)} (${l.count})`).join(", ") : <span className={s.muted}>—</span>}</td>
                   <td>{u.last_seen ? ago(u.last_seen) : <span className={s.muted}>—</span>}</td>
                   <td>{when(u.created_at)}</td>
+                  <td>
+                    {u.id === me ? (
+                      <span className={s.muted}>you</span>
+                    ) : (
+                      <span className={s.actions}>
+                        <button className={s.linkBtn} disabled={busy === u.id} onClick={() => setAsk({ u, patch: { role: u.role === "admin" ? "user" : "admin" } })}>
+                          {u.role === "admin" ? "Remove admin" : "Make admin"}
+                        </button>
+                        <button className={u.suspended ? s.linkBtn : s.suspend} disabled={busy === u.id} onClick={() => setAsk({ u, patch: { suspended: !u.suspended } })}>
+                          {busy === u.id ? "Saving…" : u.suspended ? "Unsuspend" : "Suspend"}
+                        </button>
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      <ConfirmDialog ask={ask} onCancel={() => setAsk(null)} onConfirm={(a) => void change(a)} />
     </section>
+  );
+}
+
+type Ask = { u: AdminUser; patch: { role?: "user" | "admin"; suspended?: boolean } };
+
+/** "Are you sure?" for account changes; suspending gets the red button. */
+function ConfirmDialog({ ask, onCancel, onConfirm }: { ask: Ask | null; onCancel: () => void; onConfirm: (a: Ask) => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = ref.current;
+    if (ask && d && !d.open) d.showModal();
+    if (!ask && d?.open) d.close();
+  }, [ask]);
+  const who = ask?.u.email ?? "this account";
+  const [title, body, action] =
+    ask?.patch.suspended === true
+      ? [`Suspend ${who}?`, "They're signed out everywhere and can't log in until you unsuspend them. The app still works for them as a guest.", "Suspend account"]
+      : ask?.patch.suspended === false
+        ? [`Unsuspend ${who}?`, "They can log in again straight away.", "Unsuspend"]
+        : ask?.patch.role === "admin"
+          ? [`Make ${who} an admin?`, "They'll see analytics, layout requests and every account, and can change other accounts.", "Make admin"]
+          : [`Remove admin from ${who}?`, "They'll keep their account but lose the admin dashboard.", "Remove admin"];
+  return (
+    <dialog ref={ref} className={s.confirm} onClose={onCancel} aria-labelledby="confirm-title">
+      {ask && (
+        <>
+          <h2 id="confirm-title">{title}</h2>
+          <p>{body}</p>
+          <div className={s.actions}>
+            <button className={ask.patch.suspended ? s.suspend : s.primary} onClick={() => onConfirm(ask)}>{action}</button>
+            <button className={s.secondary} onClick={onCancel} autoFocus>Cancel</button>
+          </div>
+        </>
+      )}
+    </dialog>
   );
 }
 

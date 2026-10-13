@@ -713,6 +713,7 @@ export interface AdminUser {
   exports: number;
   saves: number;
   layouts: { name: string; count: number }[];
+  suspended: boolean;
 }
 
 const STATUSES: RequestStatus[] = ["pending", "accepted", "rejected", "done"];
@@ -791,7 +792,19 @@ export async function adminUsers(days: number): Promise<AdminUser[]> {
     layouts: Array.isArray(u.layouts)
       ? u.layouts.filter((l): l is { name: string; count: number } => isObj(l) && isStr(l.name) && isNum(l.count))
       : [],
+    suspended: u.suspended === true,
   }));
+}
+
+/** Make an account admin (or back to user) and/or suspend it; returns its new state. */
+export async function updateUser(id: string, patch: { role?: "user" | "admin"; suspended?: boolean }): Promise<Pick<AdminUser, "role" | "suspended">> {
+  const v = await adminGet(`/users/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!isObj(v)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  return { role: v.role === "admin" ? "admin" : "user", suspended: v.suspended === true };
 }
 
 export async function adminRequests(status?: RequestStatus): Promise<LayoutRequest[]> {

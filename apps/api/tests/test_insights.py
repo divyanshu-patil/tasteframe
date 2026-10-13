@@ -65,6 +65,7 @@ class FakeRest:
         self.events: list[dict] = []
         self.requests: list[dict] = []
         self.likes: set[tuple[str, str]] = set()
+        self.set_user: list[dict] = []
 
     def handler(self, req: httpx.Request) -> httpx.Response:
         if req.url.host == "www.pinterest.com":
@@ -72,6 +73,10 @@ class FakeRest:
         auth = req.headers.get("authorization", "")
         token = auth.removeprefix("Bearer ")
         if req.url.path == "/auth/v1/user":
+            if token == "token-banned":
+                return httpx.Response(
+                    200, json={"id": USER[1], "banned_until": "2126-01-01T00:00:00Z"}
+                )
             users = {ADMIN[0]: ADMIN[1], USER[0]: USER[1]}
             return (
                 httpx.Response(200, json={"id": users[token]})
@@ -111,6 +116,15 @@ class FakeRest:
             signed_in = {ADMIN[0]: ADMIN[1], USER[0]: USER[1]}.get(token)
             who = f"u:{signed_in}" if signed_in else f"v:{body['p_visitor']}"
             return httpx.Response(200, json=[layout for layout, w in self.likes if w == who])
+        if path == "/rpc/admin_set_user":
+            if token != ADMIN[0]:
+                return httpx.Response(403, json={"message": "NOT_ADMIN"})
+            body = json.loads(req.content)
+            self.set_user.append(body)
+            return httpx.Response(
+                200,
+                json={"id": body["p_id"], "role": body["p_role"] or "user", "suspended": True},
+            )
         if path == "/rpc/admin_users":
             if token != ADMIN[0]:
                 return httpx.Response(403, json={"message": "NOT_ADMIN"})
@@ -311,3 +325,29 @@ def test_admin_users_requires_admin(api):
     assert client.get("/v1/admin/users", headers=user).status_code == 403
     admin = {"Authorization": f"Bearer {ADMIN[0]}"}
     assert client.get("/v1/admin/users?days=7", headers=admin).json()["users"][0]["events"] == 3
+
+
+def test_admin_can_promote_and_suspend_others_not_themselves(api):
+    client, fake = api
+    url = f"/v1/admin/users/{USER[1]}"
+    user = {"Authorization": f"Bearer {USER[0]}"}
+    assert client.patch(url, headers=user, json={"role": "admin"}).status_code == 403
+    admin = {"Authorization": f"Bearer {ADMIN[0]}"}
+    r = client.patch(url, headers=admin, json={"suspended": True})
+    assert r.status_code == 200 and r.json()["suspended"] is True
+    assert fake.set_user[-1] == {"p_id": USER[1], "p_role": None, "p_suspended": True}
+    assert client.patch(url, headers=admin, json={}).status_code == 422  # nothing to change
+    assert client.patch(url, headers=admin, json={"role": "owner"}).status_code == 422
+    r = client.patch(f"/v1/admin/users/{ADMIN[1]}", headers=admin, json={"role": "user"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "NOT_SELF"
+    assert len(fake.set_user) == 1
+
+
+def test_suspended_accounts_are_refused_and_fall_back_to_guest(api):
+    client, fake = api
+    banned = {"Authorization": "Bearer token-banned"}
+    r = client.get("/v1/admin/me", headers=banned)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "ACCOUNT_SUSPENDED"
+    ev = {"type": "pageview", "visitor": "abcDEF123456"}
+    assert client.post("/v1/events", json=ev, headers=banned).status_code == 204
+    assert fake.events[-1]["_token"] == "sb_publishable_test"  # counted as a guest

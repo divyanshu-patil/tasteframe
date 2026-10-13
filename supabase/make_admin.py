@@ -4,7 +4,7 @@
     ... make_admin.py you@example.com --revoke
 
 Reads DATABASE_URL from apps/api/.env. Admins can view analytics and the layout-request queue
-at /admin. There is deliberately no API for this.
+at /admin. Use this for the first admin; after that, admins can promote others from the Users tab.
 """
 
 import sys

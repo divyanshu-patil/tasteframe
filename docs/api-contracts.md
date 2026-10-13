@@ -274,8 +274,13 @@ sessions or expired Stories.
 - `GET /v1/admin/stats?days=1..365` returns
   `{totals, daily[], referrers[], pages[], layouts[], devices{}, accounts{users, admins, new}, requests{}}`.
 - `GET /v1/admin/users?days=1..365` returns `{users: [{id, email, role, created_at, last_seen,
-  events, pageviews, analyses, layout_opens, exports, saves, layouts: [{name, count}]}]}`, most
+  events, pageviews, analyses, layout_opens, exports, saves, layouts: [{name, count}], suspended}]}`, most
   active first (signed-in activity only; top 3 layouts each).
+- `PATCH /v1/admin/users/{id}`: `{role?: "user"|"admin", suspended?: bool}` (at least one) returns
+  `{id, role, suspended}`. Runs `public.admin_set_user`, which re-checks admin and refuses your own
+  account (400 `NOT_SELF`). Suspending bans the account in Supabase Auth and deletes its sessions;
+  a suspended account's token gets 403 `ACCOUNT_SUSPENDED` (or is treated as a guest where login
+  is optional), and a suspended admin loses admin rights in the database at once.
 - `GET /v1/admin/requests?status=pending|accepted|rejected|done` returns `{requests[]}`.
 - `GET /v1/admin/requests/{id}` returns one request.
 - `PATCH /v1/admin/requests/{id}`: `{status, admin_note?}` returns the updated request (stamps
