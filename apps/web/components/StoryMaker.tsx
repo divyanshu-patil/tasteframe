@@ -498,6 +498,11 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           onStartOver={startOver}
           onSave={save}
           signedIn={Boolean(user)}
+          onSongLogin={
+            favouritesLocked
+              ? () => requestLogin("Log in to pick a different song — your suggested song is already on the Story.")
+              : undefined
+          }
         />
       );
     }

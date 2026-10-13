@@ -21,8 +21,8 @@ from app.schemas.api import (
 )
 from app.services.insights.likes import like_counts
 from app.services.music.itunes import find_tracks
-from app.services.music.trending import REELS_UPDATED, chart_keys, trend_of
-from app.services.music.vibes import pool, rotate, vibe_from_cues
+from app.services.music.trending import REELS_UPDATED, chart_keys, key, trend_of
+from app.services.music.vibes import rotate, songs_for, vibe_from_cues
 from app.services.qloo.client import QlooClient, QlooEntity
 from app.services.recommendations.layouts import rank_layouts
 from app.services.storage.store import Storage
@@ -64,7 +64,9 @@ async def cultural_signals(
 
 
 async def pick_music(
-    candidates: list[tuple[str, str]],
+    curated: list[tuple[str, str]],
+    related: list[str],
+    favourites_first: bool,
     vibe: str,
     language: str,
     evidence: list[str],
@@ -73,36 +75,57 @@ async def pick_music(
     country: str,
     reasoning: ImageReasoning | None = None,
 ) -> MusicSuggestion:
-    """Up to 3 songs from each of the first 5 candidate (artist, source) — a trending one when the
-    artist has it, else seeded picks from their top songs so photos differ — then the vision model
-    ranks them against what it saw in the photo. Best fit leads; the rest are alternatives."""
-    if not candidates:
+    """Candidate songs: the curated (artist, title) picks for the photo's vibe, each verified in
+    the artist's iTunes catalogue, plus a couple of songs by Qloo-related artists (a trending one
+    when they have it). The vision model then ranks them against what it saw in the photo; best
+    fit leads, the rest are alternatives (one per layout)."""
+    curated, related = curated[:6], related[:3]
+    artists = list(dict.fromkeys([a for a, _ in curated] + related))
+    if not artists:
         return MusicSuggestion(kind="none", explanation="No music suggestion for this photo.")
-    head = candidates[:5]
-    found = await asyncio.gather(
-        *(find_tracks(a, settings, country, music_transport) for a, _ in head)
+    found = dict(
+        zip(
+            artists,
+            await asyncio.gather(
+                *(find_tracks(a, settings, country, music_transport) for a in artists)
+            ),
+            strict=True,
+        )
     )
     chart = chart_keys(language, settings, music_transport)
-    groups: list[list[Song]] = []
-    for (artist, src), tracks in zip(head, found, strict=True):
-        hot = [t for t in tracks if trend_of(artist, t[0], chart)]
-        chosen = list(dict.fromkeys([*hot[:1], *rotate(tracks[:10], seed)[:3]]))[:3]
-        groups.append(
-            [
-                Song(
-                    title=t,
-                    artist=artist,
-                    url=u,
-                    track_id=i,
-                    trending=trend_of(artist, t, chart),  # type: ignore[arg-type]
-                    source=src,  # type: ignore[arg-type]
-                )
-                for t, u, i in chosen
-            ]
-        )
-    # Without a ranking: one song per artist in turn (variety across layouts), trending first.
-    default = [x for row in zip_longest(*groups) for x in row if x]
-    default.sort(key=lambda x: x.trending is None)
+
+    def song(artist: str, src: str, t: tuple[str, str | None, int | None]) -> Song:
+        trend = trend_of(artist, t[0], chart)
+        return Song(title=t[0], artist=artist, url=t[1], track_id=t[2], trending=trend, source=src)  # type: ignore[arg-type]
+
+    picked = [
+        song(a, "vibe", t)
+        for a, title in curated
+        if (t := next((x for x in found[a] if key(a, x[0]) == key(a, title)), None))
+    ]
+    if len(picked) < 4:  # titles iTunes doesn't list: fall back to those artists' top songs
+        picked += [song(a, "vibe", t) for a, _ in curated for t in rotate(found[a][:10], seed)[:1]]
+    qloo: list[Song] = []
+    for a in related:
+        hot = [t for t in found[a] if trend_of(a, t[0], chart)]
+        qloo += [
+            song(a, "qloo", t)
+            for t in list(dict.fromkeys([*hot[:1], *rotate(found[a][:10], seed)[:2]]))[:2]
+        ]
+    # Without a ranking: favourites' neighbours and vibe picks take turns (or vibe picks first);
+    # duplicates dropped.
+    mixed = (
+        [x for row in zip_longest(qloo, picked) for x in row if x]
+        if favourites_first
+        else [*picked, *qloo]
+    )
+    default: list[Song] = []
+    for x in mixed:
+        if all((x.title.casefold(), x.artist) != (y.title.casefold(), y.artist) for y in default):
+            default.append(x)
+    # Trending wins among this photo's top few only, so photos with one vibe don't all share
+    # the same trending song.
+    default[:3] = sorted(default[:3], key=lambda x: x.trending is None)
 
     def why(artist: str, src: str) -> str:
         if src == "qloo":
@@ -113,7 +136,7 @@ async def pick_music(
         )
 
     if not default:
-        artist, src = candidates[0]
+        artist, src = (related[0], "qloo") if favourites_first and related else (artists[0], "vibe")
         return MusicSuggestion(
             kind="artist",
             artist=artist,
@@ -210,14 +233,14 @@ async def run_analysis(
             if reasoning
             else list(profile.mood)
         )
-        vibe_artists = rotate(list(pool(req.music_language, vibe)), seed)
+        vibe_songs = rotate(list(songs_for(req.music_language, vibe)), seed)
         artists: list[QlooEntity] = []
         movies: list[QlooEntity] = []
         qloo_error = None
         anchor: list[QlooEntity] = []
         if settings.qloo_enabled:
             try:  # the vibe's lead artist joins your favourites as a Qloo signal
-                anchor = (await qloo.search_entities(vibe_artists[0], "artist", take=1))[:1]
+                anchor = (await qloo.search_entities(vibe_songs[0][0], "artist", take=1))[:1]
             except AppError as e:
                 qloo_error = e.code
         ids = [s.entity_id for s in req.taste_seeds] + [e.entity_id for e in anchor]
@@ -242,19 +265,12 @@ async def run_analysis(
             for e in [*artists[:3], *movies[:2]]
         ]
 
-        related = [(e.name, "qloo") for e in rotate(artists[:4], seed)]
-        pooled = [(a, "vibe") for a in vibe_artists]
-        # With favourites, Qloo's related artists lead; otherwise the vibe pick leads and Qloo's
-        # neighbours of it follow.
-        ordered = [*related, *pooled] if req.taste_seeds else [pooled[0], *related[:2], *pooled[1:]]
-        candidates: list[tuple[str, str]] = []
-        for c in ordered:
-            if all(c[0].casefold() != x.casefold() for x, _ in candidates):
-                candidates.append(c)
         # Start on the songs now so they overlap the layout work; sent after the result.
         music_task = asyncio.create_task(
             pick_music(
-                candidates,
+                vibe_songs,
+                [e.name for e in rotate(artists[:4], seed)],
+                bool(req.taste_seeds),
                 vibe,
                 req.music_language,
                 evidence,

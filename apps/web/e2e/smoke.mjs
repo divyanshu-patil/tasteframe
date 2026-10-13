@@ -99,6 +99,7 @@ async function run(name, contextOptions) {
     if (features.saved_stories) {
       await page.getByRole("button", { name: "Log in to save" }).click();
       const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Continue with Google" }).waitFor();
       await dialog.getByText("Log in to save this Story").waitFor();
       if (!process.env.E2E_EMAIL) {
         await dialog.getByRole("button", { name: "Not now" }).click();

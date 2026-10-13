@@ -230,8 +230,8 @@ def test_a_new_or_liked_layout_that_fits_is_promoted_into_the_first_three():
 
 
 def test_trending_song_is_preferred():
-    """Among suggested songs, one in Apple Music's most-played chart (or reported trending on
-    Reels) leads, even when it isn't the vibe's first artist or that artist's rotated pick."""
+    """Among a photo's top suggested songs, one in Apple Music's most-played chart (or reported
+    trending on Reels) leads, even when it isn't the first pick."""
     from app.services import analysis
     from app.services.music.trending import key
 
@@ -250,15 +250,16 @@ def test_trending_song_is_preferred():
 
     async def run():
         await trending.refresh("en", s, analysis.music_transport)  # normally warmed at startup
-        cands = [("Alpha", "vibe"), ("Beta", "vibe")]
-        return await analysis.pick_music(cands, "cute", "en", [], 0, s, "US")
+        curated = [("Alpha", "Alpha song 0"), ("Beta", "Beta song 7")]  # second pick charts
+        return await analysis.pick_music(curated, [], False, "cute", "en", [], 0, s, "US")
 
     try:
         m = asyncio.run(run())
     finally:
         analysis.music_transport = old
     assert (m.artist, m.title, m.trending) == ("Beta", "Beta song 7", "chart")
-    assert m.alternatives[0].artist == "Alpha" and m.alternatives[0].trending is None
+    assert m.alternatives[0].title == "Alpha song 0"
+    assert all(x.trending is None for x in m.alternatives)
     assert "most-played" in m.explanation and "🔥" in m.explanation
     assert key("Hozier", "Too Sweet") == key("hozier & X", "Too Sweet (Remix)")
 
@@ -293,14 +294,13 @@ def test_vision_model_ranks_songs_against_the_photo():
     analysis.music_transport = httpx.MockTransport(itunes)
     analysis.vision_transport = httpx.MockTransport(ollama)
     try:
-        m = asyncio.run(
-            analysis.pick_music([("A", "vibe"), ("B", "vibe")], "sweet", "en", [], 0, s, "US", r)
-        )
+        curated = [("A", "A0"), ("B", "B0"), ("A", "A1"), ("B", "B1")]
+        m = asyncio.run(analysis.pick_music(curated, [], False, "sweet", "en", [], 0, s, "US", r))
     finally:
         analysis.music_transport, analysis.vision_transport = old
     assert '0. "A0" — A' in seen["prompt"] and "golden hour" in seen["prompt"]
     assert (m.title, m.why) == ("A1", "slow and warm, like the light")
-    assert [x.title for x in m.alternatives] == ["A0", "B0", "B1", "A2", "B2"]
+    assert [x.title for x in m.alternatives] == ["A0", "B0", "B1"]
     assert "Ranked against your photo" in m.explanation
 
 

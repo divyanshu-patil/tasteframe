@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { type Track, searchTracks, trackArtwork } from "../lib/api";
+import { type Song, type Track, searchTracks, trackArtwork } from "../lib/api";
 import type { CoverState, CoverStyle } from "../lib/story/cover";
 import type { Photo } from "../lib/story/draw";
 import { checkFile } from "../lib/upload";
@@ -52,14 +52,27 @@ interface Props {
   /** Subject position of photo 1 (0..1), for "Place over face". */
   focus: { x: number; y: number };
   hasImage: boolean;
+  /** Songs suggested for this photo/layout, best first (picked from in one tap). */
+  songs?: Song[];
+  /** Picking a song needs an account: resolves true once signed in. Omit when not gated. */
+  requireLogin?: () => Promise<boolean>;
 }
 
-export function CoverPanel({ cover, onChange, onUpload, focus, hasImage }: Props) {
+export function CoverPanel({ cover, onChange, onUpload, focus, hasImage, songs = [], requireLogin }: Props) {
   const [q, setQ] = useState("");
   const [state, setState] = useState<{ kind: "idle" | "busy" } | { kind: "results"; tracks: Track[] } | { kind: "error"; msg: string }>({ kind: "idle" });
 
+  /** Runs a song-picking action, asking guests to log in first. */
+  const gated = async (act: () => void | Promise<void>) => {
+    if (requireLogin && !(await requireLogin())) return;
+    await act();
+  };
+  const pick = (t: { track_id: number | null; title: string; artist: string }) =>
+    void gated(() => onChange({ show: true, trackId: t.track_id ?? undefined, title: t.title, artist: t.artist }));
+
   const search = async () => {
     if (q.trim().length < 2) return;
+    if (requireLogin && !(await requireLogin())) return;
     setState({ kind: "busy" });
     try {
       const tracks = await searchTracks(q.trim());
@@ -87,6 +100,26 @@ export function CoverPanel({ cover, onChange, onUpload, focus, hasImage }: Props
       <label className={s.row}>
         <input type="checkbox" checked={cover.show} onChange={(e) => onChange({ show: e.target.checked })} /> Show a square song cover
       </label>
+      {songs.length > 0 && (
+        <>
+          <p className={s.small}>
+            Suggested for this photo{requireLogin && " · log in to pick a different one"}:
+          </p>
+          <ul className={s.small} aria-label="Suggested songs">
+            {songs.map((t) => {
+              const on = cover.title === t.title && cover.artist === t.artist;
+              return (
+                <li key={`${t.artist}-${t.title}`}>
+                  <button className={s.linkBtn} aria-pressed={on} onClick={() => pick(t)}>
+                    {on ? "✓ " : ""}{t.title} — {t.artist}
+                  </button>
+                  {t.trending && <span className={s.tags}> 🔥</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
       <div className={s.searchRow}>
         <input
           className={s.input}
@@ -108,7 +141,7 @@ export function CoverPanel({ cover, onChange, onUpload, focus, hasImage }: Props
               <button
                 className={s.linkBtn}
                 aria-pressed={cover.trackId === t.track_id}
-                onClick={() => onChange({ show: true, trackId: t.track_id, title: t.title, artist: t.artist })}
+                onClick={() => pick(t)}
               >
                 {t.title} — {t.artist}
               </button>

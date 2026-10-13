@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { signIn, signUp } from "../lib/auth";
+import { signIn, signInWithGoogle, signUp } from "../lib/auth";
 import s from "./maker.module.css";
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
   onDone: (signedIn: boolean) => void;
 }
 
-/** Email + password login / sign-up (Supabase Auth) in a native modal <dialog>. */
+/** Google or email + password login / sign-up (Supabase Auth) in a native modal <dialog>. */
 export function LoginDialog({ open, reason, onDone }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -29,6 +29,14 @@ export function LoginDialog({ open, reason, onDone }: Props) {
       d.showModal();
     } else if (!open && d.open) d.close();
   }, [open]);
+
+  const google = async () => {
+    setState({ kind: "busy" });
+    const res = await signInWithGoogle();
+    if (res.ok === true) onDone(true);
+    else if (res.ok === false) setState({ kind: "error", msg: res.error });
+    // "redirect": popups were blocked, so the page is moving to Google.
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +65,10 @@ export function LoginDialog({ open, reason, onDone }: Props) {
           </p>
         ) : (
           <>
+            <button type="button" className={s.secondary} onClick={() => void google()} disabled={state.kind === "busy"}>
+              {state.kind === "busy" ? "Finish in the Google window…" : "Continue with Google"}
+            </button>
+            <p className={s.small}>or with email</p>
             <label className={s.field}>
               <span>Email</span>
               <input className={s.input} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />

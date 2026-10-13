@@ -87,10 +87,11 @@ def test_analysis_without_seeds_returns_three_distinct_layouts(client):
     assert res["visual_profile"]["source"] == "vision+manual"
     assert res["visual_profile"]["composition"] == "portrait"
     # No favourites: still a music pick, from the photo's vibe (cinematic → toxic).
-    from app.services.music.vibes import POOLS
+    from app.services.music.vibes import SONGS
 
     assert res["music"]["kind"] == "artist" and res["music"]["artist_source"] == "vibe"
-    assert res["music"]["vibe"] == "toxic" and res["music"]["artist"] in POOLS["en"]["toxic"]
+    toxic = {a for a, _ in SONGS["en"]["toxic"]}
+    assert res["music"]["vibe"] == "toxic" and res["music"]["artist"] in toxic
     assert res["provenance"]["qloo_used"] is False and res["cultural_recommendations"] == []
 
 
@@ -283,23 +284,26 @@ def test_jpg_mime_aliases_are_accepted_as_jpeg(client):
 
 
 def test_guest_gets_vibe_song_that_varies_by_photo(client_with, monkeypatch):
-    """No favourites: the photo's vibe picks an artist (+ Qloo neighbours) and a real song;
-    different uploads land on different songs, the same upload keeps its pick."""
+    """No favourites: the photo's vibe picks curated songs, each verified on iTunes (titles iTunes
+    doesn't list are skipped); different uploads land on different songs, re-runs keep theirs."""
     from app.services import analysis
-    from app.services.music.vibes import POOLS
+    from app.services.music.vibes import SONGS
+
+    curated = {lang: {t for _, t in SONGS[lang]["cute"]} for lang in ("en", "hi")}
 
     def itunes(req: httpx.Request) -> httpx.Response:
         if "most-played" in req.url.path:
             return httpx.Response(404)  # no chart today
         artist = req.url.params["term"]
+        titles = [t for a, t in SONGS["en"]["cute"] + SONGS["hi"]["cute"] if a == artist]
         songs = [
             {
                 "artistName": artist,
-                "trackName": f"{artist} song {i}",
+                "trackName": t,
                 "trackId": 100 + i,
                 "trackViewUrl": "https://music.apple.com/us/album/x?i=1",
             }
-            for i in range(6)
+            for i, t in enumerate([f"{artist} song", *titles])
         ]
         return httpx.Response(200, json={"results": songs})
 
@@ -319,14 +323,13 @@ def test_guest_gets_vibe_song_that_varies_by_photo(client_with, monkeypatch):
     picks = [run(k) for k in keys]
     for m in picks:
         assert m["kind"] == "track" and m["track_source"] == "itunes"
-        assert m["vibe"] == "cute" and m["artist"] in POOLS["en"]["cute"]
-        assert m["title"].startswith(m["artist"]) and len(m["alternatives"]) == 8
-        # No vision model here: songs alternate artists so each layout gets a different one.
-        assert len({a["artist"] for a in [m, *m["alternatives"][:4]]}) == 5
+        assert m["vibe"] == "cute" and m["title"] in curated["en"]
+        assert len(m["alternatives"]) == 5  # the other curated picks: one song per layout
+        assert all(a["title"] in curated["en"] for a in m["alternatives"])
     assert len({m["title"] for m in picks}) > 1
     assert run(keys[0])["title"] == picks[0]["title"]
     hindi = run(keys[0], "hi")
-    assert hindi["language"] == "hi" and hindi["artist"] in POOLS["hi"]["cute"]
+    assert hindi["language"] == "hi" and hindi["title"] in curated["hi"]
 
 
 def test_favourites_need_login_when_accounts_exist(client, monkeypatch):
@@ -337,6 +340,8 @@ def test_favourites_need_login_when_accounts_exist(client, monkeypatch):
     get_settings.cache_clear()
     h = new_session(client)
     r = client.get("/v1/taste/search", params={"q": "drake"}, headers=h)
+    assert r.status_code == 401 and r.json()["error"]["code"] == "AUTH_REQUIRED"
+    r = client.get("/v1/music/search", params={"q": "drake"}, headers=h)  # picking a song, too
     assert r.status_code == 401 and r.json()["error"]["code"] == "AUTH_REQUIRED"
     body = {
         "object_key": upload(client, h, make_image()),

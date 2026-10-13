@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, Path, Query, Response
 
+from app.core.auth import AuthUser, optional_user
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
 from app.core.security import rate_limit, require_session
@@ -23,8 +24,13 @@ music_transport = None
     ],
 )
 async def search(
-    q: str = Query(min_length=2, max_length=80), settings: Settings = Depends(get_settings)
+    q: str = Query(min_length=2, max_length=80),
+    settings: Settings = Depends(get_settings),
+    user: AuthUser | None = Depends(optional_user),
 ) -> TrackSearchOut:
+    # Picking your own song is a signed-in feature (the suggested song needs no account).
+    if settings.supabase_enabled and not user:
+        raise AppError("AUTH_REQUIRED", "Log in to pick a different song.", 401)
     tracks = await search_tracks(q.strip(), settings, transport=music_transport)
     return TrackSearchOut(query=q, tracks=tracks)  # type: ignore[arg-type]
 

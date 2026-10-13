@@ -66,7 +66,7 @@ async def find_tracks(
         "term": artist,
         "entity": "song",
         "attribute": "artistTerm",
-        "limit": 25,
+        "limit": 50,
         "country": country,
     }
     try:

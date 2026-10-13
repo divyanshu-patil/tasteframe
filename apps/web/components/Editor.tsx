@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type Music, searchTracks } from "../lib/api";
+import { type Music, searchTracks, songsOf } from "../lib/api";
 import type { Photo } from "../lib/story/draw";
 import { type EditorAction, editorReducer } from "../lib/story/editor";
 import { exportFilename, exportPng, exportVideo, videoType } from "../lib/story/export";
@@ -41,6 +41,8 @@ interface Props {
   /** Present only when saving is configured and the photo is uploaded. */
   onSave?: () => Promise<void>;
   signedIn?: boolean;
+  /** Set when picking a song needs an account: opens login, resolves true once signed in. */
+  onSongLogin?: () => Promise<boolean>;
   /** Add photos later to fill a multi-photo layout's empty slots. */
   onAddPhotos?: (files: FileList | null) => Promise<void>;
 }
@@ -76,7 +78,7 @@ function download(blob: Blob, name: string) {
 
 const stickerName = (st: Sticker) => STICKER_KINDS.find((k) => k.kind === st.kind)?.label ?? "Sticker";
 
-export function Editor({ photos, story, setStory, input, suggested, music, musicPending = false, onBack, onStartOver, onSave, signedIn = false, onAddPhotos }: Props) {
+export function Editor({ photos, story, setStory, input, suggested, music, musicPending = false, onBack, onStartOver, onSave, signedIn = false, onSongLogin, onAddPhotos }: Props) {
   const width = usePreviewWidth();
   const dispatch = (a: EditorAction) => setStory((cur) => (cur ? editorReducer(cur, a) : cur));
   const tpl = TEMPLATES[story.templateId];
@@ -89,6 +91,13 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
   const [audio, setAudio] = useState<File | null>(null);
   const [clipSeconds, setClipSeconds] = useState(15);
   const [video, setVideo] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
+  // Songs can arrive after the editor opened: put this layout's song on the empty sticker.
+  useEffect(() => {
+    if (music?.kind === "track" && story.cover && !story.cover.title) {
+      dispatch({ type: "cover", patch: { title: music.title ?? "", artist: music.artist ?? "", trackId: music.track_id ?? undefined } });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the suggestion changes
+  }, [music?.title, music?.artist]);
   const [canVideo, setCanVideo] = useState(false); // browser-only check (avoids an SSR mismatch)
   useEffect(() => setCanVideo(videoType() !== null), []);
   const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
@@ -308,11 +317,13 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
         />
         {musicPending ? (
           <div className={s.songNow} role="status">♪ Finding a song for this Story…</div>
-        ) : music?.kind === "track" ? (
+        ) : story.cover?.title ? (
+          // The song on the sticker: the suggestion for this layout, or the one you picked.
           <div className={s.songNow}>
-            ♪ Song for this Story: <strong>{music.title}</strong> — {music.artist}
-            {music.trending && <> · {music.trending === "chart" ? "🔥 top on Apple Music now" : "🔥 trending on Reels"}</>}
-            {music.url && (
+            ♪ Song for this Story: <strong>{story.cover.title}</strong>
+            {story.cover.artist && <> — {story.cover.artist}</>}
+            {music?.title === story.cover.title && music.trending && <> · {music.trending === "chart" ? "🔥 top on Apple Music now" : "🔥 trending on Reels"}</>}
+            {music?.title === story.cover.title && music.url && (
               <> · <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer">listen ↗</a></>
             )}
           </div>
@@ -554,6 +565,8 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
               onUpload={setUploadedCover}
               focus={story.focus ?? { x: story.crop.x, y: story.crop.y }}
               hasImage={Boolean(coverImg)}
+              songs={songsOf(music)}
+              requireLogin={onSongLogin}
             />
           </Section>
         )}

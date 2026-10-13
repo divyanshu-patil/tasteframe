@@ -48,9 +48,13 @@ Request:
   "object_key": "tmp/<session>/<random>.jpg",
   "taste_seeds": [{"entity_id": "<UUID from /v1/taste/search>", "entity_type": "artist", "name": "…"}],
   "manual_mood": ["cinematic", "nostalgic"],
+  "music_language": "en",
   "locale": "en"
 }
 ```
+- `music_language` ∈ `en | hi | pa | es | ko` (default `en`): language of the suggested songs.
+- `taste_seeds` need a signed-in user (`Authorization: Bearer <Supabase token>`) when Supabase is
+  configured, else 401 `AUTH_REQUIRED`. Song suggestions never need one.
 - `object_key` must belong to the caller's session (else 404 `OBJECT_NOT_FOUND`, same as missing).
 - `taste_seeds` ≤ 5; `entity_id` must be UUID-shaped; `entity_type` ∈ `artist | movie | tv_show |
   brand | book | podcast` (mapped to Qloo URNs server-side).
@@ -63,7 +67,8 @@ Response: `application/x-ndjson`, one JSON object per line:
 {"stage":"mood"}
 {"stage":"taste"}
 {"stage":"layouts"}
-{"result":{ …AnalysisOut… }}      ← or {"error":{…}} at any point
+{"result":{ …AnalysisOut… }}      ← or {"error":{…}} at any point; "music_pending": true
+{"music":{ …MusicSuggestion… }}   ← songs follow the layouts (always sent after a result)
 ```
 `AnalysisOut` (values illustrative):
 ```json
@@ -81,13 +86,11 @@ Response: `application/x-ndjson`, one JSON object per line:
   "layouts": [{
     "id": "vintage", "name": "Vintage", "reason": "…", "style_tags": ["grain", "light leak", "date stamp"],
     "score": {"visual_fit": 0.8, "cultural_style_fit": 0.9, "readability_fit": 0.7, "total": 0.82},
-    "headline": "golden hour, again.", "caption": "on repeat — <artist>", "accent": "#e79647",
+    "headline": "golden hour, again.", "caption": "", "accent": "#e79647",
     "focus_x": 0.55, "focus_y": 0.42
   }],
-  "music": {
-    "kind": "track | artist | none", "artist": "…", "title": "only when kind=track", "url": "https://music.apple.com/… or null",
-    "artist_source": "qloo", "track_source": "itunes | null", "explanation": "…"
-  },
+  "music": {"kind": "none", "explanation": "Picking songs for your photo…"},
+  "music_pending": true,
   "image_reasoning": {
     "provider": "ollama", "model": "gemma4:31b", "summary": "…", "moods": ["cinematic"],
     "scene": ["golden hour"], "headline_ideas": ["quiet moments"],
@@ -100,6 +103,23 @@ Response: `application/x-ndjson`, one JSON object per line:
   }
 }
 ```
+`MusicSuggestion` (the `{"music": …}` event; values illustrative):
+```json
+{
+  "kind": "track | artist | none", "artist": "…", "title": "only when kind=track",
+  "url": "https://music.apple.com/… or null", "track_id": 123, "artist_source": "vibe | qloo",
+  "track_source": "itunes | null", "vibe": "baddie", "language": "en",
+  "trending": "chart | reels | null", "why": "the vision model's short fit reason or null",
+  "explanation": "…",
+  "alternatives": [{"title": "…", "artist": "…", "url": null, "track_id": 456,
+                    "trending": null, "source": "vibe", "why": null}]
+}
+```
+Songs: curated picks for the photo's vibe (`app/services/music/vibes.py`, each verified in the
+artist's iTunes catalogue) plus songs by Qloo-related artists, ranked against the photo by the
+vision model. The UI gives each layout its own song (lead first, then the alternatives in order)
+and fills the layout's caption with it.
+
 `layouts` contains **every** template, ranked for this photo; each consecutive group of three has
 distinct families (the UI shows three at a time and Shuffle moves to the next group). Each layout
 also has `filter` (suggested photo look) and `score.ai_pick` (the vision model's pick weight, or
@@ -107,15 +127,16 @@ null without image reasoning). `score` is an internal heuristic, never a provide
 crop focus: the main subject's position from image reasoning, or 0.5/0.5 when unknown. Layout `id`s are rendered by
 `apps/web/lib/story/templates.ts` (a test keeps both catalogues in sync).
 
-## `GET /v1/taste/search?q=<2–80 chars>&type=<taste type>`
+## `GET /v1/taste/search?q=<2–80 chars>&type=<taste type>` (login when Supabase is configured)
 ```json
 {"query":"…","entity_type":"artist","candidates":[
   {"provider":"qloo","entity_id":"…","name":"…","entity_type":"artist","disambiguation":"provider descriptor or null","image_url":null}
 ]}
 ```
 
-## `GET /v1/music/search?q=<2–80 chars>` (session required)
-Songs from the iTunes Search API, for picking a Story's square song cover. No audio.
+## `GET /v1/music/search?q=<2–80 chars>` (session required; login too when Supabase is configured)
+Songs from the iTunes Search API, for picking a Story's square song cover. No audio. Picking a
+different song is a signed-in feature (401 `AUTH_REQUIRED` for guests); the suggested song is not.
 ```json
 {"query":"golden hour","tracks":[{"track_id":1640157165,"title":"golden hour","artist":"JVKE","album":"…","has_artwork":true,"explicit":false}]}
 ```

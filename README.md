@@ -177,7 +177,8 @@ photo, preferring songs that are trending right now (Apple Music's most-played c
 reported trending on Reels). Songs arrive a few seconds after the layouts, and every layout gets
 its own song, so shuffling shows new ones.
 
-Logged in, you can also name favourite artists, films or brands. [Qloo](https://www.qloo.com/)
+Log in (Google or email) to pick a different song for the sticker — from the suggestions or by
+search — and to name favourite artists, films or brands. [Qloo](https://www.qloo.com/)
 returns the culture around them (blended with the vibe artist) and its tags ("indie", "funk",
 "noir") lean the layout ranking. Apple's catalogue supplies real song titles, never invented ones.
 

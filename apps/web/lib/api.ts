@@ -187,14 +187,20 @@ export function parseMusic(m: unknown): Music {
   return music;
 }
 
-/** This layout's song: layout `index` (its rank) leads, the rest of the list follows. */
-export function musicFor(music: Music, index: number): Music {
-  if (music.kind !== "track" || !music.alternatives.length) return music;
+/** Every suggested song (the lead first); empty when there's no verified track. */
+export function songsOf(music: Music | null): Song[] {
+  if (music?.kind !== "track") return [];
   const lead: Song = {
     title: music.title ?? "", artist: music.artist ?? "", url: music.url, track_id: music.track_id,
     trending: music.trending, source: music.artist_source === "qloo" ? "qloo" : "vibe", why: music.why,
   };
-  const all = [lead, ...music.alternatives];
+  return [lead, ...music.alternatives];
+}
+
+/** This layout's song: layout `index` (its rank) leads, the rest of the list follows. */
+export function musicFor(music: Music, index: number): Music {
+  const all = songsOf(music);
+  if (all.length < 2) return music;
   const k = ((index % all.length) + all.length) % all.length;
   const [head, ...rest] = [...all.slice(k), ...all.slice(0, k)];
   return {
