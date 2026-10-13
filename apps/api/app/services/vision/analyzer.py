@@ -14,6 +14,7 @@ from app.core.errors import AppError
 from app.schemas.api import Mood, VisualProfile
 
 FORMATS = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
+ANALYSIS_MAX_SIDE = 1024
 
 
 def decode_and_sanitize(
@@ -39,13 +40,18 @@ def decode_and_sanitize(
     except Exception:  # noqa: BLE001 — any decoder failure means "not a valid image"
         raise AppError("INVALID_IMAGE", "That file could not be read as an image.", 415) from None
 
-    # Bake in camera orientation, then re-encode without EXIF/GPS/XMP metadata.
-    im = ImageOps.exif_transpose(im)
+    # Bake in camera orientation (in place: no second full-size copy), then re-encode without
+    # EXIF/GPS/XMP metadata.
+    ImageOps.exif_transpose(im, in_place=True)
     if fmt == "JPEG" and im.mode not in ("RGB", "L"):
         im = im.convert("RGB")
     out = io.BytesIO()
     save_kwargs = {"quality": 92} if fmt in ("JPEG", "WEBP") else {}
     im.save(out, format=fmt, **save_kwargs)
+    # The stored copy keeps full resolution; analysis never needs more than 1024 px (vision model
+    # 768, colours 160). Holding full-size photos for the whole run took 3-photo Stories past
+    # a 512 MB server.
+    im.thumbnail((ANALYSIS_MAX_SIDE, ANALYSIS_MAX_SIDE))
     return im, out.getvalue(), FORMATS[fmt]
 
 

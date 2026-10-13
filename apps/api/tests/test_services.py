@@ -318,3 +318,22 @@ def test_chart_lookup_never_waits_on_the_network():
         return first, trending.chart_keys("ko", s, t)
 
     assert asyncio.run(run()) == (set(), {("a", "s")})
+
+
+def test_decode_keeps_full_size_bytes_but_a_small_image_for_analysis():
+    import io
+
+    from PIL import Image
+
+    from app.services.vision.analyzer import decode_and_sanitize
+
+    im = Image.new("RGB", (3000, 2000), "orange")
+    exif = im.getexif()
+    exif[0x0112] = 6  # rotate 90° on display, like a portrait phone shot
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", exif=exif)
+    small, clean, ctype = decode_and_sanitize(buf.getvalue(), 10 * 2**20, 40_000_000)
+    assert small.size == (683, 1024)  # rotated, and capped for analysis (memory)
+    stored = Image.open(io.BytesIO(clean))
+    assert stored.size == (2000, 3000) and 0x0112 not in stored.getexif()  # full size, no EXIF
+    assert ctype == "image/jpeg"
