@@ -24,7 +24,7 @@
 .segment { display: inline-flex; border: 1px solid var(--color-ink-black); border-radius: var(--radius-sm); overflow: hidden; }
 .segment a { display: inline-flex; align-items: center; min-height: 34px; padding: 0 var(--spacing-14); color: inherit; text-decoration: none; font-size: 15px; }
 .segment a + a { border-left: 1px solid var(--color-ink-black); }
-.segOn { background: var(--color-ink-black) !important; color: var(--color-parchment); }
+.segOn { background: var(--color-ink-black) !important; color: var(--color-parchment) !important; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); border-top: 1px solid var(--color-ink-black); }
 .card { padding: var(--spacing-14) var(--spacing-14) var(--spacing-14) 0; border-bottom: 1px solid var(--color-bone-cream); }
