@@ -65,9 +65,9 @@ export async function signUp(email: string, password: string): Promise<AuthResul
   const { data, error } = await sb.auth.signUp({
     email,
     password,
-    // The landing page finishes sign-in from the link (components/AuthReturn.tsx). Supabase only
-    // honours this if the URL is in Authentication → URL Configuration → Redirect URLs.
-    options: { emailRedirectTo: `${siteUrl()}/` },
+    // /auth/callback finishes sign-in from the link (components/OAuthCallback.tsx), the same
+    // page Google returns to, so Supabase's Redirect URLs only need <origin>/auth/callback.
+    options: { emailRedirectTo: `${siteUrl()}${OAUTH_CALLBACK}` },
   });
   if (error) return { ok: false, error: error.message };
   // With "Confirm email" on, Supabase returns a user but no session until the link is clicked.

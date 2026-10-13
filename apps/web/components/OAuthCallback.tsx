@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/auth";
 
 /**
- * Finishes Google sign-in: supabase-js reads the tokens from the URL and stores the session, which
+ * Finishes Google sign-in and email-confirmation links: supabase-js reads the tokens from the URL and stores the session, which
  * the original tab picks up. In the popup we then close; after a full-page redirect we go on to
  * the studio.
  */
