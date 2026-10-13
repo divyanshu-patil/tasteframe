@@ -40,6 +40,7 @@ yarn-error.log*
 # Env files with real values (.env.example templates are committed)
 .env
 .env.*.local
+.env.production
 
 # Python
 .venv/
