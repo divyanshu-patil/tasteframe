@@ -4,6 +4,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.services.music.vibes import Language, Vibe
+
 # App-level taste types, mapped to Qloo URNs inside the Qloo adapter.
 TasteType = Literal["artist", "movie", "tv_show", "brand", "book", "podcast"]
 Mood = Literal[
@@ -218,6 +220,7 @@ class AnalysisIn(BaseModel):
     taste_seeds: list[TasteSeed] = Field(default_factory=list, max_length=5)
     manual_mood: list[Mood] = Field(default_factory=list, max_length=4)
     locale: str = Field("en", pattern=r"^[a-z]{2}(-[A-Z]{2})?$")
+    music_language: Language = "en"  # language of the suggested songs
 
     @model_validator(mode="after")
     def _keys(self) -> "AnalysisIn":
@@ -291,15 +294,38 @@ class LayoutSuggestion(BaseModel):
     is_new: bool = False  # added recently (ranked with a small boost)
 
 
+Trend = Literal["chart", "reels"]
+
+
+class Song(BaseModel):
+    """A song that fits the photo (iTunes-verified title + artist)."""
+
+    title: str
+    artist: str
+    url: str | None = None
+    track_id: int | None = None
+    trending: Trend | None = None
+    source: Literal["qloo", "vibe"] = "vibe"
+    why: str | None = Field(None, max_length=90)  # the vision model's short fit reason
+
+
 class MusicSuggestion(BaseModel):
     kind: Literal["track", "artist", "none"]
     artist: str | None = None
     title: str | None = None
     url: str | None = None
-    artist_source: Literal["qloo"] | None = None
+    # "qloo": related to your favourites; "vibe": from the curated pool for the photo's vibe.
+    artist_source: Literal["qloo", "vibe"] | None = None
     track_source: Literal["itunes"] | None = None
     track_id: int | None = None  # for the song cover (GET /v1/music/artwork/{track_id})
     explanation: str
+    vibe: Vibe | None = None  # how the photo reads (pose/expression/mood), e.g. "baddie"
+    language: Language = "en"
+    # More songs, best fit first: the UI gives each layout / shuffle its own song.
+    alternatives: list[Song] = Field(default_factory=list, max_length=8)
+    # "chart": in Apple Music's most-played now; "reels": reported trending on Instagram Reels.
+    trending: Trend | None = None
+    why: str | None = Field(None, max_length=90)
 
 
 class ImageReasoning(BaseModel):
@@ -322,6 +348,7 @@ class ImageReasoning(BaseModel):
     # What the photo is about (controlled vocabulary, sensitive terms neutralised).
     about: str | None = None
     elements: list[str] = Field(default_factory=list, max_length=8)
+    vibe: Vibe | None = None  # social-media energy of the pose/expression
 
 
 class Provenance(BaseModel):
@@ -341,6 +368,8 @@ class AnalysisOut(BaseModel):
     cultural_recommendations: list[CulturalRecommendation]
     layouts: list[LayoutSuggestion]
     music: MusicSuggestion
+    # True while songs are still being picked; they follow as a separate {"music": …} event.
+    music_pending: bool = False
     image_reasoning: ImageReasoning | None = None
     provenance: Provenance
 

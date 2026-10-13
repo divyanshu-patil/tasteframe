@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type Analysis,
   ApiError,
+  LANGUAGES,
+  type Language,
   type LayoutSuggestion,
   MOODS,
   type Mood,
@@ -20,7 +22,7 @@ import {
 import { authConfigured, useAuth } from "../lib/auth";
 import { sampleFile } from "../lib/sample";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
-import { inputFor } from "../lib/story/input";
+import { inputFor, songFor } from "../lib/story/input";
 import { track } from "../lib/analytics";
 import { TEMPLATE_IDS, type StoryState, type TemplateId } from "../lib/story/types";
 import { MAX_BYTES, checkFile } from "../lib/upload";
@@ -73,6 +75,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   const [dragOver, setDragOver] = useState(false);
   const [moods, setMoods] = useState<Mood[]>([]);
   const [seeds, setSeeds] = useState<Seed[]>([]);
+  const [language, setLanguage] = useState<Language>("en");
   const [progress, setProgress] = useState<{
     upload: number;
     stage: Stage | null;
@@ -86,6 +89,8 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   const [features, setFeatures] = useState<Features | null>(null);
   const [savedVersion, setSavedVersion] = useState(0); // bump to refresh the saved list
   const { user } = useAuth();
+  // Favourites are a signed-in feature (when this deployment has accounts); songs never need one.
+  const favouritesLocked = authConfigured && !user;
   const [login, setLogin] = useState<{ reason: string; resolve: (ok: boolean) => void } | null>(null);
   const canSave = Boolean(features?.saved_stories && authConfigured);
   /** Opens the login dialog; resolves true once signed in (false if dismissed). */
@@ -268,7 +273,8 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
         {
           object_keys: keys,
           manual_mood: moods,
-          taste_seeds: seeds.map(({ entity_id, entity_type, name }) => ({
+          music_language: language,
+          taste_seeds: (favouritesLocked ? [] : seeds).map(({ entity_id, entity_type, name }) => ({
             entity_id,
             entity_type,
             name,
@@ -276,6 +282,14 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
         },
         (stage) => live() && setProgress((p) => ({ ...p, stage })),
         ctrl.signal,
+        // Songs follow the layouts: fill them in when they arrive (or show none if they don't).
+        (music) =>
+          live() &&
+          setAnalysis((cur) =>
+            cur
+              ? { ...cur, music_pending: false, music: music ?? { ...cur.music, explanation: "Couldn't pick songs right now." } }
+              : cur,
+          ),
       );
       if (!live()) return;
       setAnalysis(result);
@@ -404,7 +418,6 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
         <Progress
           upload={progress.upload}
           stage={progress.stage}
-          hasSeeds={seeds.length > 0}
           error={runError}
           onRetry={generate}
           onCancel={cancel}
@@ -470,7 +483,8 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
             )
           }
           suggested={analysis?.layouts.slice(0, 3).map((l) => l.id) ?? (photos.length > 1 ? LOCAL_MULTI : LOCAL_SINGLE).slice(0, 3)}
-          music={analysis?.music ?? null}
+          music={songFor(analysis?.layouts.find((l) => l.id === story.templateId) ?? null, analysis)}
+          musicPending={analysis?.music_pending ?? false}
           onBack={
             analysis || objectKeys
               ? () => {
@@ -614,14 +628,40 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
         </div>
 
         <div className={s.step}>
-          <p className={s.stepNo}>
-            03 — Taste <span className={s.muted}>(optional)</span>
+          <p className={s.stepNo}>03 — Music</p>
+          <p className={s.muted}>
+            We suggest a song from your photo&apos;s vibe — baddie, aesthetic, cute, chill… — read
+            from your pose, expression and colours. Pick the language you want songs in.
           </p>
-          <TastePicker
-            seeds={seeds}
-            onChange={setSeeds}
-            available={features?.qloo !== false}
-          />
+          <label className={s.srOnly} htmlFor="song-lang">Song language</label>
+          <select
+            id="song-lang"
+            className={s.select}
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as Language)}
+          >
+            {LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
+        </div>
+
+        <div className={s.step}>
+          <p className={s.stepNo}>
+            04 — Favourite artists <span className={s.muted}>(optional{favouritesLocked ? " · log in" : ""})</span>
+          </p>
+          {favouritesLocked ? (
+            <p className={s.muted}>
+              Add favourite artists, films or brands and Qloo blends your taste into the song pick.{" "}
+              <button className={s.linkBtn} onClick={() => void requestLogin("Log in to add favourite artists — song suggestions work without an account.")}>
+                Log in to add favourites
+              </button>
+            </p>
+          ) : (
+            <TastePicker
+              seeds={seeds}
+              onChange={setSeeds}
+              available={features?.qloo !== false}
+            />
+          )}
         </div>
 
         <div className={s.ctaRow}>

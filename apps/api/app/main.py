@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -17,6 +18,7 @@ from app.api.routes import (
 )
 from app.core import errors
 from app.core.config import check_settings, get_settings
+from app.services.music import trending
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 # httpx logs full request URLs at INFO; keep it quiet so query params never reach logs.
@@ -25,8 +27,12 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    check_settings(get_settings())
+    settings = get_settings()
+    check_settings(settings)
+    # Warm the trending charts so the first Stories can already prefer trending songs.
+    warm = asyncio.gather(*(trending.refresh(lang, settings) for lang in trending.CHART_COUNTRIES))
     yield
+    warm.cancel()
 
 
 def create_app() -> FastAPI:

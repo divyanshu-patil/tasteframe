@@ -9,7 +9,7 @@ from PIL import Image
 
 from app.core.config import Settings
 from app.services.vision.ollama import model_name, parse_reply, reason_about_image
-from tests.conftest import make_image, new_session, stream, upload
+from tests.conftest import make_image, new_session, result_of, stream, upload
 
 # Shape of a real gemma4:31b reply (2026-10-10): JSON wrapped in a code fence.
 REPLY = """```json
@@ -101,7 +101,7 @@ def test_pipeline_uses_reasoning(client, monkeypatch):
     )
     h = new_session(client)
     key = upload(client, h, make_image())
-    res = stream(client.post("/v1/analysis", headers=h, json={"object_key": key}))[-1]["result"]
+    res = result_of(stream(client.post("/v1/analysis", headers=h, json={"object_key": key})))
     assert res["image_reasoning"]["model"] == "gemma4:31b"
     assert res["visual_profile"]["mood"][:3] == ["warm", "dreamy", "cinematic"]
     assert res["layouts"][0]["headline"] == "golden hour, again"
@@ -119,7 +119,7 @@ def test_pipeline_survives_reasoning_outage(client, monkeypatch):
     )
     h = new_session(client)
     key = upload(client, h, make_image())
-    res = stream(client.post("/v1/analysis", headers=h, json={"object_key": key}))[-1]["result"]
+    res = result_of(stream(client.post("/v1/analysis", headers=h, json={"object_key": key})))
     from app.services.recommendations.layouts import CATALOGUE
 
     assert res["image_reasoning"] is None and len(res["layouts"]) == len(CATALOGUE)
@@ -168,7 +168,7 @@ def test_pipeline_passes_subject_focus(client, monkeypatch):
     )
     h = new_session(client)
     key = upload(client, h, make_image())
-    res = stream(client.post("/v1/analysis", headers=h, json={"object_key": key}))[-1]["result"]
+    res = result_of(stream(client.post("/v1/analysis", headers=h, json={"object_key": key})))
     assert res["image_reasoning"]["subject"] == "person"
     assert {(lay["focus_x"], lay["focus_y"]) for lay in res["layouts"]} == {(0.62, 0.31)}
     assert not {"stills", "filmstrip", "photodump"} & {lay["id"] for lay in res["layouts"][:3]}

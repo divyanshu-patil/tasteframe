@@ -164,6 +164,8 @@ textarea.input { width: 100%; resize: vertical; }
 .active span:first-child::after { content: ""; display: inline-block; width: 0.6em; height: 0.6em; margin-left: 0.5em; border-radius: 50%; background: var(--color-ember-orange); animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.25; transform: scale(0.7); } }
 .errorBox { display: grid; gap: var(--spacing-14); padding: var(--spacing-22); background: var(--color-bone-cream); border-left: 4px solid var(--color-ember-orange); }
+/* The editor's "Song for this Story" line (a div: phone CSS hides the stage's hint paragraphs). */
+.songNow { padding: var(--spacing-7) var(--spacing-14); background: var(--color-bone-cream); border-left: 4px solid var(--color-ember-orange); font-size: 0.9rem; max-width: 100%; }
 .notice { padding: var(--spacing-14) var(--spacing-22); background: var(--color-bone-cream); border-left: 4px solid var(--color-ember-orange); max-width: 880px; }
 
 /* ---- results ---- */

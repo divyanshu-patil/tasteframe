@@ -67,7 +67,17 @@ async function run(name, contextOptions) {
     const firstSet = (await page.locator("ol h3").allInnerTexts()).join();
     await page.getByRole("button", { name: /Shuffle/ }).click();
     if ((await page.locator("ol h3").allInnerTexts()).join() === firstSet) throw new Error("shuffle didn't change layouts");
+    // Songs arrive after the layouts; each layout shows its own, and the editor names that song.
+    await page.getByText("finding a song").first().waitFor({ state: "detached", timeout: 60_000 });
+    const songs = await page.locator("ol li p", { hasText: /^♪ / }).allInnerTexts();
+    if (songs.length && new Set(songs).size !== songs.length) throw new Error(`layouts share a song: ${songs}`);
+    await page.screenshot({ path: `${OUT}/${name}-songs.png`, fullPage: true });
     await page.getByRole("button", { name: "Edit this Story" }).first().click();
+    if (songs.length) {
+      const title = songs[0].replace(/^♪ /, "").split(" — ")[0];
+      await page.getByText("Song for this Story:").filter({ hasText: title }).waitFor({ timeout: 5_000 });
+      await page.screenshot({ path: `${OUT}/${name}-editor-song.png` });
+    }
     // Select the headline (inspector) and edit it; add a sticker from the collapsed section.
     await page.locator("[aria-label='Select an element']").getByRole("button", { name: "Headline", exact: true }).click();
     await page.getByLabel("Words").first().fill("still so young.");

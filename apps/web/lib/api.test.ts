@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ApiError, parseAnalysis, parseCandidates, readAnalysisStream } from "./api";
+import { ApiError, type Music, musicFor, parseAnalysis, parseCandidates, readAnalysisStream } from "./api";
 
 const valid = {
   analysis_id: "a",
@@ -36,6 +36,22 @@ describe("response validation", () => {
     expect(() => parseAnalysis({ ...valid, music: { ...valid.music, track_source: null } })).toThrow(ApiError);
   });
 
+  it("keeps the photo vibe and validates alternative songs", () => {
+    const alts = [
+      { title: "A", artist: "X", url: "https://evil.example", track_id: 3 },
+      { title: 5, artist: "Y" },
+      { title: "B", artist: "Z", url: "https://music.apple.com/us/album/b", trending: "reels" },
+    ];
+    const m = parseAnalysis({ ...valid, music: { ...valid.music, vibe: "baddie", alternatives: alts } }).music;
+    expect(m.vibe).toBe("baddie");
+    expect(parseAnalysis({ ...valid, music: { ...valid.music, trending: "viral!" } }).music.trending).toBeNull();
+    expect(m.alternatives).toEqual([
+      { title: "A", artist: "X", url: null, track_id: 3, trending: null, source: "vibe", why: null },
+      { title: "B", artist: "Z", url: "https://music.apple.com/us/album/b", track_id: null, trending: "reels", source: "vibe", why: null },
+    ]);
+    expect(parseAnalysis(valid).music.alternatives).toEqual([]);
+  });
+
   it("rejects malformed payloads and empty layout lists", () => {
     expect(() => parseAnalysis(null)).toThrow(ApiError);
     expect(() => parseAnalysis({ ...valid, layouts: [] })).toThrow(ApiError);
@@ -55,6 +71,34 @@ describe("analysis stream", () => {
     const result = await readAnalysisStream(streamOf([body.slice(0, 10), body.slice(10, 40), body.slice(40)]), (s) => stages.push(s));
     expect(stages).toEqual(["photo", "mood"]);
     expect(result.analysis_id).toBe("a");
+  });
+
+  it("resolves with the layouts first, then delivers the songs event", async () => {
+    const pending = { ...valid, music: { kind: "none", explanation: "…" }, music_pending: true };
+    const song = { ...valid.music, title: "Later" };
+    const body = `{"result":${JSON.stringify(pending)}}\n{"music":${JSON.stringify(song)}}\n`;
+    let got: Music | null | undefined;
+    const arrived = new Promise<void>((r) => {
+      void readAnalysisStream(streamOf([body]), () => undefined, (m) => { got = m; r(); }).then((a) => {
+        expect(a.music_pending).toBe(true);
+        expect(a.music.kind).toBe("none");
+      });
+    });
+    await arrived;
+    expect(got?.title).toBe("Later");
+    // A stream that ends without songs reports null instead of hanging.
+    const none = new Promise<Music | null>((r) => {
+      void readAnalysisStream(streamOf([`{"result":${JSON.stringify(pending)}}\n`]), () => undefined, r);
+    });
+    expect(await none).toBeNull();
+  });
+
+  it("gives each layout its own song, in rank order", () => {
+    const alt = (t: string) => ({ title: t, artist: "B", url: null, track_id: null, trending: null, source: "vibe" as const, why: null });
+    const m = parseAnalysis({ ...valid, music: { ...valid.music, alternatives: [alt("2"), alt("3")] } }).music;
+    expect([0, 1, 2, 3].map((i) => musicFor(m, i).title)).toEqual(["Song", "2", "3", "Song"]);
+    expect(musicFor(m, 1).alternatives.map((a) => a.title)).toEqual(["3", "Song"]);
+    expect(musicFor(m, 1).artist_source).toBe("vibe");
   });
 
   it("surfaces safe error events", async () => {

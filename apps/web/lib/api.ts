@@ -62,16 +62,45 @@ export interface CulturalRecommendation {
   reason: string;
   evidence: string[];
 }
+/** Song languages (apps/api/app/services/music/vibes.py `Language`). */
+export const LANGUAGES = [
+  { id: "en", label: "English" },
+  { id: "hi", label: "Hindi" },
+  { id: "pa", label: "Punjabi" },
+  { id: "es", label: "Spanish" },
+  { id: "ko", label: "Korean" },
+] as const;
+export type Language = (typeof LANGUAGES)[number]["id"];
+/** "chart": in Apple Music's most-played now; "reels": reported trending on Instagram Reels. */
+export type Trend = "chart" | "reels";
+const asTrend = (v: unknown): Trend | null => (v === "chart" || v === "reels" ? v : null);
+export interface Song {
+  title: string;
+  artist: string;
+  url: string | null;
+  track_id: number | null;
+  trending: Trend | null;
+  /** "qloo": related to your favourites; "vibe": picked for the photo's vibe. */
+  source: "qloo" | "vibe";
+  /** The vision model's short reason this song fits the photo. */
+  why: string | null;
+}
 export interface Music {
   kind: "track" | "artist" | "none";
   artist: string | null;
   title: string | null;
   url: string | null;
-  artist_source: "qloo" | null;
+  /** "qloo": related to your favourites; "vibe": picked for the photo's vibe. */
+  artist_source: "qloo" | "vibe" | null;
   track_source: "itunes" | null;
   /** Apple Music track id, for the square song cover. */
   track_id: number | null;
   explanation: string;
+  /** How the photo reads, e.g. "baddie", "cute" (from pose/expression/mood). */
+  vibe: string | null;
+  alternatives: Song[];
+  trending: Trend | null;
+  why: string | null;
 }
 export interface ImageReasoning {
   provider: "ollama";
@@ -92,6 +121,8 @@ export interface Analysis {
   cultural_recommendations: CulturalRecommendation[];
   layouts: LayoutSuggestion[];
   music: Music;
+  /** Songs are still being picked; they arrive through `analyze`'s `onMusic`. */
+  music_pending: boolean;
   provenance: {
     qloo_used: boolean;
     qloo_error: string | null;
@@ -124,6 +155,54 @@ const isStrArr = (v: unknown): v is string[] => Array.isArray(v) && v.every(isSt
 const HEX = /^#[0-9a-f]{6}$/i;
 const SAFE_MUSIC_URL = /^https:\/\/music\.apple\.com\//;
 
+/** Validated music suggestion (from the analysis result or the later `{music}` event). */
+export function parseMusic(m: unknown): Music {
+  const bad = () => new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  if (!isObj(m) || !["track", "artist", "none"].includes(m.kind as string) || !isStr(m.explanation)) throw bad();
+  // Only trust links on the provider domain we document; never render arbitrary URLs.
+  const music = {
+    ...m,
+    url: isStr(m.url) && SAFE_MUSIC_URL.test(m.url) ? m.url : null,
+    track_id: isNum(m.track_id) && Number.isInteger(m.track_id) && m.track_id > 0 ? m.track_id : null,
+    vibe: isStr(m.vibe) ? m.vibe : null,
+    trending: asTrend(m.trending),
+    why: isStr(m.why) ? m.why : null,
+    alternatives: Array.isArray(m.alternatives)
+      ? m.alternatives
+          .filter((a): a is Obj => isObj(a) && isStr(a.title) && isStr(a.artist))
+          .slice(0, 8)
+          .map((a): Song => ({
+            title: a.title as string,
+            artist: a.artist as string,
+            url: isStr(a.url) && SAFE_MUSIC_URL.test(a.url) ? a.url : null,
+            track_id: isNum(a.track_id) && Number.isInteger(a.track_id) && a.track_id > 0 ? a.track_id : null,
+            trending: asTrend(a.trending),
+            source: a.source === "qloo" ? "qloo" : "vibe",
+            why: isStr(a.why) ? a.why : null,
+          }))
+      : [],
+  } as Music;
+  // A track title without a verified track source is never shown.
+  if (music.kind === "track" && (music.track_source !== "itunes" || !isStr(music.title))) throw bad();
+  return music;
+}
+
+/** This layout's song: layout `index` (its rank) leads, the rest of the list follows. */
+export function musicFor(music: Music, index: number): Music {
+  if (music.kind !== "track" || !music.alternatives.length) return music;
+  const lead: Song = {
+    title: music.title ?? "", artist: music.artist ?? "", url: music.url, track_id: music.track_id,
+    trending: music.trending, source: music.artist_source === "qloo" ? "qloo" : "vibe", why: music.why,
+  };
+  const all = [lead, ...music.alternatives];
+  const k = ((index % all.length) + all.length) % all.length;
+  const [head, ...rest] = [...all.slice(k), ...all.slice(0, k)];
+  return {
+    ...music, title: head!.title, artist: head!.artist, url: head!.url, track_id: head!.track_id,
+    trending: head!.trending, artist_source: head!.source, why: head!.why, alternatives: rest,
+  };
+}
+
 export function parseAnalysis(v: unknown): Analysis {
   const bad = () => new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
   if (!isObj(v) || !isObj(v.visual_profile) || !Array.isArray(v.layouts) || !isObj(v.music)) {
@@ -153,18 +232,7 @@ export function parseAnalysis(v: unknown): Analysis {
     l.likes = isNum(l.likes) ? Math.max(0, Math.round(l.likes)) : 0;
     l.is_new = l.is_new === true;
   }
-  const m = v.music;
-  if (!["track", "artist", "none"].includes(m.kind as string) || !isStr(m.explanation)) throw bad();
-  // Only trust links on the provider domain we document; never render arbitrary URLs.
-  const music = {
-    ...m,
-    url: isStr(m.url) && SAFE_MUSIC_URL.test(m.url) ? m.url : null,
-    track_id: isNum(m.track_id) && Number.isInteger(m.track_id) && m.track_id > 0 ? m.track_id : null,
-  } as Music;
-  // A track title without a verified track source is never shown.
-  if (music.kind === "track" && (music.track_source !== "itunes" || !isStr(music.title))) {
-    throw bad();
-  }
+  const music = parseMusic(v.music);
   const recs = Array.isArray(v.cultural_recommendations)
     ? v.cultural_recommendations.filter(
         (r): r is CulturalRecommendation => isObj(r) && isStr(r.name) && r.provider === "qloo",
@@ -185,7 +253,10 @@ export function parseAnalysis(v: unknown): Analysis {
           elements: isStrArr(ir.elements) ? ir.elements.slice(0, 8) : [],
         }
       : null;
-  return { ...(v as unknown as Analysis), layouts, music, cultural_recommendations: recs, image_reasoning };
+  return {
+    ...(v as unknown as Analysis), layouts, music, music_pending: v.music_pending === true,
+    cultural_recommendations: recs, image_reasoning,
+  };
 }
 
 export function parseCandidates(v: unknown): TasteCandidate[] {
@@ -317,13 +388,14 @@ export interface AnalysisRequest {
   object_keys: string[];
   taste_seeds: { entity_id: string; entity_type: TasteType; name: string }[];
   manual_mood: Mood[];
+  music_language: Language;
 }
 
-/** Reads the NDJSON stream: stage events, then the result or a safe error. */
 export async function analyze(
   req: AnalysisRequest,
   onStage: (s: Stage) => void,
   signal?: AbortSignal,
+  onMusic?: (m: Music | null) => void,
 ): Promise<Analysis> {
   const res = await authed("/v1/analysis", {
     method: "POST",
@@ -332,13 +404,10 @@ export async function analyze(
     signal,
   });
   if (!res.ok || !res.body) throw await errorFrom(res);
-  return readAnalysisStream(res.body, onStage);
+  return readAnalysisStream(res.body, onStage, onMusic);
 }
 
-export async function readAnalysisStream(
-  body: ReadableStream<Uint8Array>,
-  onStage: (s: Stage) => void,
-): Promise<Analysis> {
+async function* ndjson(body: ReadableStream<Uint8Array>): AsyncGenerator<Obj> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
@@ -355,14 +424,50 @@ export async function readAnalysisStream(
       } catch {
         throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
       }
-      if (!isObj(ev)) continue;
-      if (isStr(ev.stage)) onStage(ev.stage as Stage);
-      else if (isObj(ev.error)) {
-        const e = ev.error;
-        throw new ApiError(String(e.code), isStr(e.message) ? e.message : "Analysis failed.", Boolean(e.retryable));
-      } else if ("result" in ev) return parseAnalysis(ev.result);
+      if (isObj(ev)) yield ev;
     }
+    if (done) return;
+  }
+}
+
+/**
+ * Reads the NDJSON stream: stage events, then the result (resolved right away so layouts show)
+ * or a safe error. When songs are still pending, keeps reading and hands the later `{music}`
+ * event to `onMusic` (null if it never comes, e.g. the request was cancelled).
+ */
+export async function readAnalysisStream(
+  body: ReadableStream<Uint8Array>,
+  onStage: (s: Stage) => void,
+  onMusic?: (m: Music | null) => void,
+): Promise<Analysis> {
+  const events = ndjson(body);
+  for (;;) {
+    const { value: ev, done } = await events.next();
     if (done) break;
+    if (isStr(ev.stage)) onStage(ev.stage as Stage);
+    else if (isObj(ev.error)) {
+      const e = ev.error;
+      throw new ApiError(String(e.code), isStr(e.message) ? e.message : "Analysis failed.", Boolean(e.retryable));
+    } else if ("result" in ev) {
+      const a = parseAnalysis(ev.result);
+      if (a.music_pending) {
+        void (async () => {
+          let music: Music | null = null;
+          try {
+            for (let r = await events.next(); !r.done; r = await events.next()) {
+              if ("music" in r.value) {
+                music = parseMusic(r.value.music);
+                break;
+              }
+            }
+          } catch {
+            // cancelled or malformed: songs just don't arrive
+          }
+          onMusic?.(music);
+        })();
+      }
+      return a;
+    }
   }
   throw new ApiError("BAD_RESPONSE", "The analysis ended unexpectedly. Please retry.", true);
 }

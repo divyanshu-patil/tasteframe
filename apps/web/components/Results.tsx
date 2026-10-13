@@ -5,7 +5,7 @@ import type { Analysis, LayoutSuggestion, Music } from "../lib/api";
 import type { Photo } from "../lib/story/draw";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
 import { type StoryState, TEMPLATE_IDS, type TemplateId } from "../lib/story/types";
-import { inputFor } from "../lib/story/input";
+import { inputFor, songFor } from "../lib/story/input";
 import { useCoverImage } from "./CoverPanel";
 import { PinSource } from "./PinSource";
 import { pinsFor } from "../lib/story/pins";
@@ -24,25 +24,60 @@ interface Props {
   onRetry?: () => void;
 }
 
+const TREND_LABEL = { chart: "🔥 Top on Apple Music now", reels: "🔥 Trending on Reels" } as const;
+
+/** Shown while songs are picked (they arrive after the layouts). */
+export function MusicLoading() {
+  return (
+    <article className={s.music} aria-label="Music suggestion" aria-busy="true">
+      <p className={s.kicker}>Song suggestion</p>
+      <p className={s.small} role="status">♪ Finding songs that fit your photo…</p>
+    </article>
+  );
+}
+
 export function MusicCard({ music }: { music: Music }) {
   return (
     <article className={s.music} aria-label="Music suggestion">
       <p className={s.kicker}>
         {music.kind === "track" ? "Song suggestion" : music.kind === "artist" ? "Artist suggestion" : "Music"}
+        {music.vibe && <> · vibe: {music.vibe}</>}
       </p>
       {music.kind === "track" && <p className={s.musicTitle}>{music.title}</p>}
-      {music.artist && <p className={music.kind === "track" ? s.musicArtist : s.musicTitle}>{music.artist}</p>}
-      <p className={s.small}>{music.explanation}</p>
-      {music.kind !== "none" && (
-        <p className={s.small}>
-          Source: artist via Qloo{music.track_source === "itunes" && " · track metadata via Apple iTunes Search"}.
-          Add it with Instagram&apos;s Music sticker after you post — audio isn&apos;t embedded in the PNG.
+      {music.artist && (
+        <p className={music.kind === "track" ? s.musicArtist : s.musicTitle}>
+          {music.artist}
+          {music.artist_source === "qloo" && <span className={s.tags}> · via Qloo</span>}
         </p>
       )}
+      {music.trending && <p className={s.small}><strong>{TREND_LABEL[music.trending]}</strong></p>}
+      {music.why && <p className={s.small}>“{music.why}”</p>}
       {music.url && (
         <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer">
           Open in Apple Music ↗
         </a>
+      )}
+      {music.alternatives.length > 0 && (
+        <>
+          <p className={s.small}>Also fits:</p>
+          <ul className={s.recs}>
+            {music.alternatives.slice(0, 3).map((a) => (
+              <li key={`${a.artist}-${a.title}`}>
+                {a.url ? (
+                  <a className={s.textLink} href={a.url} target="_blank" rel="noopener noreferrer">{a.title}</a>
+                ) : (
+                  <strong>{a.title}</strong>
+                )}{" "}
+                <span className={s.muted}>{a.artist}</span>
+                {a.trending && <span className={s.tags}> {TREND_LABEL[a.trending]}</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className={s.small}>{music.explanation}</p>
+      {music.kind !== "none" && (
+        <p className={s.small}>Add it with Instagram&apos;s Music sticker after you post.</p>
       )}
     </article>
   );
@@ -107,6 +142,7 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
             </button>
             <p className={s.optionNo}>No. {(page % pages) * 3 + i + 1}{page % pages === 0 && i === 0 ? " · best match" : ""}</p>
             <h3 className={s.optionName}>{layout.name}</h3>
+            {analysis && <SongLine music={analysis.music_pending ? null : songFor(layout, analysis)} pending={analysis.music_pending} />}
             <div className={s.layoutMeta}>
               <NewBadge id={layout.id} isNew={layout.is_new} />
               <LikeButton id={layout.id} />
@@ -183,7 +219,10 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
           <article>
             <p className={s.kicker}>Cultural taste · from Qloo</p>
             {prov && prov.seeds.length === 0 && (
-              <p className={s.small}>No favourites given, so no Qloo request was made. Add a few to personalise.</p>
+              <p className={s.small}>
+                No favourites added, so Qloo used the artist picked for your photo&apos;s vibe as its signal.
+                Log in and add favourite artists to personalise further.
+              </p>
             )}
             {prov && prov.seeds.length > 0 && (
               <p className={s.small}>Signals you confirmed: {prov.seeds.join(", ")}</p>
@@ -200,10 +239,27 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
             )}
           </article>
 
-          <MusicCard music={analysis.music} />
+          {analysis.music_pending ? (
+            <MusicLoading />
+          ) : (
+            // Follows the shuffle: this page's first layout's song leads.
+            <MusicCard music={songFor(shown[0] ?? null, analysis) ?? analysis.music} />
+          )}
         </div>
       )}
     </section>
+  );
+}
+
+/** This layout's own song, under its preview. */
+function SongLine({ music, pending }: { music: Music | null; pending: boolean }) {
+  if (pending) return <p className={s.small} role="status">♪ finding a song…</p>;
+  if (!music || music.kind !== "track") return null;
+  return (
+    <p className={s.small}>
+      ♪ <strong>{music.title}</strong> — {music.artist}
+      {music.trending && <span className={s.tags}> {TREND_LABEL[music.trending]}</span>}
+    </p>
   );
 }
 

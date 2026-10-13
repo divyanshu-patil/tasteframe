@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { type Music, searchTracks } from "../lib/api";
 import type { Photo } from "../lib/story/draw";
 import { type EditorAction, editorReducer } from "../lib/story/editor";
-import { exportFilename, exportPng } from "../lib/story/export";
+import { exportFilename, exportPng, exportVideo, videoType } from "../lib/story/export";
 import { FILTERS } from "../lib/story/filters";
 import { LAYOUT_GROUPS, groupOf } from "../lib/story/groups";
 import { pinsFor } from "../lib/story/pins";
@@ -16,7 +16,7 @@ import { CoverPanel, useCoverImage, useTrackArt } from "./CoverPanel";
 import { CutoutRefiner } from "./CutoutRefiner";
 import { ModelProgress } from "./ModelProgress";
 import { ColorField, Section, Segmented, Slider, Toggle, deg, pct, px, times } from "./controls";
-import { MusicCard } from "./Results";
+import { MusicCard, MusicLoading } from "./Results";
 import { LikeButton, NewBadge } from "./LikeButton";
 import { PinSource } from "./PinSource";
 import { StoryCanvas } from "./StoryCanvas";
@@ -35,6 +35,7 @@ interface Props {
   input: (id: TemplateId) => TemplateInput;
   suggested: TemplateId[];
   music: Music | null;
+  musicPending?: boolean;
   onBack?: () => void;
   onStartOver: () => void;
   /** Present only when saving is configured and the photo is uploaded. */
@@ -62,9 +63,20 @@ function usePreviewWidth(): number {
   return w;
 }
 
+function download(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 const stickerName = (st: Sticker) => STICKER_KINDS.find((k) => k.kind === st.kind)?.label ?? "Sticker";
 
-export function Editor({ photos, story, setStory, input, suggested, music, onBack, onStartOver, onSave, signedIn = false, onAddPhotos }: Props) {
+export function Editor({ photos, story, setStory, input, suggested, music, musicPending = false, onBack, onStartOver, onSave, signedIn = false, onAddPhotos }: Props) {
   const width = usePreviewWidth();
   const dispatch = (a: EditorAction) => setStory((cur) => (cur ? editorReducer(cur, a) : cur));
   const tpl = TEMPLATES[story.templateId];
@@ -74,6 +86,11 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
   const [fontPreview, setFontPreview] = useState<{ k: TextKey; patch: Partial<TextLayer> } | null>(null);
   const shown = fontPreview ? { ...story, [fontPreview.k]: { ...story[fontPreview.k], ...fontPreview.patch } } : story;
   const [exporting, setExporting] = useState<"idle" | "busy" | "error" | "done">("idle");
+  const [audio, setAudio] = useState<File | null>(null);
+  const [clipSeconds, setClipSeconds] = useState(15);
+  const [video, setVideo] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
+  const [canVideo, setCanVideo] = useState(false); // browser-only check (avoids an SSR mismatch)
+  useEffect(() => setCanVideo(videoType() !== null), []);
   const [saving, setSaving] = useState<{ kind: "idle" | "busy" | "done" } | { kind: "error"; msg: string }>({ kind: "idle" });
   const [uploadedCover, setUploadedCover] = useState<Photo | null>(null);
   const coverImg = useCoverImage(story.cover?.trackId, uploadedCover);
@@ -157,18 +174,24 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
     setExporting("busy");
     try {
       const blob = await exportPng(photos, story, { cover: coverImg, masks, art });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = exportFilename(story);
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      download(blob, exportFilename(story));
       setExporting("done");
       track("export", { layout: story.templateId });
     } catch {
       setExporting("error");
+    }
+  };
+
+  const doVideo = async () => {
+    if (!audio) return;
+    setVideo({ kind: "busy" });
+    try {
+      const { blob, ext } = await exportVideo(photos, story, { cover: coverImg, masks, art }, audio, clipSeconds);
+      download(blob, exportFilename(story).replace(/\.png$/, `.${ext}`));
+      setVideo({ kind: "done" });
+      track("export", { layout: story.templateId });
+    } catch (e) {
+      setVideo({ kind: "error", msg: e instanceof Error && e.message ? e.message : "Video export failed." });
     }
   };
 
@@ -283,6 +306,17 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           onSwapSlots={photos.length > 1 ? (a, b) => dispatch({ type: "swap", a, b }) : undefined}
           onZoom={(d) => zoomBy(sel, d)}
         />
+        {musicPending ? (
+          <div className={s.songNow} role="status">♪ Finding a song for this Story…</div>
+        ) : music?.kind === "track" ? (
+          <div className={s.songNow}>
+            ♪ Song for this Story: <strong>{music.title}</strong> — {music.artist}
+            {music.trending && <> · {music.trending === "chart" ? "🔥 top on Apple Music now" : "🔥 trending on Reels"}</>}
+            {music.url && (
+              <> · <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer">listen ↗</a></>
+            )}
+          </div>
+        ) : null}
         <p className={s.small}>Tap to select · drag to move · scroll or pinch to zoom · arrow keys nudge</p>
         {tpl.needsMask && !masks && <p className={s.small} role="status">Cutting you out of the photo on your device (the first time loads a small model)…</p>}
         {tpl.needsMask && masks && <ModelProgress task="cutout" label="Sharpening your cutout" working="Sharpening your cutout on your device…" />}
@@ -541,12 +575,40 @@ export function Editor({ photos, story, setStory, input, suggested, music, onBac
           {exporting === "error" && <p className={s.error}>Export failed. <button className={s.linkBtn} onClick={doExport}>Try again</button></p>}
           {exporting === "done" && (
             <p className={s.small}>
-              Downloaded. Post it as a Story, then add the song with Instagram&apos;s Music sticker.{" "}
+              Downloaded. Post it as a Story, then add{" "}
+              {music?.kind === "track" ? <strong>&ldquo;{music.title}&rdquo; by {music.artist}</strong> : "your song"}{" "}
+              with Instagram&apos;s Music sticker.{" "}
               <button className={s.linkBtn} onClick={onStartOver}>Make another</button>
             </p>
           )}
         </div>
-        {music && music.kind !== "none" && <MusicCard music={music} />}
+        {canVideo && (
+          <Section title="Video with audio" hint={audio ? audio.name : "Off"} open={false}>
+            <p className={s.small}>
+              Pick an audio file you have the rights to (your own recording, or a track you
+              licensed). For the suggested song, download the PNG and add it with Instagram&apos;s
+              Music sticker instead — we can&apos;t legally put copyrighted songs into your video.
+            </p>
+            <label className={s.small}>
+              Audio file{" "}
+              <input type="file" accept="audio/*" onChange={(e) => { setAudio(e.target.files?.[0] ?? null); setVideo({ kind: "idle" }); }} />
+            </label>
+            <label className={s.small}>
+              Length{" "}
+              <select className={s.select} value={clipSeconds} onChange={(e) => setClipSeconds(Number(e.target.value))}>
+                {[10, 15, 30, 60].map((n) => <option key={n} value={n}>{n} s</option>)}
+              </select>
+            </label>
+            <button className={s.secondary} onClick={doVideo} disabled={!audio || video.kind === "busy"}>
+              {video.kind === "busy" ? `Recording… (~${clipSeconds} s)` : "Download video"}
+            </button>
+            <div aria-live="polite">
+              {video.kind === "error" && <p className={s.error}>{video.msg}</p>}
+              {video.kind === "done" && <p className={s.small}>Video downloaded.</p>}
+            </div>
+          </Section>
+        )}
+        {musicPending ? <MusicLoading /> : music && music.kind !== "none" && <MusicCard music={music} />}
       </div>
       {refining !== null && autoMasks && photos[refining] && (
         <CutoutRefiner

@@ -166,12 +166,20 @@ subject and where it sits, and pose cues like *face close-up*, *pout* or *mirror
 - **Privacy on upload.** Photos go straight to a private bucket through short-lived upload
   links, are re-encoded without EXIF/GPS, and expire after a day unless you save the Story.
 
-### 🎧 2. Listens to your taste through Qloo
+### 🎧 2. Picks a song for your photo's vibe, and listens to your taste through Qloo
 
-Name a few favourite artists, films or brands. [Qloo](https://www.qloo.com/) returns the
-culture that sits around them, and Tasteframe uses those tags ("indie", "funk", "noir") to lean
-the ranking toward layouts that fit. The top artist becomes the music suggestion, and Apple's
-catalogue supplies a real song title, never an invented one.
+Every photo gets a song, no account needed. The vision model reads the pose, expression and
+styling as a vibe (baddie, aesthetic, toxic, friendly, sweet, cute, romantic, chill, sad, party),
+which selects a hand-curated artist pool in your chosen language (English with US/UK artists,
+Hindi, Punjabi, Spanish or Korean), built from public Spotify, YouTube Music and Reels chart
+reporting. The vision model then ranks about fifteen candidate songs against what it saw in the
+photo, preferring songs that are trending right now (Apple Music's most-played chart, plus songs
+reported trending on Reels). Songs arrive a few seconds after the layouts, and every layout gets
+its own song, so shuffling shows new ones.
+
+Logged in, you can also name favourite artists, films or brands. [Qloo](https://www.qloo.com/)
+returns the culture around them (blended with the vibe artist) and its tags ("indie", "funk",
+"noir") lean the layout ranking. Apple's catalogue supplies real song titles, never invented ones.
 
 ### 🗂️ 3. Picks three of 90 layouts, and shows where each came from
 
@@ -235,7 +243,9 @@ nudges and arrow keys for fine work.
 
 ### 📥 5. Export, save, come back
 
-Download a 1080 × 1920 PNG and post it, then add the song with Instagram's own music sticker.
+Download a 1080 × 1920 PNG and post it, then add the suggested song with Instagram's own music
+sticker. Or download the Story as a video (MP4 where the browser supports it, else WebM) with an
+audio file you have the rights to.
 Log in to keep up to 20 Stories in your account and reopen them on any device.
 
 ### 📌 6. Ask for the layout you want next
@@ -295,7 +305,8 @@ A complete loop, not a demo. Everything marked shipped is built, tested and runn
 | Gallery, Request a layout, admin dashboard, analytics | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
 | Live Qloo calls verified against a hackathon key | ![Next](https://img.shields.io/badge/needs%20a%20key-E8A33D?style=flat-square) |
 | Hosted deployment | ![Next](https://img.shields.io/badge/next-E8A33D?style=flat-square) |
-| Video and animated Stories | ![Planned](https://img.shields.io/badge/planned-8A8580?style=flat-square) |
+| Video export with your own audio | ![Shipped](https://img.shields.io/badge/shipped-2E7D5B?style=flat-square) |
+| Animated Stories | ![Planned](https://img.shields.io/badge/planned-8A8580?style=flat-square) |
 
 > [!NOTE]
 > **Tasteframe never posts for you.** It makes the image; you post it with Instagram's own

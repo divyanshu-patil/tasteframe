@@ -6,7 +6,7 @@ import json
 import httpx
 from PIL import Image
 
-from tests.conftest import load_fixture, make_image, new_session, stream, upload
+from tests.conftest import load_fixture, make_image, new_session, result_of, stream, upload
 
 SEED_A = "11111111-1111-4111-8111-111111111111"
 SEED_B = "55555555-5555-4555-8555-555555555555"
@@ -75,8 +75,8 @@ def test_analysis_without_seeds_returns_three_distinct_layouts(client):
             "/v1/analysis", headers=h, json={"object_key": key, "manual_mood": ["cinematic"]}
         )
     )
-    assert [e["stage"] for e in events[:-1]] == ["photo", "mood", "taste", "layouts"]
-    res = events[-1]["result"]
+    assert [e["stage"] for e in events[:-2]] == ["photo", "mood", "taste", "layouts"]
+    res = result_of(events)
     from app.services.recommendations.layouts import CATALOGUE, TEMPLATES_BY_ID
 
     ids = [lay["id"] for lay in res["layouts"]]
@@ -86,7 +86,11 @@ def test_analysis_without_seeds_returns_three_distinct_layouts(client):
     assert res["visual_profile"]["mood"][0] == "cinematic"
     assert res["visual_profile"]["source"] == "vision+manual"
     assert res["visual_profile"]["composition"] == "portrait"
-    assert res["music"]["kind"] == "none"
+    # No favourites: still a music pick, from the photo's vibe (cinematic → toxic).
+    from app.services.music.vibes import POOLS
+
+    assert res["music"]["kind"] == "artist" and res["music"]["artist_source"] == "vibe"
+    assert res["music"]["vibe"] == "toxic" and res["music"]["artist"] in POOLS["en"]["toxic"]
     assert res["provenance"]["qloo_used"] is False and res["cultural_recommendations"] == []
 
 
@@ -144,6 +148,8 @@ def test_seed_changes_cultural_results(client_with):
 
     def handler(req: httpx.Request) -> httpx.Response:
         assert req.headers["X-Api-Key"] == "test-qloo-key"
+        if req.url.path == "/search":  # the photo-vibe anchor lookup: none found here
+            return httpx.Response(404)
         assert req.url.path == "/v2/insights"
         seeds = req.url.params["signal.interests.entities"]
         data = json.loads(json.dumps(insights))
@@ -160,15 +166,17 @@ def test_seed_changes_cultural_results(client_with):
             "object_key": key,
             "taste_seeds": [{"entity_id": seed, "entity_type": "artist", "name": "Seed"}],
         }
-        return stream(client.post("/v1/analysis", headers=h, json=body))[-1]["result"]
+        return result_of(stream(client.post("/v1/analysis", headers=h, json=body)))
 
     a, b = run(SEED_A), run(SEED_B)
-    assert a["music"]["artist"] == "Related Artist One" and a["music"]["kind"] == "artist"
-    assert b["music"]["artist"] == "Related Artist Two"
+    related = {e["name"] for e in insights["results"]["entities"]}
+    assert a["music"]["artist"] in related and a["music"]["kind"] == "artist"
+    assert b["music"]["artist"] in related and b["music"]["artist"] != a["music"]["artist"]
+    assert a["music"]["artist_source"] == "qloo"
     assert a["music"]["title"] is None  # never invent a track
     assert a["provenance"]["qloo_used"] and a["provenance"]["seeds"] == ["Seed"]
     assert a["cultural_recommendations"][0]["provider"] == "qloo"
-    types = {c.url.params["filter.type"] for c in fake.calls}
+    types = {c.url.params["filter.type"] for c in fake.calls if c.url.path == "/v2/insights"}
     assert types == {"urn:entity:artist", "urn:entity:movie"}
 
 
@@ -180,12 +188,13 @@ def test_qloo_outage_degrades_without_breaking_layouts(client_with):
         "object_key": key,
         "taste_seeds": [{"entity_id": SEED_A, "entity_type": "artist", "name": "Seed"}],
     }
-    res = stream(client.post("/v1/analysis", headers=h, json=body))[-1]["result"]
+    res = result_of(stream(client.post("/v1/analysis", headers=h, json=body)))
     assert res["provenance"]["qloo_error"] == "QLOO_UPSTREAM_ERROR"
     assert res["provenance"]["qloo_used"] is False
     from app.services.recommendations.layouts import CATALOGUE
 
-    assert len(res["layouts"]) == len(CATALOGUE) and res["music"]["kind"] == "none"
+    assert len(res["layouts"]) == len(CATALOGUE)
+    assert res["music"]["artist_source"] == "vibe"  # still a song idea without Qloo
 
 
 def test_seed_must_be_provider_id_not_free_text(client):
@@ -248,7 +257,7 @@ def test_multi_photo_analysis_merges_and_ranks_for_photo_count(client):
         upload(client, h, make_image(color=c))
         for c in ((230, 120, 40), (40, 90, 200), (60, 160, 70))
     ]
-    res = stream(client.post("/v1/analysis", headers=h, json={"object_keys": keys}))[-1]["result"]
+    res = result_of(stream(client.post("/v1/analysis", headers=h, json={"object_keys": keys})))
     assert res["visual_profile"]["photo_count"] == 3
     assert len(res["visual_profile"]["palette"]) >= 3  # colours from all photos
     top = res["layouts"][:3]
@@ -271,3 +280,79 @@ def test_jpg_mime_aliases_are_accepted_as_jpeg(client):
         assert (
             body["object_key"].endswith(".jpg") and body["fields"]["Content-Type"] == "image/jpeg"
         )
+
+
+def test_guest_gets_vibe_song_that_varies_by_photo(client_with, monkeypatch):
+    """No favourites: the photo's vibe picks an artist (+ Qloo neighbours) and a real song;
+    different uploads land on different songs, the same upload keeps its pick."""
+    from app.services import analysis
+    from app.services.music.vibes import POOLS
+
+    def itunes(req: httpx.Request) -> httpx.Response:
+        if "most-played" in req.url.path:
+            return httpx.Response(404)  # no chart today
+        artist = req.url.params["term"]
+        songs = [
+            {
+                "artistName": artist,
+                "trackName": f"{artist} song {i}",
+                "trackId": 100 + i,
+                "trackViewUrl": "https://music.apple.com/us/album/x?i=1",
+            }
+            for i in range(6)
+        ]
+        return httpx.Response(200, json={"results": songs})
+
+    monkeypatch.setenv("MUSIC_METADATA_PROVIDER", "itunes")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setattr(analysis, "music_transport", httpx.MockTransport(itunes))
+    client, _ = client_with(lambda r: httpx.Response(404))  # Qloo: no anchor found
+    h = new_session(client)
+
+    def run(key: str, lang: str = "en") -> dict:
+        body = {"object_key": key, "manual_mood": ["playful"], "music_language": lang}
+        return result_of(stream(client.post("/v1/analysis", headers=h, json=body)))["music"]
+
+    keys = [upload(client, h, make_image()) for _ in range(6)]
+    picks = [run(k) for k in keys]
+    for m in picks:
+        assert m["kind"] == "track" and m["track_source"] == "itunes"
+        assert m["vibe"] == "cute" and m["artist"] in POOLS["en"]["cute"]
+        assert m["title"].startswith(m["artist"]) and len(m["alternatives"]) == 8
+        # No vision model here: songs alternate artists so each layout gets a different one.
+        assert len({a["artist"] for a in [m, *m["alternatives"][:4]]}) == 5
+    assert len({m["title"] for m in picks}) > 1
+    assert run(keys[0])["title"] == picks[0]["title"]
+    hindi = run(keys[0], "hi")
+    assert hindi["language"] == "hi" and hindi["artist"] in POOLS["hi"]["cute"]
+
+
+def test_favourites_need_login_when_accounts_exist(client, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "pk")
+    get_settings.cache_clear()
+    h = new_session(client)
+    r = client.get("/v1/taste/search", params={"q": "drake"}, headers=h)
+    assert r.status_code == 401 and r.json()["error"]["code"] == "AUTH_REQUIRED"
+    body = {
+        "object_key": upload(client, h, make_image()),
+        "taste_seeds": [{"entity_id": SEED_A, "entity_type": "artist", "name": "Seed"}],
+    }
+    r = client.post("/v1/analysis", headers=h, json=body)
+    assert r.status_code == 401 and r.json()["error"]["code"] == "AUTH_REQUIRED"
+    # …but song suggestions don't: a guest without favourites still gets a full result.
+    body["taste_seeds"] = []
+    assert result_of(stream(client.post("/v1/analysis", headers=h, json=body)))["layouts"]
+
+
+def test_vibe_from_pose_cues():
+    from app.services.music.vibes import vibe_from_cues
+
+    assert vibe_from_cues(["pout", "sunglasses", "warm"]) == "baddie"
+    assert vibe_from_cues(["laugh", "friends"]) == "friendly"
+    assert vibe_from_cues(["eyes closed", "headphones"]) == "chill"
+    assert vibe_from_cues([]) == "aesthetic"

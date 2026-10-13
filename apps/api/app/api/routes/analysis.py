@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.api.routes.taste import get_qloo
+from app.core.auth import AuthUser, optional_user
 from app.core.config import Settings, get_settings
+from app.core.errors import AppError
 from app.core.security import assert_owns_key, rate_limit, require_session
 from app.schemas.api import AnalysisIn
 from app.services.analysis import run_analysis
@@ -25,7 +27,10 @@ async def analysis(
     settings: Settings = Depends(get_settings),
     storage: Storage = Depends(get_storage),
     qloo: QlooClient = Depends(get_qloo),
+    user: AuthUser | None = Depends(optional_user),
 ) -> StreamingResponse:
+    if body.taste_seeds and settings.supabase_enabled and not user:
+        raise AppError("AUTH_REQUIRED", "Log in to use favourite artists.", 401)
     for key in body.object_keys:
         assert_owns_key(key, session_id)
 

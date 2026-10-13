@@ -116,6 +116,16 @@ Separate artist recommendation, track metadata, playback rights and Instagram mu
 3. Optionally map the artist to a track from a permitted curated metadata catalogue or provider.
 4. Do not scrape streaming services or redistribute copyrighted audio.
 5. For MVP, let the user add the song through Instagram's native music sticker.
+6. Without favourites, the photo's vibe (vision model `vibe`, else pose/mood cues) selects a
+   curated artist pool per language (`app/services/music/vibes.py`); the lead artist is also
+   sent to Qloo as a signal. The upload key seeds which artist/song, so photos differ.
+   ~15 candidate songs (≤3 per artist, iTunes, cached 24 h) are ranked against the photo by a
+   text-only vision-model call (reusing its photo read); trending songs (Apple Music most-played
+   RSS, refreshed in the background every 6 h, plus a dated Reels list in `trending.py`) are
+   preferred when they fit. Songs stream as a `{"music": …}` event after `{"result": …}`
+   (`music_pending: true`), so layouts render first; each layout gets its own song by rank.
+7. Favourites (Qloo taste seeds) need a signed-in user when Supabase auth is configured.
+8. Video export muxes only a user-supplied audio file (no streaming previews in exports).
 
 ## 8. Proposed repo layout
 

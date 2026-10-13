@@ -8,6 +8,7 @@ from PIL import Image
 
 from app.core.config import Settings
 from app.schemas.api import VisualProfile
+from app.services.music import itunes
 from app.services.music.itunes import find_track
 from app.services.recommendations.layouts import CATALOGUE, rank_layouts, score_all
 from app.services.vision.analyzer import analyze, merge_manual, mood_labels
@@ -94,9 +95,24 @@ def test_itunes_exact_artist_match_only():
         "https://music.apple.com/us/album/x?i=1",
         None,  # no trackId in this fixture
     )
+    itunes._TRACKS.clear()  # each call below is a fresh lookup
     assert asyncio.run(find_track("The Artist", s, transport=_itunes(hit[:1]))) is None
     evil = [{"artistName": "The Artist", "trackName": "T", "trackViewUrl": "https://evil.example"}]
+    itunes._TRACKS.clear()
     assert asyncio.run(find_track("The Artist", s, transport=_itunes(evil))) == ("T", None, None)
+
+
+def test_itunes_tracks_are_cached_per_artist():
+    calls = []
+
+    def h(req):
+        calls.append(req)
+        return httpx.Response(200, json={"results": [{"artistName": "Cached", "trackName": "S"}]})
+
+    s = Settings(_env_file=None)
+    for _ in range(3):
+        assert asyncio.run(itunes.find_tracks("Cached", s, transport=httpx.MockTransport(h)))
+    assert len(calls) == 1
 
 
 def test_itunes_failure_and_disabled():
@@ -211,3 +227,94 @@ def test_a_new_or_liked_layout_that_fits_is_promoted_into_the_first_three():
     new = rank_layouts(p, [], None, today=min(ADDED.values()))
     flagged = [o for o in new if o.is_new]
     assert {o.id for o in flagged} == set(ADDED) and "New layout." in flagged[0].reason
+
+
+def test_trending_song_is_preferred():
+    """Among suggested songs, one in Apple Music's most-played chart (or reported trending on
+    Reels) leads, even when it isn't the vibe's first artist or that artist's rotated pick."""
+    from app.services import analysis
+    from app.services.music.trending import key
+
+    def h(req: httpx.Request) -> httpx.Response:
+        if "most-played" in req.url.path:
+            chart = [{"artistName": "Beta & Guest", "name": "Beta song 7 (feat. X)"}]
+            return httpx.Response(200, json={"feed": {"results": chart}})
+        a = req.url.params["term"]
+        songs = [{"artistName": a, "trackName": f"{a} song {i}"} for i in range(9)]
+        return httpx.Response(200, json={"results": songs})
+
+    s = Settings(_env_file=None)
+    old = analysis.music_transport
+    analysis.music_transport = httpx.MockTransport(h)
+    from app.services.music import trending
+
+    async def run():
+        await trending.refresh("en", s, analysis.music_transport)  # normally warmed at startup
+        cands = [("Alpha", "vibe"), ("Beta", "vibe")]
+        return await analysis.pick_music(cands, "cute", "en", [], 0, s, "US")
+
+    try:
+        m = asyncio.run(run())
+    finally:
+        analysis.music_transport = old
+    assert (m.artist, m.title, m.trending) == ("Beta", "Beta song 7", "chart")
+    assert m.alternatives[0].artist == "Alpha" and m.alternatives[0].trending is None
+    assert "most-played" in m.explanation and "🔥" in m.explanation
+    assert key("Hozier", "Too Sweet") == key("hozier & X", "Too Sweet (Remix)")
+
+
+def test_vision_model_ranks_songs_against_the_photo():
+    """The lead song is the vision model's best fit for the photo, not the pool's first pick;
+    bad indices are ignored and short lists are topped up so each layout has a song."""
+    import json
+
+    from app.schemas.api import ImageReasoning
+    from app.services import analysis
+
+    seen = {}
+
+    def ollama(req: httpx.Request) -> httpx.Response:
+        seen["prompt"] = json.loads(req.content)["messages"][0]["content"]
+        ranking = [{"i": 2, "why": "slow and warm, like the light"}, {"i": 0}, {"i": 99}]
+        reply = {"message": {"content": json.dumps({"ranking": ranking})}}
+        return httpx.Response(200, json=reply)
+
+    def itunes(req: httpx.Request) -> httpx.Response:
+        if "most-played" in req.url.path:
+            return httpx.Response(404)
+        a = req.url.params["term"]
+        return httpx.Response(
+            200, json={"results": [{"artistName": a, "trackName": f"{a}{i}"} for i in range(3)]}
+        )
+
+    s = Settings(_env_file=None, ollama_api_key="k")
+    r = ImageReasoning(model="m", summary="a person smiling at golden hour", moods=["warm"])
+    old = analysis.music_transport, analysis.vision_transport
+    analysis.music_transport = httpx.MockTransport(itunes)
+    analysis.vision_transport = httpx.MockTransport(ollama)
+    try:
+        m = asyncio.run(
+            analysis.pick_music([("A", "vibe"), ("B", "vibe")], "sweet", "en", [], 0, s, "US", r)
+        )
+    finally:
+        analysis.music_transport, analysis.vision_transport = old
+    assert '0. "A0" — A' in seen["prompt"] and "golden hour" in seen["prompt"]
+    assert (m.title, m.why) == ("A1", "slow and warm, like the light")
+    assert [x.title for x in m.alternatives] == ["A0", "B0", "B1", "A2", "B2"]
+    assert "Ranked against your photo" in m.explanation
+
+
+def test_chart_lookup_never_waits_on_the_network():
+    """Cold cache: no trending info this time, a background refresh fills it for the next one."""
+    from app.services.music import trending
+
+    chart = {"feed": {"results": [{"artistName": "A", "name": "S"}]}}
+    t = httpx.MockTransport(lambda r: httpx.Response(200, json=chart))
+    s = Settings(_env_file=None)
+
+    async def run():
+        first = trending.chart_keys("ko", s, t)
+        await asyncio.gather(*trending._tasks)
+        return first, trending.chart_keys("ko", s, t)
+
+    assert asyncio.run(run()) == (set(), {("a", "s")})

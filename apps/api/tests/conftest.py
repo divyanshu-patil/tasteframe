@@ -24,6 +24,14 @@ def make_image(fmt: str = "JPEG", size=(600, 900), color=(200, 140, 60), exif=No
     return buf.getvalue()
 
 
+@pytest.fixture(autouse=True)
+def _fresh_track_cache():
+    from app.services.music import itunes, trending
+
+    itunes._TRACKS.clear()
+    trending._CHARTS.clear()
+
+
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     # Never read the developer's real apps/api/.env (it may hold live keys) in unit tests.
@@ -118,3 +126,10 @@ def upload(client: TestClient, headers: dict, data: bytes, ctype: str = "image/j
 
 def stream(resp) -> list[dict]:
     return [json.loads(line) for line in resp.text.splitlines() if line.strip()]
+
+
+def result_of(events: list[dict]) -> dict:
+    """The analysis result with the songs (sent as a later {"music": …} event) folded in."""
+    res = next(e["result"] for e in events if "result" in e)
+    assert res["music_pending"] is True and events[-1].keys() == {"music"}
+    return {**res, "music": events[-1]["music"], "music_pending": False}

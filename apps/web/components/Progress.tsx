@@ -6,14 +6,13 @@ import s from "./maker.module.css";
 const STEPS: { id: Stage; label: string }[] = [
   { id: "photo", label: "Reading your photo" },
   { id: "mood", label: "Understanding your visual mood" },
-  { id: "taste", label: "Exploring your cultural taste" },
+  { id: "taste", label: "Matching music to your vibe" },
   { id: "layouts", label: "Creating your Story options" },
 ];
 
 interface Props {
   upload: number;
   stage: Stage | null;
-  hasSeeds: boolean;
   error: ApiError | null;
   onRetry: () => void;
   onCancel: () => void;
@@ -21,7 +20,7 @@ interface Props {
 }
 
 /** Every row reflects a real event: upload bytes, then stage events streamed by the API. */
-export function Progress({ upload, stage, hasSeeds, error, onRetry, onCancel, onLocal }: Props) {
+export function Progress({ upload, stage, error, onRetry, onCancel, onLocal }: Props) {
   const current = stage ? STEPS.findIndex((x) => x.id === stage) : -1;
   return (
     <section className={s.progress} aria-live="polite" aria-busy={!error}>
@@ -33,11 +32,10 @@ export function Progress({ upload, stage, hasSeeds, error, onRetry, onCancel, on
         </li>
         {STEPS.map((step, i) => {
           const status = i < current ? s.done : i === current ? s.active : s.pending;
-          const skipped = step.id === "taste" && !hasSeeds && i < current;
           return (
             <li key={step.id} className={status}>
               <span>{step.label}</span>
-              <span className={s.mono}>{skipped ? "skipped — no favourites" : i < current ? "done" : i === current ? "…" : ""}</span>
+              <span className={s.mono}>{i < current ? "done" : i === current ? "…" : ""}</span>
             </li>
           );
         })}

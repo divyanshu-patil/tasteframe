@@ -11,6 +11,7 @@ the song in the Story, with "Artwork via Apple Music" attribution in the UI.
 import io
 import logging
 import re
+import time
 import unicodedata
 from urllib.parse import urlparse
 
@@ -23,10 +24,19 @@ log = logging.getLogger("tasteframe.music")
 ITUNES_URL = "https://itunes.apple.com/search"
 LOOKUP_URL = "https://itunes.apple.com/lookup"
 MAX_ART_BYTES = 3 * 1024 * 1024
+# iTunes Search allows ~20 calls/min per IP and an artist's top songs barely move in a day.
+# ponytail: per-process dict; move to Redis if the API runs on many instances.
+_TRACKS: dict[tuple[str, str], tuple[float, list[tuple[str, str | None, int | None]]]] = {}
+TRACK_TTL = 24 * 3600
 
 
 def _norm(s: str) -> str:
     return unicodedata.normalize("NFKC", s).casefold().strip()
+
+
+def _lead(credit: str) -> str:
+    """First credited artist of "A & B" / "A, B & C" / "A feat. B" (the track's lead)."""
+    return _norm(re.split(r" & |, | feat\. | ft\. ", credit, maxsplit=1)[0])
 
 
 async def find_track(
@@ -34,15 +44,29 @@ async def find_track(
     settings: Settings,
     country: str = "US",
     transport: httpx.AsyncBaseTransport | None = None,
-) -> tuple[str, str | None] | None:
-    """Return (track title, store url) for an exact artist-name match, else None."""
+) -> tuple[str, str | None, int | None] | None:
+    """Return (track title, store url, track id) for an exact artist-name match, else None."""
+    found = await find_tracks(artist, settings, country, transport)
+    return found[0] if found else None
+
+
+async def find_tracks(
+    artist: str,
+    settings: Settings,
+    country: str = "US",
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> list[tuple[str, str | None, int | None]]:
+    """Top songs (iTunes order, distinct titles) whose artist name matches exactly."""
     if settings.music_metadata_provider != "itunes":
-        return None
+        return []
+    hit = _TRACKS.get((_norm(artist), country))
+    if hit and time.monotonic() - hit[0] < TRACK_TTL:
+        return hit[1]
     params = {
         "term": artist,
         "entity": "song",
         "attribute": "artistTerm",
-        "limit": 10,
+        "limit": 25,
         "country": country,
     }
     try:
@@ -54,19 +78,22 @@ async def find_track(
             results = resp.json().get("results", [])
     except (httpx.HTTPError, ValueError, AttributeError):
         log.warning("itunes lookup failed")
-        return None
+        return []
+    out: dict[str, tuple[str, str | None, int | None]] = {}
     for r in results if isinstance(results, list) else []:
         if (
             isinstance(r, dict)
             and isinstance(r.get("artistName"), str)
-            and _norm(r["artistName"]) == _norm(artist)
+            and _lead(r["artistName"]) == _norm(artist)
             and isinstance(r.get("trackName"), str)
         ):
             url = r.get("trackViewUrl")
             ok = isinstance(url, str) and url.startswith("https://music.apple.com/")
             tid = r.get("trackId") if isinstance(r.get("trackId"), int) else None
-            return r["trackName"], url if ok else None, tid
-    return None
+            out.setdefault(_norm(r["trackName"]), (r["trackName"], url if ok else None, tid))
+    if out:  # failures and empty answers are retried next time
+        _TRACKS[(_norm(artist), country)] = (time.monotonic(), list(out.values()))
+    return list(out.values())
 
 
 async def search_tracks(
