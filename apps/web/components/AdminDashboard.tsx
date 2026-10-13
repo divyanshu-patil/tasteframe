@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type AdminStats, type AdminUser, type LayoutRequest, type RequestStatus, adminMe, adminRequests, adminStats, adminUsers, updateRequest, updateUser } from "../lib/api";
 import { authConfigured, signOut, useAuth } from "../lib/auth";
@@ -25,8 +27,19 @@ const ago = (iso: string) => {
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
 };
 const layoutName = (id: string) => (id in TEMPLATES ? TEMPLATES[id as keyof typeof TEMPLATES].name : id);
+const VIEWS = [
+  { path: "/admin", label: "Overview" },
+  { path: "/admin/users", label: "Users" },
+] as const;
 
-export function AdminDashboard() {
+/** `?days=7|30|90` (default 30), shared by every admin page. */
+function useDays(): (typeof RANGES)[number] {
+  const d = Number(useSearchParams().get("days"));
+  return RANGES.find((r) => r === d) ?? 30;
+}
+
+/** Admin gate + nav around the admin pages (it lives in the layout, so access is checked once). */
+export function AdminDashboard({ children }: { children: React.ReactNode }) {
   const { user, ready } = useAuth();
   const [login, setLogin] = useState(false);
   const [role, setRole] = useState<"checking" | "admin" | "denied" | { error: string }>("checking");
@@ -60,12 +73,46 @@ export function AdminDashboard() {
       </div>
     );
   if (typeof role === "object") return <p className={s.error}>{role.error}</p>;
-  return <Dashboard email={user.email ?? ""} userId={user.id} />;
+  return (
+    <div className={s.dash}>
+      <AdminNav email={user.email ?? ""} />
+      {children}
+    </div>
+  );
 }
 
-function Dashboard({ email, userId }: { email: string; userId: string }) {
-  const [view, setView] = useState<"overview" | "users">("overview");
-  const [days, setDays] = useState<(typeof RANGES)[number]>(30);
+/** Pages and date range are links: /admin, /admin/users, each with ?days=. */
+function AdminNav({ email }: { email: string }) {
+  const path = usePathname();
+  const days = useDays();
+  return (
+    <header className={s.head}>
+      <h1 className={s.title}>Admin</h1>
+      <div className={s.headTools}>
+        <nav className={s.segment} aria-label="Admin pages">
+          {VIEWS.map((v) => (
+            <Link key={v.path} href={`${v.path}?days=${days}`} aria-current={path === v.path ? "page" : undefined} className={path === v.path ? s.segOn : ""}>
+              {v.label}
+            </Link>
+          ))}
+        </nav>
+        <nav className={s.segment} aria-label="Date range">
+          {RANGES.map((d) => (
+            <Link key={d} href={`${path}?days=${d}`} aria-current={days === d ? "true" : undefined} className={days === d ? s.segOn : ""}>
+              {d} days
+            </Link>
+          ))}
+        </nav>
+        <span className={s.muted}>{email}</span>
+        <button className={s.linkBtn} onClick={() => void signOut()}>Sign out</button>
+      </div>
+    </header>
+  );
+}
+
+/** /admin: traffic, layouts and the layout-request queue. */
+export function AdminOverview() {
+  const days = useDays();
   const [stats, setStats] = useState<AdminStats | { error: string } | null>(null);
   const [tab, setTab] = useState<RequestStatus | "all">("pending");
   const [rows, setRows] = useState<LayoutRequest[] | { error: string } | null>(null);
@@ -89,91 +136,65 @@ function Dashboard({ email, userId }: { email: string; userId: string }) {
   };
 
   return (
-    <div className={s.dash}>
-      <header className={s.head}>
-        <h1 className={s.title}>Admin</h1>
-        <div className={s.headTools}>
-          <div className={s.segment} role="tablist" aria-label="View">
-            {(["overview", "users"] as const).map((v) => (
-              <button key={v} role="tab" aria-selected={view === v} className={view === v ? s.segOn : ""} onClick={() => setView(v)}>
-                {v === "overview" ? "Overview" : "Users"}
-              </button>
-            ))}
-          </div>
-          <div className={s.segment} role="group" aria-label="Date range">
-            {RANGES.map((d) => (
-              <button key={d} aria-pressed={days === d} className={days === d ? s.segOn : ""} onClick={() => setDays(d)}>
-                {d} days
-              </button>
-            ))}
-          </div>
-          <span className={s.muted}>{email}</span>
-          <button className={s.linkBtn} onClick={() => void signOut()}>Sign out</button>
-        </div>
-      </header>
-
-      {view === "users" ? (
-        <Users days={days} me={userId} />
-      ) : (
-        <>
-          {stats === null && <p className={s.note}>Loading analytics…</p>}
-          {stats && "error" in stats && (
-            <p className={s.error}>
-              {stats.error} <button className={s.linkBtn} onClick={loadStats}>Try again</button>
-            </p>
-          )}
-          {stats && !("error" in stats) && <Overview stats={stats} days={days} />}
-
-          <section className={s.queue} aria-labelledby="queue-title">
-            <div className={s.queueHead}>
-              <h2 id="queue-title">Layout requests</h2>
-              <div className={s.tabs} role="tablist">
-                {TABS.map((t) => (
-                  <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? s.tabOn : ""} onClick={() => setTab(t.id)}>
-                    {t.label}
-                    {stats && !("error" in stats) && t.id !== "all" && <span className={s.count}>{stats.requests[t.id] ?? 0}</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {rows === null && <p className={s.note}>Loading requests…</p>}
-            {rows && "error" in rows && (
-              <p className={s.error}>
-                {rows.error} <button className={s.linkBtn} onClick={loadRows}>Try again</button>
-              </p>
-            )}
-            {Array.isArray(rows) && rows.length === 0 && <p className={s.note}>No {tab === "all" ? "" : `${tab} `}requests yet.</p>}
-            {Array.isArray(rows) && rows.length > 0 && (
-              <ul className={s.reqList}>
-                {rows.map((r) => (
-                  <li key={r.id}>
-                    <button className={s.reqRow} onClick={() => setOpen(r)} aria-label={`Open request from ${ago(r.created_at)}`}>
-                      {/* eslint-disable-next-line @next/next/no-img-element -- Pinterest thumbnail */}
-                      {r.pin_thumb ? <img src={r.pin_thumb} alt="" loading="lazy" /> : <span className={s.noThumb} />}
-                      <span className={s.reqMain}>
-                        <span className={s.reqNote}>{r.note || <em className={s.muted}>No note</em>}</span>
-                        <span className={s.muted}>
-                          Pin by {r.pin_author || "unknown"} · {ago(r.created_at)}
-                          {r.email ? " · wants an email" : ""}
-                        </span>
-                      </span>
-                      <span className={`${s.status} ${s[`st_${r.status}`]}`}>{r.status}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </>
+    <>
+      {stats === null && <p className={s.note}>Loading analytics…</p>}
+      {stats && "error" in stats && (
+        <p className={s.error}>
+          {stats.error} <button className={s.linkBtn} onClick={loadStats}>Try again</button>
+        </p>
       )}
+      {stats && !("error" in stats) && <Overview stats={stats} days={days} />}
+
+      <section className={s.queue} aria-labelledby="queue-title">
+        <div className={s.queueHead}>
+          <h2 id="queue-title">Layout requests</h2>
+          <div className={s.tabs} role="tablist">
+            {TABS.map((t) => (
+              <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? s.tabOn : ""} onClick={() => setTab(t.id)}>
+                {t.label}
+                {stats && !("error" in stats) && t.id !== "all" && <span className={s.count}>{stats.requests[t.id] ?? 0}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+        {rows === null && <p className={s.note}>Loading requests…</p>}
+        {rows && "error" in rows && (
+          <p className={s.error}>
+            {rows.error} <button className={s.linkBtn} onClick={loadRows}>Try again</button>
+          </p>
+        )}
+        {Array.isArray(rows) && rows.length === 0 && <p className={s.note}>No {tab === "all" ? "" : `${tab} `}requests yet.</p>}
+        {Array.isArray(rows) && rows.length > 0 && (
+          <ul className={s.reqList}>
+            {rows.map((r) => (
+              <li key={r.id}>
+                <button className={s.reqRow} onClick={() => setOpen(r)} aria-label={`Open request from ${ago(r.created_at)}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- Pinterest thumbnail */}
+                  {r.pin_thumb ? <img src={r.pin_thumb} alt="" loading="lazy" /> : <span className={s.noThumb} />}
+                  <span className={s.reqMain}>
+                    <span className={s.reqNote}>{r.note || <em className={s.muted}>No note</em>}</span>
+                    <span className={s.muted}>
+                      Pin by {r.pin_author || "unknown"} · {ago(r.created_at)}
+                      {r.email ? " · wants an email" : ""}
+                    </span>
+                  </span>
+                  <span className={`${s.status} ${s[`st_${r.status}`]}`}>{r.status}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <RequestDetail request={open} onClose={() => setOpen(null)} onUpdated={onUpdated} />
-    </div>
+    </>
   );
 }
 
-/** Accounts ranked by what they did while signed in, with the layouts each uses most. */
-function Users({ days, me }: { days: number; me: string }) {
+/** /admin/users: accounts ranked by what they did while signed in, with the layouts each uses most. */
+export function AdminUsers() {
+  const days = useDays();
+  const me = useAuth().user?.id;
   const [rows, setRows] = useState<AdminUser[] | { error: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
