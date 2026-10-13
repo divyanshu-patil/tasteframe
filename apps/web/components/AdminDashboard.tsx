@@ -32,6 +32,13 @@ const VIEWS = [
   { path: "/admin/users", label: "Users" },
 ] as const;
 
+/** This page's URL with `set` merged into its query (other params, like ?days=, are kept). */
+function useHref(): (set: Record<string, string>) => string {
+  const path = usePathname();
+  const q = useSearchParams();
+  return (set) => `${path}?${new URLSearchParams({ ...Object.fromEntries(q), ...set })}`;
+}
+
 /** `?days=7|30|90` (default 30), shared by every admin page. */
 function useDays(): (typeof RANGES)[number] {
   const d = Number(useSearchParams().get("days"));
@@ -85,6 +92,7 @@ export function AdminDashboard({ children }: { children: React.ReactNode }) {
 function AdminNav({ email }: { email: string }) {
   const path = usePathname();
   const days = useDays();
+  const href = useHref();
   return (
     <header className={s.head}>
       <h1 className={s.title}>Admin</h1>
@@ -98,7 +106,7 @@ function AdminNav({ email }: { email: string }) {
         </nav>
         <nav className={s.segment} aria-label="Date range">
           {RANGES.map((d) => (
-            <Link key={d} href={`${path}?days=${d}`} aria-current={days === d ? "true" : undefined} className={days === d ? s.segOn : ""}>
+            <Link key={d} href={href({ days: String(d) })} aria-current={days === d ? "true" : undefined} className={days === d ? s.segOn : ""}>
               {d} days
             </Link>
           ))}
@@ -113,8 +121,10 @@ function AdminNav({ email }: { email: string }) {
 /** /admin: traffic, layouts and the layout-request queue. */
 export function AdminOverview() {
   const days = useDays();
+  const href = useHref();
+  const status = useSearchParams().get("status");
+  const tab = TABS.find((t) => t.id === status)?.id ?? "pending"; // ?status=, default pending
   const [stats, setStats] = useState<AdminStats | { error: string } | null>(null);
-  const [tab, setTab] = useState<RequestStatus | "all">("pending");
   const [rows, setRows] = useState<LayoutRequest[] | { error: string } | null>(null);
   const [open, setOpen] = useState<LayoutRequest | null>(null);
 
@@ -148,14 +158,14 @@ export function AdminOverview() {
       <section className={s.queue} aria-labelledby="queue-title">
         <div className={s.queueHead}>
           <h2 id="queue-title">Layout requests</h2>
-          <div className={s.tabs} role="tablist">
+          <nav className={s.tabs} aria-label="Request status">
             {TABS.map((t) => (
-              <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? s.tabOn : ""} onClick={() => setTab(t.id)}>
+              <Link key={t.id} href={href({ status: t.id })} scroll={false} aria-current={tab === t.id ? "page" : undefined} className={tab === t.id ? s.tabOn : ""}>
                 {t.label}
                 {stats && !("error" in stats) && t.id !== "all" && <span className={s.count}>{stats.requests[t.id] ?? 0}</span>}
-              </button>
+              </Link>
             ))}
-          </div>
+          </nav>
         </div>
         {rows === null && <p className={s.note}>Loading requests…</p>}
         {rows && "error" in rows && (
