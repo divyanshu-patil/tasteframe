@@ -113,6 +113,9 @@ LayoutId = Literal[
     "songbox",
     "clockit",
     "doodlefit",
+    "lyriclily",
+    "keyphoto",
+    "sidecollage",
 ]
 FilterId = Literal[
     "none",

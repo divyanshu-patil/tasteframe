@@ -102,6 +102,10 @@ export const TEMPLATE_IDS = [
   "songbox",
   "clockit",
   "doodlefit",
+  // The owner's third pin set (templates-pins2.ts).
+  "lyriclily",
+  "keyphoto",
+  "sidecollage",
 ] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 

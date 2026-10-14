@@ -21,11 +21,21 @@ export const ELEMENT_FILES = {
   anger: { file: "anger", w: 220, h: 220 },
   owocat: { file: "owo-cat", w: 300, h: 280 },
   headcat: { file: "headphone-cat", w: 280, h: 300 },
+  // Photographic flowers supplied by the owner (transparent WebP, sliced as-is from their sheets).
+  lilydark: { file: "lily-dark.webp", w: 647, h: 640 },
+  lilydark2: { file: "lily-dark-2.webp", w: 526, h: 498 },
+  lilypink: { file: "lily-pink.webp", w: 591, h: 635 },
+  lilypink2: { file: "lily-pink-2.webp", w: 511, h: 510 },
+  lilypair: { file: "lily-pair.webp", w: 640, h: 631 },
+  blossomred: { file: "blossom-red.webp", w: 479, h: 468 },
+  calla: { file: "calla-lily.webp", w: 435, h: 468 },
+  hibiscusred: { file: "hibiscus-red.webp", w: 530, h: 484 },
+  orchid: { file: "orchid-red.webp", w: 455, h: 502 },
 } as const;
 export type ElementKind = keyof typeof ELEMENT_FILES;
 
 /** Bump when any element PNG changes, so browsers don't keep a cached old copy. */
-const ELEMENTS_VERSION = 3;
+const ELEMENTS_VERSION = 4;
 
 const images = new Map<ElementKind, HTMLImageElement>();
 let ready: Promise<void> | null = null;
@@ -43,7 +53,8 @@ export function elementsReady(): Promise<void> {
             resolve();
           };
           img.onerror = () => resolve(); // a missing element just doesn't draw
-          img.src = `/elements/${ELEMENT_FILES[k].file}.png?v=${ELEMENTS_VERSION}`;
+          const file: string = ELEMENT_FILES[k].file;
+          img.src = `/elements/${file.includes(".") ? file : `${file}.png`}?v=${ELEMENTS_VERSION}`;
         }),
     ),
   )

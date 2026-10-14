@@ -39,6 +39,15 @@ export const STICKER_KINDS = [
   { kind: "anger", label: "Anger mark", color: "#d2282e" },
   { kind: "owocat", label: "OwO cat", color: "#ffffff" },
   { kind: "headcat", label: "Headphone cat", color: "#e29654" },
+  { kind: "lilydark", label: "Dark lily", color: "#6e1420" },
+  { kind: "lilydark2", label: "Dark lily 2", color: "#6e1420" },
+  { kind: "lilypink", label: "Pink lily", color: "#e8a6b0" },
+  { kind: "lilypink2", label: "Pink lily 2", color: "#e8a6b0" },
+  { kind: "lilypair", label: "Lily pair", color: "#a0303f" },
+  { kind: "blossomred", label: "Wine blossom", color: "#7a1a2a" },
+  { kind: "calla", label: "Calla lily", color: "#7a1a2a" },
+  { kind: "hibiscusred", label: "Wine hibiscus", color: "#7a1a2a" },
+  { kind: "orchid", label: "Wine orchid", color: "#7a1a2a" },
   { kind: "spotify", label: "Playlist panel", color: "#1ed760" },
 ] as const;
 export type StickerKind = (typeof STICKER_KINDS)[number]["kind"];

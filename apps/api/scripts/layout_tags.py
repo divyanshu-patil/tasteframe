@@ -54,7 +54,8 @@ STOP = set(
     "frames collage stickers sticker printable free iphone image images pose poses creative "
     "graphic graphics making make how good perfect some one two three four five six nine i me "
     "him her boys girls girl men women cover covers page pages theme tricks tips techniques app "
-    "apps diy drawing drawings text".split()
+    "apps diy drawing drawings text animation search code codes feed tutorial prompts prompt "
+    "phone mobile".split()
 )
 PER_LAYOUT = 6  # Qloo tags kept per layout
 PIN_TERMS = 8  # Pinterest terms looked up per layout (most frequent across its pins)
@@ -96,6 +97,10 @@ def resolve(q: str, key: str, base: str, cache: dict) -> list[dict]:
             if e.code != 429 or attempt == 3:
                 raise
             time.sleep(1.5 * (attempt + 1))  # 5 requests/second limit
+        except (TimeoutError, urllib.error.URLError):
+            if attempt == 3:
+                raise
+            time.sleep(2.0 * (attempt + 1))  # slow or dropped connection: try again
     norm = q.replace(" ", "_").replace("-", "_")
     exact = [
         {"tag": t["id"], "name": re.sub(r"\s*-\s*", "-", t["name"]).strip("\"' ")}

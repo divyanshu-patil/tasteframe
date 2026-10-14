@@ -1252,6 +1252,50 @@ CATALOGUE: tuple[Template, ...] = (
         text_on_photo=True,
         keywords=("pop", "indie pop", "k-pop", "dance"),
     ),
+    Template(
+        "lyriclily",
+        "Lyric Lily",
+        "music",
+        ("lyric card", "dark lily", "photo bands"),
+        "your photo in two bands around a black strip with a mauve lyric card and a large dark "
+        "red lily; moody selfies, close-up portraits, night, sultry or dark-romance vibes",
+        {"moody": 1.0, "cinematic": 0.85, "bold": 0.8, "warm": 0.5, "nostalgic": 0.5},
+        ("selfie", "close-up", "portrait", "night", "bedroom", "dark", "face", "lips"),
+        {"person": 1.0, "people": 0.35, "object": 0.2, "scene": 0.15},
+        ("portrait", "square", "landscape"),
+        False,
+        ("r&b", "hip hop", "rap", "dark", "sultry", "soul", "trap"),
+        capacity=2,
+    ),
+    Template(
+        "keyphoto",
+        "Key Photo",
+        "screen",
+        ("photo editor", "live frames", "small caption"),
+        "your photo open in a phone photo editor on black: live preview with a small caption, "
+        "the key-photo tip, frame scrubber and toolbar; warm indoor selfies, candid portraits",
+        {"moody": 0.95, "warm": 0.9, "nostalgic": 0.8, "cinematic": 0.7, "minimal": 0.6},
+        ("selfie", "portrait", "bedroom", "indoor", "room", "lamp", "close-up", "night"),
+        {"person": 1.0, "people": 0.6, "object": 0.4, "scene": 0.35},
+        ("landscape", "square", "portrait"),
+        True,
+        ("indie", "r&b", "bedroom pop", "lo-fi", "alternative"),
+    ),
+    Template(
+        "sidecollage",
+        "Sideways Collage",
+        "collage",
+        ("sideways photos", "album art", "chrome stars"),
+        "two sideways photos with an upright square inset, the song's album art, chrome stars, "
+        "red hearts and lips, an eye bar; party outfits, glitter dresses, night-out poses",
+        {"bold": 1.0, "playful": 0.9, "editorial": 0.7, "moody": 0.6, "bright": 0.5},
+        ("party", "night", "dress", "outfit", "glitter", "pose", "mirror", "full body", "club"),
+        {"person": 1.0, "people": 0.7, "object": 0.2, "scene": 0.2},
+        ("portrait", "square", "landscape"),
+        False,
+        ("k-pop", "pop", "party", "dance", "fashion", "hip hop"),
+        capacity=3,
+    ),
 )
 
 TEMPLATES_BY_ID = {t.id: t for t in CATALOGUE}
@@ -1260,8 +1304,11 @@ TEMPLATES_BY_ID = {t.id: t for t in CATALOGUE}
 LAUNCH = date(2026, 9, 1)
 NEW_DAYS = 30
 ADDED: dict[str, date] = {
-    i: date(2026, 10, 11)
-    for i in ("appswitch", "phones", "camlyric", "filmslant", "songbox", "clockit", "doodlefit")
+    **{
+        i: date(2026, 10, 11)
+        for i in ("appswitch", "phones", "camlyric", "filmslant", "songbox", "clockit", "doodlefit")
+    },
+    **{i: date(2026, 10, 14) for i in ("lyriclily", "keyphoto", "sidecollage")},
 }
 W_POPULAR, W_NEW = 0.10, 0.08
 PROMOTE_WITHIN, PROMOTE_MIN = 9, 0.85  # candidates: top 9 by fit, ≥ 85% of the best score
@@ -1317,6 +1364,8 @@ TOPIC_LAYOUTS: dict[str, tuple[str, ...]] = {
         "songbox",
         "appswitch",
         "filmslant",
+        "lyriclily",
+        "keyphoto",
     ),
     "selfie": (
         "y2k",
@@ -1331,6 +1380,8 @@ TOPIC_LAYOUTS: dict[str, tuple[str, ...]] = {
         "phones",
         "songbox",
         "filmslant",
+        "keyphoto",
+        "sidecollage",
     ),
     "group": ("photodump", "polaroids", "booth", "scrapbook", "grid", "filmstrip", "filmslant"),
     "couple": ("duo", "vintage", "softfocus", "polaroids", "cinematic", "note"),
@@ -1345,7 +1396,7 @@ TOPIC_LAYOUTS: dict[str, tuple[str, ...]] = {
     "architecture": ("editorial", "newspaper", "minimal", "splitscreen", "mosaic"),
     "travel": ("ticket", "journal", "torncollage", "stills", "polaroids", "mosaic"),
     "food": ("photodump", "moodboard", "grid", "note", "mosaic"),
-    "celebration": ("scrapbook", "photodump", "polaroids", "y2k", "booth", "grid"),
+    "celebration": ("scrapbook", "photodump", "polaroids", "y2k", "booth", "grid", "sidecollage"),
     "wedding": ("softfocus", "duo", "vintage", "magazine", "polaroids", "journal"),
     "music": (
         "nowplaying",
@@ -1359,6 +1410,7 @@ TOPIC_LAYOUTS: dict[str, tuple[str, ...]] = {
         "camlyric",
         "songbox",
         "appswitch",
+        "lyriclily",
     ),
     "sport": ("magazine", "newspaper", "splitscreen", "grid", "filmstrip"),
     "fashion": (
@@ -1374,11 +1426,22 @@ TOPIC_LAYOUTS: dict[str, tuple[str, ...]] = {
         "clockit",
         "doodlefit",
         "camlyric",
+        "sidecollage",
     ),
     "interior": ("moodboard", "editorial", "note", "mosaic", "minimal"),
     "objects": ("moodboard", "note", "editorial", "grid", "minimal"),
     "study_work": ("editorial", "newspaper", "note", "grid", "minimal"),
-    "night": ("y2k", "nowplaying", "cinematic", "filmstrip", "minimal", "songbox", "appswitch"),
+    "night": (
+        "y2k",
+        "nowplaying",
+        "cinematic",
+        "filmstrip",
+        "minimal",
+        "songbox",
+        "appswitch",
+        "lyriclily",
+        "sidecollage",
+    ),
     "details": ("minimal", "softfocus", "moodboard", "torn", "editorial"),
 }
 

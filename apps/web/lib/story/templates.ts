@@ -21,6 +21,7 @@ import { type Slots, type Template, boxAt, decos, fmtDate, on, pad, stamp, subje
 import { AESTHETIC_TEMPLATES } from "./layouts-aesthetic";
 import { REF_TEMPLATES } from "./templates-refs";
 import { PIN_TEMPLATES } from "./templates-pins";
+import { PIN2_TEMPLATES } from "./templates-pins2";
 import { DEFAULT_COVER, drawCover } from "./cover";
 import { drawSticker } from "./stickers";
 import { MORE_TEMPLATES } from "./templates-more";
@@ -482,6 +483,7 @@ export const TEMPLATES: Record<TemplateId, Template> = {
   ...REF_TEMPLATES,
   ...AESTHETIC_TEMPLATES,
   ...PIN_TEMPLATES,
+  ...PIN2_TEMPLATES,
 } as Record<TemplateId, Template>;
 
 /** Default cover for a layout: song-cover layouts show it; "ig" with no position sits over the subject's face. */
