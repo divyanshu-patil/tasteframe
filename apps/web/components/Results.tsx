@@ -13,6 +13,7 @@ import { LikeButton, NewBadge } from "./LikeButton";
 import { useMasks } from "./useMasks";
 import { StoryCanvas } from "./StoryCanvas";
 import { track } from "../lib/analytics";
+import { PreviewCredit, SongPreview } from "./SongPreview";
 import s from "./maker.module.css";
 
 interface Props {
@@ -60,6 +61,13 @@ export function MusicCard({ music, moods = [] }: { music: Music; moods?: string[
       {moods.length > 0 && <p className={s.small}>Matched to the mood you asked for: <strong>{moods.join(" · ")}</strong></p>}
       {music.trending && <p className={s.small}><strong>{TREND_LABEL[music.trending]}</strong></p>}
       {music.why && <p className={s.small}>“{music.why}”</p>}
+      {music.kind === "track" && (
+        <SongPreview
+          url={music.preview_url}
+          label={`${music.title} by ${music.artist}`}
+          song={{ artist: music.artist ?? undefined, title: music.title ?? undefined, song_source: music.artist_source ?? undefined }}
+        />
+      )}
       {music.url && (
         <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer" onClick={() => listened(music.artist, music.title, music.artist_source)}>
           Open in Apple Music ↗
@@ -77,12 +85,14 @@ export function MusicCard({ music, moods = [] }: { music: Music; moods?: string[
                   <strong>{a.title}</strong>
                 )}{" "}
                 <span className={s.muted}>{a.artist}</span>
-                {a.trending && <span className={s.tags}> {TREND_LABEL[a.trending]}</span>}
+                {a.trending && <span className={s.tags}> {TREND_LABEL[a.trending]}</span>}{" "}
+                <SongPreview url={a.preview_url} label={`${a.title} by ${a.artist}`} song={{ artist: a.artist, title: a.title, song_source: a.source }} />
               </li>
             ))}
           </ul>
         </>
       )}
+      {(music.preview_url || music.alternatives.some((a) => a.preview_url)) && <PreviewCredit />}
       <p className={s.small}>{music.explanation}</p>
       {music.kind !== "none" && (
         <p className={s.small}>Add it with Instagram&apos;s Music sticker after you post.</p>

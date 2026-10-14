@@ -1,7 +1,9 @@
-"""Track-metadata fallback via Apple's public iTunes Search API (metadata + store link only).
+"""Track-metadata fallback via Apple's public iTunes Search API (metadata, store link, preview).
 
 Qloo has no track entity type, so Qloo supplies the *artist*; this only looks up a top song
-by that exact artist. No audio is downloaded or redistributed.
+by that exact artist. No audio is downloaded or redistributed: the 30-second `previewUrl` the
+public Search API returns (no developer account needed) is passed to the browser, which streams
+it from Apple for in-page listening only — never stored, proxied or put in exports.
 
 Song covers: square artwork (600×600) for a track, fetched server-side from Apple's image CDN
 (mzstatic.com only) so the browser gets it same-origin (canvas-safe). Used to identify/promote
@@ -13,6 +15,7 @@ import logging
 import re
 import time
 import unicodedata
+from typing import NamedTuple
 from urllib.parse import urlparse
 
 import httpx
@@ -24,10 +27,20 @@ log = logging.getLogger("tasteframe.music")
 ITUNES_URL = "https://itunes.apple.com/search"
 LOOKUP_URL = "https://itunes.apple.com/lookup"
 MAX_ART_BYTES = 3 * 1024 * 1024
+
+
 # iTunes Search allows ~20 calls/min per IP and an artist's top songs barely move in a day.
 # ponytail: per-process dict; move to Redis if the API runs on many instances.
-_TRACKS: dict[tuple[str, str], tuple[float, list[tuple[str, str | None, int | None]]]] = {}
+class Track(NamedTuple):
+    title: str
+    url: str | None  # Apple Music store page
+    track_id: int | None
+    preview: str | None = None  # Apple's 30 s preview (audio-ssl.itunes.apple.com only)
+
+
+_TRACKS: dict[tuple[str, str], tuple[float, list[Track]]] = {}
 TRACK_TTL = 24 * 3600
+PREVIEW = re.compile(r"^https://audio-ssl\.itunes\.apple\.com/[\w./%+-]+\.m4a$")
 
 
 def _norm(s: str) -> str:
@@ -44,8 +57,8 @@ async def find_track(
     settings: Settings,
     country: str = "US",
     transport: httpx.AsyncBaseTransport | None = None,
-) -> tuple[str, str | None, int | None] | None:
-    """Return (track title, store url, track id) for an exact artist-name match, else None."""
+) -> Track | None:
+    """The top track for an exact artist-name match, else None."""
     found = await find_tracks(artist, settings, country, transport)
     return found[0] if found else None
 
@@ -55,7 +68,7 @@ async def find_tracks(
     settings: Settings,
     country: str = "US",
     transport: httpx.AsyncBaseTransport | None = None,
-) -> list[tuple[str, str | None, int | None]]:
+) -> list[Track]:
     """Top songs (iTunes order, distinct titles) whose artist name matches exactly."""
     if settings.music_metadata_provider != "itunes":
         return []
@@ -79,7 +92,7 @@ async def find_tracks(
     except (httpx.HTTPError, ValueError, AttributeError):
         log.warning("itunes lookup failed")
         return []
-    out: dict[str, tuple[str, str | None, int | None]] = {}
+    out: dict[str, Track] = {}
     for r in results if isinstance(results, list) else []:
         if (
             isinstance(r, dict)
@@ -90,7 +103,16 @@ async def find_tracks(
             url = r.get("trackViewUrl")
             ok = isinstance(url, str) and url.startswith("https://music.apple.com/")
             tid = r.get("trackId") if isinstance(r.get("trackId"), int) else None
-            out.setdefault(_norm(r["trackName"]), (r["trackName"], url if ok else None, tid))
+            prev = r.get("previewUrl")
+            out.setdefault(
+                _norm(r["trackName"]),
+                Track(
+                    r["trackName"],
+                    url if ok else None,
+                    tid,
+                    prev if isinstance(prev, str) and PREVIEW.match(prev) else None,
+                ),
+            )
     if out:  # failures and empty answers are retried next time
         _TRACKS[(_norm(artist), country)] = (time.monotonic(), list(out.values()))
     return list(out.values())

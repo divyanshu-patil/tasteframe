@@ -22,7 +22,7 @@ from app.schemas.api import (
 )
 from app.services.insights.community import community_picks
 from app.services.insights.likes import like_counts
-from app.services.music.itunes import find_tracks
+from app.services.music.itunes import Track, find_tracks
 from app.services.music.moods import clean_wish, moods_in, qloo_tags, vibe_for
 from app.services.music.trending import REELS_UPDATED, chart_keys, key, trend_of
 from app.services.music.vibes import rotate, songs_for, vibe_from_cues
@@ -131,9 +131,17 @@ async def pick_music(
     )
     chart = chart_keys(language, settings, music_transport)
 
-    def song(artist: str, src: str, t: tuple[str, str | None, int | None]) -> Song:
-        trend = trend_of(artist, t[0], chart)
-        return Song(title=t[0], artist=artist, url=t[1], track_id=t[2], trending=trend, source=src)  # type: ignore[arg-type]
+    def song(artist: str, src: str, t: Track) -> Song:
+        trend = trend_of(artist, t.title, chart)
+        return Song(
+            title=t.title,
+            artist=artist,
+            url=t.url,
+            track_id=t.track_id,
+            preview_url=t.preview,
+            trending=trend,
+            source=src,  # type: ignore[arg-type]
+        )
 
     picked = [
         song(a, "vibe", t)
@@ -219,6 +227,7 @@ async def pick_music(
         title=lead.title,
         url=lead.url,
         track_id=lead.track_id,
+        preview_url=lead.preview_url,
         artist_source=lead.source,
         track_source="itunes",
         vibe=vibe,  # type: ignore[arg-type]

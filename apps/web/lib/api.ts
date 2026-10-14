@@ -79,6 +79,8 @@ export interface Song {
   artist: string;
   url: string | null;
   track_id: number | null;
+  /** Apple's 30-second preview (streamed from Apple in the page only). */
+  preview_url: string | null;
   trending: Trend | null;
   /** "qloo": related to your favourites; "vibe": picked for the photo's vibe. */
   source: "qloo" | "vibe";
@@ -95,6 +97,8 @@ export interface Music {
   track_source: "itunes" | null;
   /** Apple Music track id, for the square song cover. */
   track_id: number | null;
+  /** Apple's 30-second preview (streamed from Apple in the page only). */
+  preview_url: string | null;
   explanation: string;
   /** How the photo reads, e.g. "baddie", "cute" (from pose/expression/mood). */
   vibe: string | null;
@@ -162,6 +166,9 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
 const isStrArr = (v: unknown): v is string[] => Array.isArray(v) && v.every(isStr);
 const HEX = /^#[0-9a-f]{6}$/i;
 const SAFE_MUSIC_URL = /^https:\/\/music\.apple\.com\//;
+/** Apple's preview host only (what the iTunes Search API returns as previewUrl). */
+export const SAFE_PREVIEW_URL = /^https:\/\/audio-ssl\.itunes\.apple\.com\/[\w./%+-]+\.m4a$/;
+const previewOf = (v: unknown) => (isStr(v) && SAFE_PREVIEW_URL.test(v) ? v : null);
 
 /** Validated music suggestion (from the analysis result or the later `{music}` event). */
 export function parseMusic(m: unknown): Music {
@@ -172,6 +179,7 @@ export function parseMusic(m: unknown): Music {
     ...m,
     url: isStr(m.url) && SAFE_MUSIC_URL.test(m.url) ? m.url : null,
     track_id: isNum(m.track_id) && Number.isInteger(m.track_id) && m.track_id > 0 ? m.track_id : null,
+    preview_url: previewOf(m.preview_url),
     vibe: isStr(m.vibe) ? m.vibe : null,
     trending: asTrend(m.trending),
     why: isStr(m.why) ? m.why : null,
@@ -184,6 +192,7 @@ export function parseMusic(m: unknown): Music {
             artist: a.artist as string,
             url: isStr(a.url) && SAFE_MUSIC_URL.test(a.url) ? a.url : null,
             track_id: isNum(a.track_id) && Number.isInteger(a.track_id) && a.track_id > 0 ? a.track_id : null,
+            preview_url: previewOf(a.preview_url),
             trending: asTrend(a.trending),
             source: a.source === "qloo" ? "qloo" : "vibe",
             why: isStr(a.why) ? a.why : null,
@@ -200,7 +209,7 @@ export function songsOf(music: Music | null): Song[] {
   if (music?.kind !== "track") return [];
   const lead: Song = {
     title: music.title ?? "", artist: music.artist ?? "", url: music.url, track_id: music.track_id,
-    trending: music.trending, source: music.artist_source === "qloo" ? "qloo" : "vibe", why: music.why,
+    preview_url: music.preview_url, trending: music.trending, source: music.artist_source === "qloo" ? "qloo" : "vibe", why: music.why,
   };
   return [lead, ...music.alternatives];
 }
@@ -213,7 +222,7 @@ export function musicFor(music: Music, index: number): Music {
   const [head, ...rest] = [...all.slice(k), ...all.slice(0, k)];
   return {
     ...music, title: head!.title, artist: head!.artist, url: head!.url, track_id: head!.track_id,
-    trending: head!.trending, artist_source: head!.source, why: head!.why, alternatives: rest,
+    preview_url: head!.preview_url, trending: head!.trending, artist_source: head!.source, why: head!.why, alternatives: rest,
   };
 }
 

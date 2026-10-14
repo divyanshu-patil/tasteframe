@@ -443,3 +443,8 @@ textarea.input { width: 100%; resize: vertical; }
 .fontSearch .input { width: 100%; font-size: 15px; }
 .fontEmpty { margin: 0; padding: 12px 14px; font-size: 15px; color: var(--color-charcoal); }
 .fontMeta { float: right; margin-top: 6px; font-family: var(--font-mono); font-size: 11px; font-style: normal; font-weight: 400; color: var(--color-charcoal); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* 30-second Apple preview (SongPreview) */
+.previewBtn { justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 1px solid var(--color-ink-black); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 14px; cursor: pointer; }
+.previewBtn[aria-pressed="true"] { background: var(--color-ink-black); color: var(--color-bone-cream); }
+.previewBtn:focus-visible { outline: 2px solid var(--color-ember-orange); outline-offset: 2px; }

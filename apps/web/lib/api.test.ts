@@ -38,16 +38,16 @@ describe("response validation", () => {
 
   it("keeps the photo vibe and validates alternative songs", () => {
     const alts = [
-      { title: "A", artist: "X", url: "https://evil.example", track_id: 3 },
+      { title: "A", artist: "X", url: "https://evil.example", track_id: 3, preview_url: "https://evil.example/a.m4a" },
       { title: 5, artist: "Y" },
-      { title: "B", artist: "Z", url: "https://music.apple.com/us/album/b", trending: "reels" },
+      { title: "B", artist: "Z", url: "https://music.apple.com/us/album/b", trending: "reels", preview_url: "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/x/b.m4a" },
     ];
     const m = parseAnalysis({ ...valid, music: { ...valid.music, vibe: "baddie", alternatives: alts } }).music;
     expect(m.vibe).toBe("baddie");
     expect(parseAnalysis({ ...valid, music: { ...valid.music, trending: "viral!" } }).music.trending).toBeNull();
     expect(m.alternatives).toEqual([
-      { title: "A", artist: "X", url: null, track_id: 3, trending: null, source: "vibe", why: null },
-      { title: "B", artist: "Z", url: "https://music.apple.com/us/album/b", track_id: null, trending: "reels", source: "vibe", why: null },
+      { title: "A", artist: "X", url: null, track_id: 3, preview_url: null, trending: null, source: "vibe", why: null },
+      { title: "B", artist: "Z", url: "https://music.apple.com/us/album/b", track_id: null, preview_url: "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/x/b.m4a", trending: "reels", source: "vibe", why: null },
     ]);
     expect(parseAnalysis(valid).music.alternatives).toEqual([]);
   });

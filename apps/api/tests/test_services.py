@@ -88,18 +88,32 @@ def test_itunes_exact_artist_match_only():
             "artistName": "the artist",
             "trackName": "Song",
             "trackViewUrl": "https://music.apple.com/us/album/x?i=1",
+            "previewUrl": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/a/b.m4a",
         },
     ]
     assert asyncio.run(find_track("The Artist", s, transport=_itunes(hit))) == (
         "Song",
         "https://music.apple.com/us/album/x?i=1",
         None,  # no trackId in this fixture
+        "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/a/b.m4a",
     )
     itunes._TRACKS.clear()  # each call below is a fresh lookup
     assert asyncio.run(find_track("The Artist", s, transport=_itunes(hit[:1]))) is None
-    evil = [{"artistName": "The Artist", "trackName": "T", "trackViewUrl": "https://evil.example"}]
+    evil = [
+        {
+            "artistName": "The Artist",
+            "trackName": "T",
+            "trackViewUrl": "https://evil.example",
+            "previewUrl": "https://evil.example/x.m4a",  # only Apple's preview host passes
+        }
+    ]
     itunes._TRACKS.clear()
-    assert asyncio.run(find_track("The Artist", s, transport=_itunes(evil))) == ("T", None, None)
+    assert asyncio.run(find_track("The Artist", s, transport=_itunes(evil))) == (
+        "T",
+        None,
+        None,
+        None,
+    )
 
 
 def test_itunes_tracks_are_cached_per_artist():

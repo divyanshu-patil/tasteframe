@@ -124,6 +124,10 @@ Separate artist recommendation, track metadata, playback rights and Instagram mu
    RSS, refreshed in the background every 6 h, plus a dated Reels list in `trending.py`) are
    preferred when they fit. Songs stream as a `{"music": …}` event after `{"result": …}`
    (`music_pending: true`), so layouts render first; each layout gets its own song by rank.
+   Each song carries Apple's 30-second `previewUrl` from the public iTunes Search API (no developer
+   account needed; only `audio-ssl.itunes.apple.com` URLs pass). The browser streams it from Apple
+   for in-page listening with "Previews courtesy of Apple Music" and a link to Apple Music; it is
+   never downloaded, proxied, stored or added to exports (video export only uses audio you supply).
    Songs are only suggested while Qloo is on (admin switch and key): with Qloo off the result
    has `music.kind: "none"` and no song lookups are made.
 7. Favourites (Qloo taste seeds) need a signed-in user when Supabase auth is configured.

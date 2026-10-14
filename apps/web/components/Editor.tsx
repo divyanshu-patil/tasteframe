@@ -24,6 +24,7 @@ import { FontPicker } from "./FontPicker";
 import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
 import { useMasks } from "./useMasks";
 import { type SongEvent, track } from "../lib/analytics";
+import { SongPreview } from "./SongPreview";
 import { PROPS } from "../lib/story/elements";
 import s from "./maker.module.css";
 
@@ -347,6 +348,13 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
             {music?.title === story.cover.title && music.trending && <> · {music.trending === "chart" ? "🔥 top on Apple Music now" : "🔥 trending on Reels"}</>}
             {music?.title === story.cover.title && music.url && (
               <> · <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer" onClick={() => track("song_listen", songEvent())}>listen ↗</a></>
+            )}
+            {music?.title === story.cover.title && music.preview_url && (
+              <>
+                {" "}
+                <SongPreview url={music.preview_url} label={`${music.title} by ${music.artist}`} song={songEvent()} />
+                <span className={s.small}> Preview courtesy of Apple Music.</span>
+              </>
             )}
           </div>
         ) : musicOff ? (

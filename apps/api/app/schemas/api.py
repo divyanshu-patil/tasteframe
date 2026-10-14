@@ -308,6 +308,7 @@ class Song(BaseModel):
     artist: str
     url: str | None = None
     track_id: int | None = None
+    preview_url: str | None = None  # Apple's 30 s preview, streamed in the page only
     trending: Trend | None = None
     source: Literal["qloo", "vibe"] = "vibe"
     why: str | None = Field(None, max_length=90)  # the vision model's short fit reason
@@ -322,6 +323,7 @@ class MusicSuggestion(BaseModel):
     artist_source: Literal["qloo", "vibe"] | None = None
     track_source: Literal["itunes"] | None = None
     track_id: int | None = None  # for the song cover (GET /v1/music/artwork/{track_id})
+    preview_url: str | None = None  # Apple's 30 s preview, streamed in the page only
     explanation: str
     vibe: Vibe | None = None  # how the photo reads (pose/expression/mood), e.g. "baddie"
     language: Language = "en"
