@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import logging
 import secrets
+import time
 from collections.abc import AsyncIterator
 from itertools import zip_longest
 
@@ -19,8 +20,10 @@ from app.schemas.api import (
     Song,
     VisualProfile,
 )
+from app.services.insights.community import community_picks
 from app.services.insights.likes import like_counts
 from app.services.music.itunes import find_tracks
+from app.services.music.moods import clean_wish, moods_in, qloo_tags, vibe_for
 from app.services.music.trending import REELS_UPDATED, chart_keys, key, trend_of
 from app.services.music.vibes import rotate, songs_for, vibe_from_cues
 from app.services.qloo import usage
@@ -32,6 +35,7 @@ from app.services.recommendations.layouts import (
     qloo_layout_fit,
     rank_layouts,
 )
+from app.services.region import country_name
 from app.services.storage.store import Storage
 from app.services.vision.analyzer import (
     analyze,
@@ -55,13 +59,17 @@ async def _no_affinity() -> dict[str, float]:
 
 
 async def cultural_signals(
-    qloo: QlooClient, ids: list[str]
+    qloo: QlooClient,
+    ids: list[str],
+    mood_tags: list[str] | None = None,
+    location: str | None = None,
 ) -> tuple[list[QlooEntity], list[QlooEntity]]:
-    """Two documented Insights queries (artist + movie) anchored on the given entity ids."""
+    """Two documented Insights queries (artist + movie) anchored on the given entity ids. The
+    music mood asked for (fixed Qloo tag ids) and the region steer the artists."""
     seed_ids = set(ids)
     results = await asyncio.gather(
-        qloo.get_insights(ids, "artist", take=8),
-        qloo.get_insights(ids, "movie", take=5),
+        qloo.get_insights(ids, "artist", take=8, tags=mood_tags, location=location),
+        qloo.get_insights(ids, "movie", take=5, location=location),
         return_exceptions=True,
     )
     errors = [r for r in results if isinstance(r, BaseException)]
@@ -72,6 +80,23 @@ async def cultural_signals(
         for r in results
     )
     return artists, movies
+
+
+# Artist name → Qloo entity id for the most-picked artists in a region (identifiers only).
+# ponytail: per-process, a day; Qloo's caching terms weren't verified, so nothing else is kept.
+_ARTIST_IDS: dict[str, tuple[float, QlooEntity | None]] = {}
+
+
+async def popular_artists(qloo: QlooClient, names: list[str]) -> list[QlooEntity]:
+    out = []
+    for name in names:
+        hit = _ARTIST_IDS.get(name)
+        if not hit or time.monotonic() - hit[0] > 86400:
+            found = (await qloo.search_entities(name, "artist", take=1))[:1]
+            hit = _ARTIST_IDS[name] = (time.monotonic(), found[0] if found else None)
+        if hit[1]:
+            out.append(hit[1])
+    return out
 
 
 async def pick_music(
@@ -85,6 +110,7 @@ async def pick_music(
     settings: Settings,
     country: str,
     reasoning: ImageReasoning | None = None,
+    wish: str | None = None,
 ) -> MusicSuggestion:
     """Candidate songs: the curated (artist, title) picks for the photo's vibe, each verified in
     the artist's iTunes catalogue, plus a couple of songs by Qloo-related artists (a trending one
@@ -163,6 +189,7 @@ async def pick_music(
             [(x.title, x.artist, bool(x.trending)) for x in default],
             settings,
             vision_transport,
+            wish,
         )
         if reasoning
         else None
@@ -204,8 +231,15 @@ async def pick_music(
 
 
 async def run_analysis(
-    req: AnalysisIn, settings: Settings, storage: Storage, qloo: QlooClient, country: str = "US"
+    req: AnalysisIn,
+    settings: Settings,
+    storage: Storage,
+    qloo: QlooClient,
+    country: str = "US",
+    region: str | None = None,
 ) -> AsyncIterator[dict]:
+    """`country`: iTunes storefront. `region`: the person's country code (tracking, Qloo
+    location signal, what people near them pick)."""
     try:
         yield {"stage": "photo"}
         images = []
@@ -239,10 +273,19 @@ async def run_analysis(
         # in the chosen language, so a song is suggested with or without favourites.
         # Per-upload seed (keys are random): each photo gets its own pick, re-runs keep it.
         seed = int.from_bytes(hashlib.sha256("|".join(req.object_keys).encode()).digest()[:8])
-        vibe = (reasoning.vibe if reasoning else None) or vibe_from_cues(
-            [*reasoning.expressions, *reasoning.elements, *reasoning.scene, *profile.mood]
-            if reasoning
-            else list(profile.mood)
+        # What they asked for ("baddie, sexy, mild tone") → our moods; it picks the song pool and
+        # its Qloo tags steer the related artists.
+        wish = clean_wish(req.music_wish)
+        wish_moods = moods_in(wish)
+        picks = await community_picks(settings, region)
+        vibe = (
+            vibe_for(wish_moods)
+            or (reasoning.vibe if reasoning else None)
+            or vibe_from_cues(
+                [*reasoning.expressions, *reasoning.elements, *reasoning.scene, *profile.mood]
+                if reasoning
+                else list(profile.mood)
+            )
         )
         vibe_songs = rotate(list(songs_for(req.music_language, vibe)), seed)
         artists: list[QlooEntity] = []
@@ -255,13 +298,22 @@ async def run_analysis(
                 anchor = (await qloo.search_entities(vibe_songs[0][0], "artist", take=1))[:1]
             except AppError as e:
                 qloo_error = e.code
+        if qloo_on and not req.taste_seeds and picks.artists:
+            try:  # no favourites: what people near you play/export joins the signal
+                anchor += [
+                    e
+                    for e in await popular_artists(qloo, picks.artists[:2])
+                    if e.entity_id not in {a.entity_id for a in anchor}
+                ]
+            except AppError as e:
+                qloo_error = e.code
         ids = [s.entity_id for s in req.taste_seeds] + [e.entity_id for e in anchor]
         qloo_fit: dict[str, tuple[float, list[str]]] | None = None
         if qloo_on and (req.taste_seeds or anchor):
             # Admin switch: Qloo also scores each layout's tags against the same taste signal.
             by_qloo = await usage.layouts_on(settings)
             signals, affinity = await asyncio.gather(
-                cultural_signals(qloo, ids),
+                cultural_signals(qloo, ids, qloo_tags(wish_moods), country_name(region)),
                 qloo.tag_affinity(ids, layout_tag_ids()) if by_qloo else _no_affinity(),
                 return_exceptions=True,
             )
@@ -278,6 +330,8 @@ async def run_analysis(
 
         seed_names = [s.name for s in req.taste_seeds]
         evidence = [*seed_names, *(e.name for e in anchor)]
+        if wish_moods:
+            evidence.append(f"the {' / '.join(wish_moods[:3])} mood you asked for")
         recs = [
             CulturalRecommendation(
                 kind=e.entity_type,
@@ -296,8 +350,8 @@ async def run_analysis(
             asyncio.create_task(
                 pick_music(
                     vibe_songs,
-                    [e.name for e in rotate(artists[:4], seed)],
-                    bool(req.taste_seeds),
+                    [e.name for e in (artists[:4] if wish_moods else rotate(artists[:4], seed))],
+                    bool(req.taste_seeds or wish_moods),
                     vibe,
                     req.music_language,
                     evidence,
@@ -305,6 +359,7 @@ async def run_analysis(
                     settings,
                     country,
                     reasoning,
+                    wish,
                 )
             )
             if qloo_on
@@ -328,6 +383,7 @@ async def run_analysis(
             subjects=[(x.subject, x.x, x.y) for x in reasoning.subjects] if reasoning else None,
             likes=await like_counts(settings),
             qloo_fit=qloo_fit,
+            uses=picks.layouts,
         )
 
         result = AnalysisOut(
@@ -353,6 +409,7 @@ async def run_analysis(
                 seeds=seed_names,
                 layouts_by_qloo=qloo_fit is not None,
                 music_off=music_task is None,
+                music_moods=wish_moods,
                 **(
                     {"layout_rule": QLOO_RULE if reasoning else QLOO_RULE_NO_AI} if qloo_fit else {}
                 ),

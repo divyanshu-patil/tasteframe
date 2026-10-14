@@ -68,6 +68,7 @@ class FakeRest:
         self.set_user: list[dict] = []
         self.qloo_on = True
         self.qloo_layouts = False
+        self.picks_asked: list[dict] = []
         self.qloo_calls: list[dict] = []
 
     def handler(self, req: httpx.Request) -> httpx.Response:
@@ -131,6 +132,16 @@ class FakeRest:
         if path == "/app_flags":
             row = {"qloo_enabled": self.qloo_on, "qloo_layouts": self.qloo_layouts}
             return httpx.Response(200, json=[row])
+        if path == "/rpc/community_picks":
+            self.picks_asked.append(json.loads(req.content))
+            return httpx.Response(
+                200,
+                json={
+                    "region": "IN",
+                    "layouts": {"newspaper": 40, "x": "bad"},
+                    "artists": ["A", 3],
+                },
+            )
         if path == "/rpc/log_qloo_call":
             self.qloo_calls.append(json.loads(req.content))
             return httpx.Response(204)
@@ -145,6 +156,11 @@ class FakeRest:
                     self.qloo_layouts = body["p_layouts"]
             flags = {"enabled": self.qloo_on, "layouts": self.qloo_layouts}
             return httpx.Response(200, json={**flags, "daily": []})
+        if path == "/rpc/admin_music":
+            if token != ADMIN[0]:
+                return httpx.Response(403, json={"message": "NOT_ADMIN"})
+            src = [{"source": "qloo", "listens": 3, "exports": 2}]
+            return httpx.Response(200, json={"by_source": src, "by_region": [], "top": []})
         if path == "/rpc/admin_users":
             if token != ADMIN[0]:
                 return httpx.Response(403, json={"message": "NOT_ADMIN"})
@@ -438,3 +454,45 @@ def test_admin_switches_qloo_off_for_everyone_and_calls_are_logged(api):
     assert (
         client.patch("/v1/admin/qloo", headers=admin, json={"enabled": "nope"}).status_code == 422
     )
+
+
+def test_song_listens_and_exports_are_tracked_with_region(api):
+    client, fake = api
+    ev = {
+        "type": "song_listen",
+        "visitor": "abcDEF123456",
+        "region": "GB",  # browser hint: the geo header wins
+        "artist": "SZA",
+        "title": "Kill Bill",
+        "song_source": "qloo",
+    }
+    r = client.post("/v1/events", json=ev, headers={"x-vercel-ip-country": "IN"})
+    assert r.status_code == 204
+    row = fake.events[-1]
+    assert row["region"] == "IN" and row["artist"] == "SZA" and row["song_source"] == "qloo"
+    client.post("/v1/events", json={**ev, "type": "export", "layout": "vintage"})
+    assert fake.events[-1]["region"] == "GB" and fake.events[-1]["layout"] == "vintage"
+    bad = {**ev, "region": "India"}
+    assert client.post("/v1/events", json=bad).status_code == 422
+
+
+def test_community_picks_are_parsed_and_cached(api):
+    from app.core.config import get_settings
+    from app.services.insights import community
+
+    _, fake = api
+    community._cache.clear()
+    picks = asyncio.run(community.community_picks(get_settings(), "IN"))
+    assert picks.region == "IN" and picks.layouts == {"newspaper": 40} and picks.artists == ["A"]
+    asyncio.run(community.community_picks(get_settings(), "IN"))
+    assert fake.picks_asked == [{"p_region": "IN"}]  # second call served from cache
+
+
+def test_admin_music_breakdown_is_admin_only(api):
+    client, _ = api
+    assert (
+        client.get("/v1/admin/music", headers={"Authorization": f"Bearer {USER[0]}"}).status_code
+        == 403
+    )
+    r = client.get("/v1/admin/music?days=7", headers={"Authorization": f"Bearer {ADMIN[0]}"})
+    assert r.status_code == 200 and r.json()["by_source"][0]["source"] == "qloo"

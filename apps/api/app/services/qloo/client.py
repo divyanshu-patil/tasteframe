@@ -8,6 +8,9 @@ Verified against docs.qloo.com + github.com/qloo/docs-public (2026-10-10):
 - GET /v2/insights?filter.type=urn:tag&filter.results.tags=<urn,urn>&signal.interests.entities=
   scores the given tags against the signal; each returned tag carries query.affinity (0..1), and
   tags with no affinity are left out (checked live 2026-10-14).
+- Insights also takes `signal.interests.tags=<urn,…>` (mood tags steer related artists) and
+  `signal.location.query=<country name>` (biases toward that place's audience; ISO codes don't
+  work: "IN" matched elsewhere, "GB" returned nothing). Checked live 2026-10-14.
 """
 
 import asyncio
@@ -160,13 +163,24 @@ class QlooClient:
         return out[:take]
 
     async def get_insights(
-        self, entity_ids: list[str], target_type: str, take: int = 8
+        self,
+        entity_ids: list[str],
+        target_type: str,
+        take: int = 8,
+        tags: list[str] | None = None,
+        location: str | None = None,
     ) -> list[QlooEntity]:
+        """`tags` and `location` must be our own fixed values (mood tag ids, country names),
+        never browser text."""
         params: dict[str, str | int] = {
             "filter.type": URN[target_type],
             "signal.interests.entities": ",".join(entity_ids),
             "take": take,
         }
+        if tags:
+            params["signal.interests.tags"] = ",".join(tags)
+        if location:
+            params["signal.location.query"] = location
         data = await self._get("/v2/insights", params)
         if data is None:
             return []

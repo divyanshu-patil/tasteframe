@@ -14,7 +14,8 @@ score = 0.30 visual + 0.30 ai_pick + 0.25 cultural + 0.15 readability   (with im
 score = 0.45 visual + 0.35 cultural + 0.20 readability                   (without)
 score = 0.45 qloo + 0.25 visual + 0.20 ai_pick + 0.10 readability       (Qloo layouts on)
 score = 0.50 qloo + 0.35 visual + 0.15 readability                       (… without reasoning)
-then × (1 + 0.10 popularity + 0.08 newness): likes and recently added layouts get a small boost on
+then × (1 + 0.10 popularity + 0.08 newness): likes, exports (people near you, last 30 days) and
+recently added layouts get a small boost on
 top of photo fit, and one new or well-liked layout that already fits the photo is moved into the
 first three suggestions. An engineering heuristic — tune by human review; not a validated model.
 
@@ -1637,6 +1638,7 @@ def rank_layouts(
     likes: dict[str, int] | None = None,
     today: date | None = None,
     qloo_fit: dict[str, tuple[float, list[str]]] | None = None,
+    uses: dict[str, int] | None = None,
 ) -> list[LayoutSuggestion]:
     """All templates ranked for this photo (or the top `k`), families interleaved per 3.
 
@@ -1645,6 +1647,7 @@ def rank_layouts(
     `ai_picks`: the vision model's ranked template ids for this photo.
     `subjects`: per-photo (kind, x, y) for multi-photo Stories (crop focus per photo).
     `likes`: like counts per layout id (community boost); `today` pins newness in tests.
+    `uses`: exports per layout id (people in your region, or everyone) — same boost as likes.
     `qloo_fit`: from qloo_layout_fit(); when given, Qloo's tag affinity leads the ranking."""
     people = bool(subject and subject[0] in ("person", "people"))
     per_photo = subjects or ([subject] if subject else [])
@@ -1656,12 +1659,13 @@ def rank_layouts(
     ]
     focus = (subject[1], subject[2]) if subject and subject[0] != "scene" else (0.5, 0.5)
     kind = subject[0] if subject else None
-    likes = likes or {}
+    likes, uses = likes or {}, uses or {}
+    pop = {k: likes.get(k, 0) + uses.get(k, 0) for k in {*likes, *uses}}
     ordered = _promote(
         _interleave(
-            score_all(p, qloo_tags, people, scene, kind, ai_picks, topic, likes, today, qloo_fit)
+            score_all(p, qloo_tags, people, scene, kind, ai_picks, topic, pop, today, qloo_fit)
         ),
-        likes,
+        pop,
         today,
     )
     if k is not None:
@@ -1695,6 +1699,8 @@ def rank_layouts(
             reason += " New layout."
         if popularity(t.id, likes) >= 0.5 and liked:
             reason += f" Liked by {liked} {'person' if liked == 1 else 'people'}."
+        if popularity(t.id, uses) >= 0.5:
+            reason += " Often exported by people near you."
         if t.text_on_photo and score.readability_fit < 0.6:
             reason += " Text sits on an overlay to stay readable."
         n = p.photo_count

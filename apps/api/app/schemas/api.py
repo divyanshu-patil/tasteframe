@@ -221,6 +221,10 @@ class AnalysisIn(BaseModel):
     manual_mood: list[Mood] = Field(default_factory=list, max_length=4)
     locale: str = Field("en", pattern=r"^[a-z]{2}(-[A-Z]{2})?$")
     music_language: Language = "en"  # language of the suggested songs
+    # What music they want, in their words ("baddie, sexy, mild tone"). Matched to our moods;
+    # never sent to Qloo as text.
+    music_wish: str | None = Field(None, max_length=200)
+    region: str | None = Field(None, pattern=r"^[A-Z]{2}$")  # browser locale hint
 
     @model_validator(mode="after")
     def _keys(self) -> "AnalysisIn":
@@ -361,6 +365,7 @@ class Provenance(BaseModel):
     seeds: list[str]
     layouts_by_qloo: bool = False  # ranked by Qloo's affinity to each layout's tags
     music_off: bool = False  # no song suggested because Qloo is off (admin switch or no key)
+    music_moods: list[str] = Field(default_factory=list)  # moods read from the music wish
     layout_rule: str = "local heuristic: 0.45 visual + 0.35 cultural + 0.20 readability"
 
 
@@ -601,8 +606,16 @@ class TrackSearchOut(BaseModel):
 
 # ---- Analytics, layout requests, admin ------------------------------------------------------
 EventType = Literal[
-    "pageview", "analysis", "layout_open", "export", "save", "request", "gallery_pick"
+    "pageview",
+    "analysis",
+    "layout_open",
+    "export",
+    "save",
+    "request",
+    "gallery_pick",
+    "song_listen",
 ]
+SongSource = Literal["vibe", "qloo", "picked"]
 Device = Literal["mobile", "tablet", "desktop"]
 
 
@@ -639,6 +652,11 @@ class EventIn(BaseModel):
     referrer: str | None = Field(None, max_length=300)
     layout: LayoutId | None = None
     device: Device | None = None
+    region: str | None = Field(None, pattern=r"^[A-Z]{2}$")  # browser locale hint
+    # song listened to / on the exported Story
+    artist: str | None = Field(None, max_length=120)
+    title: str | None = Field(None, max_length=160)
+    song_source: SongSource | None = None
 
 
 class PinPreview(BaseModel):

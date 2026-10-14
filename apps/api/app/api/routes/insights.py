@@ -5,7 +5,7 @@ import hmac
 import re
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Path, Query, Response
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 
 from app.core.auth import AuthUser, optional_user
 from app.core.config import Settings, get_settings
@@ -29,6 +29,7 @@ from app.services.recommendations.layouts import (
     TEMPLATES_BY_ID,
     new_layout_ids,
 )
+from app.services.region import region_of
 
 router = APIRouter(prefix="/v1", tags=["insights"])
 HOST_RE = re.compile(r"^[a-z0-9.-]{1,120}$")
@@ -83,6 +84,7 @@ def referrer_host(ref: str | None) -> str | None:
 )
 async def record_event(
     body: EventIn,
+    request: Request,
     settings: Settings = Depends(get_settings),
     user: AuthUser | None = Depends(optional_user),
 ) -> Response:
@@ -94,6 +96,10 @@ async def record_event(
             "referrer": referrer_host(body.referrer),
             "layout": body.layout,
             "device": body.device,
+            "region": region_of(request, body.region),
+            "artist": body.artist,
+            "title": body.title,
+            "song_source": body.song_source,
         }
         try:
             # Signed in: sent as the user, so the row's user_id defaults to auth.uid() (RLS

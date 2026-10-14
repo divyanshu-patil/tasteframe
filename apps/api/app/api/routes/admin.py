@@ -115,6 +115,21 @@ async def qloo(
     return {**data, "configured": settings.qloo_enabled}
 
 
+@router.get("/music")
+async def music(
+    days: int = Query(30, ge=1, le=365),
+    user: AuthUser = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Songs people listened to and exported, by source (Qloo / vibe pool / picked) and region."""
+    data = await rest(settings, "POST", "/rpc/admin_music", token=user.token, body={"days": days})
+    if not isinstance(data, dict):
+        raise AppError(
+            "INSIGHTS_UNAVAILABLE", "Music activity is temporarily unavailable.", 503, True
+        )
+    return data
+
+
 @router.patch("/qloo")
 async def set_qloo(
     body: AdminQlooPatch,

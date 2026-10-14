@@ -500,3 +500,30 @@ def test_no_songs_while_qloo_is_off(client_with, monkeypatch):
     assert res["music"]["kind"] == "none" and "off" in res["music"]["explanation"]
     assert res["provenance"]["music_off"] is True
     assert res["layouts"] and not looked_up and not qloo.calls
+
+
+def test_music_wish_and_region_steer_qloo(client_with):
+    """'baddie, sexy, mild tone' → our moods; only their fixed Qloo tag ids (never the text) and
+    the country name (from the geo header) reach Qloo, and the baddie song pool is used."""
+    insights = load_fixture("insights_artist.json")
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/search":
+            return httpx.Response(404)
+        return httpx.Response(200, json=insights)
+
+    client, fake = client_with(handler)
+    h = {**new_session(client), "x-vercel-ip-country": "IN"}
+    body = {
+        "object_key": upload(client, h, make_image()),
+        "taste_seeds": [{"entity_id": SEED_A, "entity_type": "artist", "name": "Seed"}],
+        "music_wish": "i want music that makes me a baddie, look sexy, mild tone",
+    }
+    res = result_of(stream(client.post("/v1/analysis", headers=h, json=body)))
+    assert res["provenance"]["music_moods"] == ["confident", "sultry", "mellow"]
+    artist = next(c for c in fake.calls if c.url.params.get("filter.type") == "urn:entity:artist")
+    tags = artist.url.params["signal.interests.tags"].split(",")
+    assert "urn:tag:music:qloo:sultry" in tags and "urn:tag:genre:music:mellow" in tags
+    assert artist.url.params["signal.location.query"] == "India"
+    assert all("baddie" not in str(c.url) for c in fake.calls)  # their words stay here
+    assert res["music"]["vibe"] == "baddie"

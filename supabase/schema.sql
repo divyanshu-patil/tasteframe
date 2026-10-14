@@ -182,7 +182,7 @@ create policy "users_select_self_or_admin" on public.users
 create table if not exists public.events (
     id bigint generated always as identity primary key,
     created_at timestamptz not null default now(),
-    type text not null check (type in ('pageview', 'analysis', 'layout_open', 'export', 'save', 'request', 'gallery_pick')),
+    type text not null,
     path text check (char_length(path) <= 120),
     referrer text check (char_length(referrer) <= 120),
     visitor text not null check (visitor ~ '^[0-9a-f]{16}$'),
@@ -204,6 +204,48 @@ create policy "events_insert_any" on public.events
     for insert to anon, authenticated with check (user_id is null or user_id = (select auth.uid()));
 create policy "events_select_admin" on public.events
     for select to authenticated using ((select public.is_admin()));
+
+-- What people listen to and export, by country (code only; no IP or finer location). Songs are
+-- the suggestion's artist/title (or the one they picked); song_source says where it came from.
+alter table public.events drop constraint if exists events_type_check;
+alter table public.events add constraint events_type_check check (type in ('pageview', 'analysis',
+    'layout_open', 'export', 'save', 'request', 'gallery_pick', 'song_listen'));
+alter table public.events add column if not exists region text check (region ~ '^[A-Z]{2}$');
+alter table public.events add column if not exists artist text check (char_length(artist) <= 120);
+alter table public.events add column if not exists title text check (char_length(title) <= 160);
+alter table public.events add column if not exists song_source text
+    check (song_source in ('vibe', 'qloo', 'picked'));
+create index if not exists events_picks_idx on public.events (type, region, created_at desc)
+    where type in ('export', 'song_listen');
+
+-- Community signal for ranking (called by the API with the publishable key; aggregates only):
+-- layouts exported and artists listened to/exported in the last `days`, in `p_region` when it has
+-- enough activity (≥ 20 events), else everywhere.
+create or replace function public.community_picks(p_region text default null, days int default 30)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+    with recent as (
+        select * from public.events
+        where type in ('export', 'song_listen')
+            and created_at > now() - make_interval(days => greatest(1, least(days, 365)))
+    ), scope as (
+        select case when p_region is not null
+            and (select count(*) from recent where region = p_region) >= 20
+            then p_region end as region
+    ), picked as (
+        select r.* from recent r, scope s where s.region is null or r.region = s.region
+    )
+    select jsonb_build_object(
+        'region', (select region from scope),
+        'layouts', (select coalesce(jsonb_object_agg(layout, n), '{}'::jsonb) from (
+            select layout, count(*) as n from picked
+            where type = 'export' and layout is not null group by layout) l),
+        'artists', (select coalesce(jsonb_agg(artist order by n desc), '[]'::jsonb) from (
+            select artist, count(*) as n from picked
+            where artist is not null group by artist order by n desc limit 5) a));
+$$;
+revoke all on function public.community_picks(text, int) from public;
+grant execute on function public.community_picks(text, int) to anon, authenticated;
 
 -- Layout requests from the landing page: a Pinterest pin someone wants turned into a layout.
 create table if not exists public.layout_requests (
@@ -464,6 +506,43 @@ grant execute on function public.admin_qloo(int) to authenticated;
 
 -- Either switch (null leaves it as is).
 drop function if exists public.admin_set_qloo(boolean);
+-- Admin "Qloo" page: did Qloo's songs get picked? Listens and exports by where the song came from
+-- (Qloo-related artist, our vibe pool, or picked by the person), by country, and the top songs.
+create or replace function public.admin_music(days int default 30) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+    since timestamptz := now() - make_interval(days => greatest(1, least(days, 365)));
+begin
+    if not public.is_admin() then
+        raise exception 'NOT_ADMIN' using errcode = '42501';
+    end if;
+    return jsonb_build_object(
+        'by_source', (select coalesce(jsonb_agg(x order by x.exports desc), '[]'::jsonb) from (
+            select coalesce(song_source, 'none') as source,
+                count(*) filter (where type = 'song_listen') as listens,
+                count(*) filter (where type = 'export') as exports
+            from public.events where created_at > since and type in ('export', 'song_listen')
+            group by 1) x),
+        'by_region', (select coalesce(jsonb_agg(x order by x.exports desc), '[]'::jsonb) from (
+            select coalesce(region, '—') as region,
+                count(*) filter (where type = 'song_listen') as listens,
+                count(*) filter (where type = 'export') as exports,
+                count(*) filter (where type = 'export' and song_source = 'qloo') as qloo_exports
+            from public.events where created_at > since and type in ('export', 'song_listen')
+            group by 1 limit 20) x),
+        'top', (select coalesce(jsonb_agg(x order by x.exports desc, x.listens desc), '[]'::jsonb)
+            from (
+            select artist, title, song_source as source,
+                count(*) filter (where type = 'song_listen') as listens,
+                count(*) filter (where type = 'export') as exports
+            from public.events where created_at > since and artist is not null
+                and type in ('export', 'song_listen')
+            group by artist, title, song_source order by 5 desc, 4 desc limit 12) x));
+end;
+$$;
+revoke all on function public.admin_music(int) from public;
+grant execute on function public.admin_music(int) to authenticated;
+
 create or replace function public.admin_set_qloo(p_on boolean default null, p_layouts boolean default null)
 returns jsonb
 language plpgsql security definer set search_path = public as $$

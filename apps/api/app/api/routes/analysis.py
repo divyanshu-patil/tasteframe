@@ -1,7 +1,7 @@
 import json
 import time
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Request
 from fastapi.responses import StreamingResponse
 
 from app.api.routes.taste import get_qloo
@@ -12,6 +12,7 @@ from app.core.security import assert_owns_key, rate_limit, require_session
 from app.schemas.api import AnalysisIn
 from app.services.analysis import run_analysis
 from app.services.qloo.client import QlooClient
+from app.services.region import region_of
 from app.services.storage.store import Storage, get_storage
 
 router = APIRouter(prefix="/v1", tags=["analysis"])
@@ -39,6 +40,7 @@ def _hold(analysis_id: str, session_id: str, layouts: list[dict]) -> None:
 )
 async def analysis(
     body: AnalysisIn,
+    request: Request,
     session_id: str = Depends(require_session),
     settings: Settings = Depends(get_settings),
     storage: Storage = Depends(get_storage),
@@ -52,7 +54,8 @@ async def analysis(
     guest = settings.supabase_enabled and not user
 
     async def lines():
-        async for event in run_analysis(body, settings, storage, qloo):
+        region = region_of(request, body.region)
+        async for event in run_analysis(body, settings, storage, qloo, region=region):
             if guest and "result" in event:
                 res = event["result"]
                 _hold(res["analysis_id"], session_id, res["layouts"])

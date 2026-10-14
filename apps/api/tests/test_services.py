@@ -352,3 +352,15 @@ def test_every_layout_has_qloo_tags():
     fit = qloo_layout_fit({some: 0.9})
     assert max(f for f, _ in fit.values()) == 1.0 and fit["cinematic"][1]
     assert qloo_layout_fit({}) == {}
+
+
+def test_exports_near_you_boost_a_layout():
+    from app.services.recommendations.layouts import rank_layouts
+
+    p = profile()
+    base = [x.id for x in rank_layouts(p, [], None)]
+    pick = base[-1]  # the last layout, exported a lot nearby
+    boosted = rank_layouts(p, [], None, uses={pick: 50, base[0]: 1})
+    ids = [x.id for x in boosted]
+    assert ids.index(pick) < base.index(pick)
+    assert "Often exported by people near you." in boosted[ids.index(pick)].reason
