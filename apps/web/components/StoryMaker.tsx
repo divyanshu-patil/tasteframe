@@ -26,7 +26,11 @@ import { TEMPLATES, defaultState } from "../lib/story/templates";
 import { inputFor, songFor } from "../lib/story/input";
 import { regionHint, setPhotoTopic, track } from "../lib/analytics";
 import { clearResume, loadResume, saveResume } from "../lib/resume";
-import { TEMPLATE_IDS, type StoryState, type TemplateId } from "../lib/story/types";
+import {
+  TEMPLATE_IDS,
+  type StoryState,
+  type TemplateId,
+} from "../lib/story/types";
 import { MAX_BYTES, checkFile } from "../lib/upload";
 import { Editor } from "./Editor";
 import { LoginDialog } from "./LoginDialog";
@@ -42,8 +46,13 @@ type Phase = "setup" | "working" | "results" | "edit";
 //   /create[?layout=preset]  →  /create?step=results  →  /create?step=edit&layout=<id>
 // Steps are client state (photos live in memory), so we use the History API, which Next's App
 // Router syncs with; a step we can't show (e.g. after a reload, no photos) falls back to setup.
-const isTemplate = (v: string | null): v is TemplateId => (TEMPLATE_IDS as readonly string[]).includes(v ?? "");
-function urlFor(phase: Phase, layout: TemplateId | null, preset?: TemplateId): string {
+const isTemplate = (v: string | null): v is TemplateId =>
+  (TEMPLATE_IDS as readonly string[]).includes(v ?? "");
+function urlFor(
+  phase: Phase,
+  layout: TemplateId | null,
+  preset?: TemplateId,
+): string {
   if (phase === "results" || phase === "working") return "/create?step=results";
   if (phase === "edit" && layout) return `/create?step=edit&layout=${layout}`;
   return preset ? `/create?layout=${preset}` : "/create";
@@ -58,8 +67,22 @@ export interface PhotoFile {
 
 const MAX_PHOTOS = 4;
 // Offline fallback order (no analysis): single-photo vs multi-photo friendly layouts first.
-const LOCAL_SINGLE: TemplateId[] = ["cinematic", "editorial", "scrapbook", "vintage", "journal", "minimal"];
-const LOCAL_MULTI: TemplateId[] = ["grid", "polaroids", "booth", "duo", "splitscreen", "mosaic"];
+const LOCAL_SINGLE: TemplateId[] = [
+  "cinematic",
+  "editorial",
+  "scrapbook",
+  "vintage",
+  "journal",
+  "minimal",
+];
+const LOCAL_MULTI: TemplateId[] = [
+  "grid",
+  "polaroids",
+  "booth",
+  "duo",
+  "splitscreen",
+  "mosaic",
+];
 
 async function loadImage(url: string): Promise<HTMLImageElement> {
   const img = new Image();
@@ -96,20 +119,31 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   // With accounts configured, guests get the top 3 layouts as-is; favourites, shuffling, other
   // layouts and any edit need an account. Songs never do.
   const guest = authConfigured && !user;
-  const [login, setLogin] = useState<{ reason: string; resolve: (ok: boolean) => void } | null>(null);
+  const [login, setLogin] = useState<{
+    reason: string;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
   const canSave = Boolean(features?.saved_stories && authConfigured);
   /** Opens the login dialog; resolves true once signed in (false if dismissed). */
   const requestLogin = (reason: string) =>
     new Promise<boolean>((resolve) => setLogin({ reason, resolve }));
   const localIds = photos.length > 1 ? LOCAL_MULTI : LOCAL_SINGLE;
   /** The top 3 suggestions: the layouts a guest can use. */
-  const freeIds = (a: Analysis | null) => (a ? a.layouts.slice(0, 3).map((l) => l.id) : localIds.slice(0, 3));
+  const freeIds = (a: Analysis | null) =>
+    a ? a.layouts.slice(0, 3).map((l) => l.id) : localIds.slice(0, 3);
   /** Guests log in first (false if they don't); a guest-run analysis then fetches the layouts the API held back. */
-  const unlock = async (reason: string, a = analysis): Promise<Analysis | null | false> => {
+  const unlock = async (
+    reason: string,
+    a = analysis,
+  ): Promise<Analysis | null | false> => {
     if (guest && !(await requestLogin(reason))) return false;
     if (!a?.locked_layouts) return a;
     const layouts = await moreLayouts(a.analysis_id);
-    setAnalysis((cur) => (cur?.analysis_id === a.analysis_id ? { ...cur, layouts, locked_layouts: 0 } : cur));
+    setAnalysis((cur) =>
+      cur?.analysis_id === a.analysis_id
+        ? { ...cur, layouts, locked_layouts: 0 }
+        : cur,
+    );
     return { ...a, layouts, locked_layouts: 0 };
   };
   const runId = useRef(0);
@@ -117,11 +151,21 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   /** Point the address bar at a step: push a history entry, or replace the current one. */
-  const nav = (to: Phase, layout: TemplateId | null = null, how: "push" | "replace" = "push", extra: object = {}) => {
+  const nav = (
+    to: Phase,
+    layout: TemplateId | null = null,
+    how: "push" | "replace" = "push",
+    extra: object = {},
+  ) => {
     const url = urlFor(to, layout, preset);
     if (url === location.pathname + location.search && how === "push") return;
     if (how === "push") history.pushState({ tf: to, ...extra }, "", url);
-    else history.replaceState({ ...(history.state as object | null), tf: to }, "", url);
+    else
+      history.replaceState(
+        { ...(history.state as object | null), tf: to },
+        "",
+        url,
+      );
   };
 
   // Back / Forward between steps.
@@ -130,9 +174,23 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
       const q = new URLSearchParams(location.search);
       const step = q.get("step");
       const layout = q.get("layout");
-      if (step === "results" && photos.length) return setPhase((p) => (p === "working" ? p : "results"));
+      if (step === "results" && photos.length)
+        return setPhase((p) => (p === "working" ? p : "results"));
       if (step === "edit" && photos.length && isTemplate(layout)) {
-        setStory((cur) => cur?.templateId === layout ? cur : defaultState(layout, inputFor(analysis?.layouts.find((l) => l.id === layout) ?? analysis?.layouts[0] ?? null, analysis, storyDate)));
+        setStory((cur) =>
+          cur?.templateId === layout
+            ? cur
+            : defaultState(
+                layout,
+                inputFor(
+                  analysis?.layouts.find((l) => l.id === layout) ??
+                    analysis?.layouts[0] ??
+                    null,
+                  analysis,
+                  storyDate,
+                ),
+              ),
+        );
         return setPhase("edit");
       }
       abort.current?.abort(); // leaving a running analysis cancels it
@@ -148,7 +206,8 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   // A reload loses the in-memory photos: show setup at a URL that matches it — unless a
   // signed-in person's Story is kept in this browser (restored below once auth is known).
   useEffect(() => {
-    if (new URLSearchParams(location.search).get("step")) nav("setup", null, "replace");
+    if (new URLSearchParams(location.search).get("step"))
+      nav("setup", null, "replace");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, []);
 
@@ -170,7 +229,9 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
       const loaded: PhotoFile[] = [];
       try {
         for (const [i, p] of snap.photos.entries()) {
-          const file = new File([p.blob], p.name || `photo-${i + 1}`, { type: p.type });
+          const file = new File([p.blob], p.name || `photo-${i + 1}`, {
+            type: p.type,
+          });
           const url = URL.createObjectURL(file);
           loaded.push({ file, type: p.type, url, img: await loadImage(url) });
         }
@@ -192,11 +253,21 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
 
   // …and keep that snapshot current while they look at results or edit (debounced).
   useEffect(() => {
-    if (!user || (phase !== "results" && phase !== "edit") || !photos.length || analysis?.music_pending) return;
+    if (
+      !user ||
+      (phase !== "results" && phase !== "edit") ||
+      !photos.length ||
+      analysis?.music_pending
+    )
+      return;
     const t = setTimeout(() => {
       void saveResume({
         userId: user.id,
-        photos: photos.map((p) => ({ blob: p.file, type: p.type, name: p.file.name })),
+        photos: photos.map((p) => ({
+          blob: p.file,
+          type: p.type,
+          name: p.file.name,
+        })),
         objectKeys,
         analysis,
         story,
@@ -228,7 +299,10 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   // Revoke preview object URLs when the page unmounts (removals revoke their own).
   const urls = useRef<string[]>([]);
   urls.current = photos.map((p) => p.url);
-  useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), []);
+  useEffect(
+    () => () => urls.current.forEach((u) => URL.revokeObjectURL(u)),
+    [],
+  );
 
   const cleanupUploads = useCallback((keys: string[] | null) => {
     // Best effort; the bucket lifecycle rule expires temporary uploads anyway.
@@ -264,7 +338,10 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
         setFileError(`${file.name} could not be decoded. Try another photo.`);
       }
     }
-    if (list.length > room) setFileError(`Only ${MAX_PHOTOS} photos per Story — extra ones were skipped.`);
+    if (list.length > room)
+      setFileError(
+        `Only ${MAX_PHOTOS} photos per Story — extra ones were skipped.`,
+      );
     if (!added.length) return;
     invalidate();
     setPhotos((cur) => [...cur, ...added].slice(0, MAX_PHOTOS));
@@ -276,20 +353,25 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     const added: PhotoFile[] = [];
     for (const file of list) {
       const check = await checkFile(file);
-      if (!check.ok) throw new ApiError("INVALID_IMAGE", `${file.name}: ${check.error}`);
+      if (!check.ok)
+        throw new ApiError("INVALID_IMAGE", `${file.name}: ${check.error}`);
       const url = URL.createObjectURL(file);
       try {
         added.push({ file, type: check.type, url, img: await loadImage(url) });
       } catch {
         URL.revokeObjectURL(url);
-        throw new ApiError("INVALID_IMAGE", `${file.name} could not be decoded.`);
+        throw new ApiError(
+          "INVALID_IMAGE",
+          `${file.name} could not be decoded.`,
+        );
       }
     }
     if (!added.length) return;
     // Upload now so "Save to my Stories" includes them (keys stay aligned with photos).
     if (objectKeys) {
       const keys: string[] = [];
-      for (const p of added) keys.push(await uploadPhoto(p.file, p.type, () => undefined));
+      for (const p of added)
+        keys.push(await uploadPhoto(p.file, p.type, () => undefined));
       setObjectKeys((cur) => (cur ? [...cur, ...keys] : cur));
     }
     setPhotos((cur) => [...cur, ...added].slice(0, MAX_PHOTOS));
@@ -335,7 +417,9 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           const k = await uploadPhoto(
             ph.file,
             ph.type,
-            (f) => live() && setProgress((p) => ({ ...p, upload: (i + f) / photos.length })),
+            (f) =>
+              live() &&
+              setProgress((p) => ({ ...p, upload: (i + f) / photos.length })),
             ctrl.signal,
           );
           if (!live()) return;
@@ -351,11 +435,13 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           music_language: language,
           music_wish: musicWish.trim() || undefined,
           region: regionHint(),
-          taste_seeds: (guest ? [] : seeds).map(({ entity_id, entity_type, name }) => ({
-            entity_id,
-            entity_type,
-            name,
-          })),
+          taste_seeds: (guest ? [] : seeds).map(
+            ({ entity_id, entity_type, name }) => ({
+              entity_id,
+              entity_type,
+              name,
+            }),
+          ),
         },
         (stage) => live() && setProgress((p) => ({ ...p, stage })),
         ctrl.signal,
@@ -364,7 +450,14 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           live() &&
           setAnalysis((cur) =>
             cur
-              ? { ...cur, music_pending: false, music: music ?? { ...cur.music, explanation: "Couldn't pick songs right now." } }
+              ? {
+                  ...cur,
+                  music_pending: false,
+                  music: music ?? {
+                    ...cur.music,
+                    explanation: "Couldn't pick songs right now.",
+                  },
+                }
               : cur,
           ),
       );
@@ -381,7 +474,10 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
       } else if (preset) {
         track("layout_open", { layout: preset });
         // Picked from the gallery: go straight to that layout, personalised by the analysis.
-        const layout = result.layouts.find((l) => l.id === preset) ?? result.layouts[0] ?? null;
+        const layout =
+          result.layouts.find((l) => l.id === preset) ??
+          result.layouts[0] ??
+          null;
         setStory(defaultState(preset, inputFor(layout, result, date)));
         setPhase("edit");
         nav("edit", preset, "replace");
@@ -407,7 +503,8 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     runId.current++;
     setPhase("setup");
     // Undo the "results" entry generate() pushed, so Back doesn't land on it again.
-    if ((history.state as { tf?: string } | null)?.tf === "results") history.back();
+    if ((history.state as { tf?: string } | null)?.tf === "results")
+      history.back();
     else nav("setup", null, "replace");
   };
 
@@ -431,7 +528,10 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   const openEditor = async (id: TemplateId, a = analysis) => {
     if (!freeIds(a).includes(id) && (guest || a?.locked_layouts)) {
       // If the held-back layouts can't be fetched (expired), still open it, less personalised.
-      const r = await unlock(`Log in to use the ${TEMPLATES[id].name} layout — the three suggested for your photo are free.`, a).catch(() => a);
+      const r = await unlock(
+        `Log in to use the ${TEMPLATES[id].name} layout — the three suggested for your photo are free.`,
+        a,
+      ).catch(() => a);
       if (r === false) return;
       a = r;
     }
@@ -455,7 +555,11 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     try {
       for (let i = 0; i < Math.max(1, saved.photo_count); i++) {
         const blob = await storyPhoto(saved.id, i);
-        const file = new File([blob], `saved-${saved.config.templateId}-${i + 1}`, { type: blob.type });
+        const file = new File(
+          [blob],
+          `saved-${saved.config.templateId}-${i + 1}`,
+          { type: blob.type },
+        );
         const url = URL.createObjectURL(file);
         loaded.push({ file, type: blob.type, url, img: await loadImage(url) });
       }
@@ -478,7 +582,12 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     canSave && objectKeys && story
       ? async () => {
           // Saving to our backend needs an account: ask the guest to log in, then continue.
-          if (!user && !(await requestLogin("Log in to save this Story to your account — creating and downloading never need one."))) {
+          if (
+            !user &&
+            !(await requestLogin(
+              "Log in to save this Story to your account — creating and downloading never need one.",
+            ))
+          ) {
             throw new ApiError("LOGIN_CANCELLED", "");
           }
           const m = analysis?.music;
@@ -549,7 +658,10 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           onEdit={(id) => void openEditor(id)}
           onUnlock={
             guest || analysis?.locked_layouts
-              ? () => unlock("Log in to shuffle through every layout — the first three are free.").then((r) => r !== false)
+              ? () =>
+                  unlock(
+                    "Log in to shuffle through every layout — the first three are free.",
+                  ).then((r) => r !== false)
               : undefined
           }
           onStartOver={startOver}
@@ -577,15 +689,30 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
             )
           }
           suggested={freeIds(analysis)}
-          onEditLogin={guest ? (reason) => unlock(reason).then((r) => r !== false, () => true) : undefined}
-          music={songFor(analysis?.layouts.find((l) => l.id === story.templateId) ?? null, analysis)}
+          onEditLogin={
+            guest
+              ? (reason) =>
+                  unlock(reason).then(
+                    (r) => r !== false,
+                    () => true,
+                  )
+              : undefined
+          }
+          music={songFor(
+            analysis?.layouts.find((l) => l.id === story.templateId) ?? null,
+            analysis,
+          )}
           musicPending={analysis?.music_pending ?? false}
           musicOff={analysis?.provenance.music_off === true}
           onBack={
             analysis || objectKeys
               ? () => {
                   // Opened from the suggestions: same as the browser's Back button.
-                  if ((history.state as { from?: string } | null)?.from === "results") return history.back();
+                  if (
+                    (history.state as { from?: string } | null)?.from ===
+                    "results"
+                  )
+                    return history.back();
                   setPhase("results");
                   nav("results");
                 }
@@ -596,7 +723,10 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           signedIn={Boolean(user)}
           onSongLogin={
             guest
-              ? () => requestLogin("Log in to pick a different song — your suggested song is already on the Story.")
+              ? () =>
+                  requestLogin(
+                    "Log in to pick a different song — your suggested song is already on the Story.",
+                  )
               : undefined
           }
         />
@@ -616,8 +746,13 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
         {preset && (
           <p className={s.notice} role="status">
             Layout chosen: <strong>{TEMPLATES[preset].name}</strong>
-            {(TEMPLATES[preset].capacity ?? 1) > 1 ? ` (holds up to ${TEMPLATES[preset].capacity} photos)` : ""}. Add your photo
-            and it opens straight in this layout. <a className={s.linkBtn} href="/gallery">Pick another</a>
+            {(TEMPLATES[preset].capacity ?? 1) > 1
+              ? ` (holds up to ${TEMPLATES[preset].capacity} photos)`
+              : ""}
+            . Add your photo and it opens straight in this layout.{" "}
+            <a className={s.linkBtn} href="/gallery">
+              Pick another
+            </a>
           </p>
         )}
 
@@ -631,16 +766,27 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
                 {photos.map((p, i) => (
                   <li key={p.url} className={s.photoTile}>
                     {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
-                    <img src={p.url} alt={`Photo ${i + 1}`} className={s.previewImg} />
+                    <img
+                      src={p.url}
+                      alt={`Photo ${i + 1}`}
+                      className={s.previewImg}
+                    />
                     <span className={s.photoNo}>{i + 1}</span>
-                    <button className={s.photoRemove} aria-label={`Remove photo ${i + 1}`} onClick={() => removeOne(i)}>
+                    <button
+                      className={s.photoRemove}
+                      aria-label={`Remove photo ${i + 1}`}
+                      onClick={() => removeOne(i)}
+                    >
                       ×
                     </button>
                   </li>
                 ))}
                 {photos.length < MAX_PHOTOS && (
                   <li>
-                    <button className={s.photoAdd} onClick={() => inputRef.current?.click()}>
+                    <button
+                      className={s.photoAdd}
+                      onClick={() => inputRef.current?.click()}
+                    >
                       + Add photo
                     </button>
                   </li>
@@ -669,7 +815,8 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
             >
               <span className={s.dropTitle}>Drop up to 4 photos</span>
               <span className={s.muted}>
-                or click to choose · JPG / JPEG, PNG or WebP · up to {Math.round(MAX_BYTES / 1048576)} MB each
+                or click to choose · JPG / JPEG, PNG or WebP · up to{" "}
+                {Math.round(MAX_BYTES / 1048576)} MB each
               </span>
               <span className={s.primaryFake}>Choose photos</span>
             </label>
@@ -688,7 +835,10 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
             aria-label="Choose photos"
           />
           {!photo && (
-            <button className={s.linkBtn} onClick={() => void sampleFile().then((f) => choose([f]))}>
+            <button
+              className={s.linkBtn}
+              onClick={() => void sampleFile().then((f) => choose([f]))}
+            >
               No photo handy? Use a sample dusk landscape.
             </button>
           )}
@@ -708,9 +858,10 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
             words to steer it.
             {features?.image_reasoning && (
               <>
-                {" "}An AI vision model (Gemma via Ollama Cloud) also looks at a
-                downscaled copy to suggest moods and headlines. It never identifies
-                people, and Ollama doesn&apos;t train on it.
+                {" "}
+                An AI vision model (Gemma via Ollama Cloud) also looks at a
+                downscaled copy to suggest moods and headlines. It never
+                identifies people, and Ollama doesn&apos;t train on it.
               </>
             )}
           </p>
@@ -731,44 +882,63 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
         <div className={s.step}>
           <p className={s.stepNo}>03 — Music</p>
           <p className={s.muted}>
-            We suggest a song from your photo&apos;s vibe — baddie, aesthetic, cute, chill… — read
-            from your pose, expression and colours. Pick the language you want songs in.
+            We suggest a song from your photo&apos;s vibe — baddie, aesthetic,
+            cute, chill… — read from your pose, expression and colours. Pick the
+            language you want songs in.
           </p>
-          <label className={s.srOnly} htmlFor="song-lang">Song language</label>
+          <label className={s.srOnly} htmlFor="song-lang">
+            Song language
+          </label>
           <select
             id="song-lang"
             className={s.select}
             value={language}
             onChange={(e) => setLanguage(e.target.value as Language)}
           >
-            {LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+            {LANGUAGES.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
+              </option>
+            ))}
           </select>
           <label className={s.small} htmlFor="music-wish">
-            Describe the music you want <span className={s.muted}>(optional)</span>
+            Describe the music you want{" "}
+            <span className={s.muted}>(optional)</span>
           </label>
           <textarea
             id="music-wish"
             className={s.input}
             rows={2}
             maxLength={200}
-            placeholder="e.g. make me look like a baddie, sexy, with a mild tone"
+            placeholder="e.g. Make me look like cute, softer music, etc"
             value={musicWish}
             onChange={(e) => setMusicWish(e.target.value)}
           />
           <p className={s.small}>
-            Qloo turns the mood you describe into taste signals to find artists that fit. Your words
-            themselves aren&apos;t sent to Qloo.
+            Qloo turns the mood you describe into taste signals to find artists
+            that fit. Your words themselves aren&apos;t sent to Qloo.
           </p>
         </div>
 
         <div className={s.step}>
           <p className={s.stepNo}>
-            04 — Favourite artists <span className={s.muted}>(optional{guest ? " · log in" : ""})</span>
+            04 — Favourite artists{" "}
+            <span className={s.muted}>
+              (optional{guest ? " · log in" : ""})
+            </span>
           </p>
           {guest ? (
             <p className={s.muted}>
-              Add favourite artists, films or brands and Qloo blends your taste into the song pick.{" "}
-              <button className={s.linkBtn} onClick={() => void requestLogin("Log in to add favourite artists — song suggestions work without an account.")}>
+              Add favourite artists, films or brands and Qloo blends your taste
+              into the song pick.{" "}
+              <button
+                className={s.linkBtn}
+                onClick={() =>
+                  void requestLogin(
+                    "Log in to add favourite artists — song suggestions work without an account.",
+                  )
+                }
+              >
                 Log in to add favourites
               </button>
             </p>
