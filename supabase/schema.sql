@@ -389,6 +389,89 @@ $$;
 revoke all on function public.admin_set_user(uuid, public.user_role, boolean) from public;
 grant execute on function public.admin_set_user(uuid, public.user_role, boolean) to authenticated;
 
+-- App-wide switches admins flip without a redeploy. One row. The API reads qloo_enabled with the
+-- publishable key; only admin_set_qloo() changes it. qloo_quota holds the last credit headers
+-- Qloo returned (x-month-ratelimit-*), so the dashboard shows credits even after an API restart.
+create table if not exists public.app_flags (
+    id boolean primary key default true check (id),
+    qloo_enabled boolean not null default true,
+    qloo_quota jsonb,
+    updated_at timestamptz not null default now(),
+    updated_by uuid references auth.users (id) on delete set null
+);
+insert into public.app_flags (id) values (true) on conflict do nothing;
+alter table public.app_flags enable row level security;
+revoke all on table public.app_flags from anon, authenticated;
+grant select (qloo_enabled) on table public.app_flags to anon, authenticated;
+drop policy if exists "app_flags_read" on public.app_flags;
+create policy "app_flags_read" on public.app_flags for select to anon, authenticated using (true);
+
+-- Qloo calls per day and endpoint, logged by the API (every HTTP attempt, retries included).
+create table if not exists public.qloo_usage (
+    day date not null default current_date,
+    endpoint text not null check (endpoint in ('search', 'insights')),
+    calls int not null default 0,
+    errors int not null default 0,
+    primary key (day, endpoint)
+);
+alter table public.qloo_usage enable row level security;
+revoke all on table public.qloo_usage from anon, authenticated;
+
+-- Called by the API with the publishable key, so like `events` anyone holding that key could
+-- inflate these counts; they're for monitoring, not billing (Qloo's own headers are the truth).
+create or replace function public.log_qloo_call(p_endpoint text, p_ok boolean,
+    p_limit int default null, p_remaining int default null, p_reset_s int default null) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+    insert into public.qloo_usage as u (endpoint, calls, errors) values (p_endpoint, 1, (not p_ok)::int)
+    on conflict (day, endpoint) do update set calls = u.calls + 1, errors = u.errors + excluded.errors;
+    if p_limit > 0 and p_remaining between 0 and p_limit and p_reset_s between 0 and 3000000 then
+        update public.app_flags set qloo_quota = jsonb_build_object('limit', p_limit,
+            'remaining', p_remaining, 'resets_at', now() + make_interval(secs => p_reset_s), 'seen_at', now());
+    end if;
+end;
+$$;
+revoke all on function public.log_qloo_call(text, boolean, int, int, int) from public;
+grant execute on function public.log_qloo_call(text, boolean, int, int, int) to anon, authenticated;
+
+-- Admin "Qloo" page: the switch, last known credits and calls per day.
+create or replace function public.admin_qloo(days int default 30) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+    since date := current_date - greatest(1, least(days, 365)) + 1;
+begin
+    if not public.is_admin() then
+        raise exception 'NOT_ADMIN' using errcode = '42501';
+    end if;
+    return (select jsonb_build_object(
+        'enabled', f.qloo_enabled,
+        'updated_at', f.updated_at,
+        'updated_by', (select email from public.users where id = f.updated_by),
+        'quota', f.qloo_quota,
+        'daily', (select coalesce(jsonb_agg(jsonb_build_object('day', to_char(day, 'YYYY-MM-DD'),
+                'search', s, 'insights', i, 'errors', e) order by day), '[]'::jsonb) from (
+            select day, sum(calls) filter (where endpoint = 'search') as s,
+                sum(calls) filter (where endpoint = 'insights') as i, sum(errors) as e
+            from public.qloo_usage where day >= since group by day) x))
+        from public.app_flags f);
+end;
+$$;
+revoke all on function public.admin_qloo(int) from public;
+grant execute on function public.admin_qloo(int) to authenticated;
+
+create or replace function public.admin_set_qloo(p_on boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+    if not public.is_admin() then
+        raise exception 'NOT_ADMIN' using errcode = '42501';
+    end if;
+    update public.app_flags set qloo_enabled = p_on, updated_at = now(), updated_by = auth.uid();
+    return jsonb_build_object('enabled', p_on);
+end;
+$$;
+revoke all on function public.admin_set_qloo(boolean) from public;
+grant execute on function public.admin_set_qloo(boolean) to authenticated;
+
 -- Layout likes: one per signed-in account (u:<uid>) or anonymous visitor (v:<server-hashed id>)
 -- per layout. No direct table access — only the three functions below.
 -- Note: anonymous likes can't be proven unique (anyone can mint visitor ids); the API rate-limits

@@ -66,6 +66,8 @@ class FakeRest:
         self.requests: list[dict] = []
         self.likes: set[tuple[str, str]] = set()
         self.set_user: list[dict] = []
+        self.qloo_on = True
+        self.qloo_calls: list[dict] = []
 
     def handler(self, req: httpx.Request) -> httpx.Response:
         if req.url.host == "www.pinterest.com":
@@ -125,6 +127,17 @@ class FakeRest:
                 200,
                 json={"id": body["p_id"], "role": body["p_role"] or "user", "suspended": True},
             )
+        if path == "/app_flags":
+            return httpx.Response(200, json=[{"qloo_enabled": self.qloo_on}])
+        if path == "/rpc/log_qloo_call":
+            self.qloo_calls.append(json.loads(req.content))
+            return httpx.Response(204)
+        if path in ("/rpc/admin_qloo", "/rpc/admin_set_qloo"):
+            if token != ADMIN[0]:
+                return httpx.Response(403, json={"message": "NOT_ADMIN"})
+            if path == "/rpc/admin_set_qloo":
+                self.qloo_on = json.loads(req.content)["p_on"]
+            return httpx.Response(200, json={"enabled": self.qloo_on, "daily": []})
         if path == "/rpc/admin_users":
             if token != ADMIN[0]:
                 return httpx.Response(403, json={"message": "NOT_ADMIN"})
@@ -167,7 +180,9 @@ def api(client_with, monkeypatch):
     from app.core import auth
     from app.core.config import get_settings
     from app.services.insights import rest
+    from app.services.qloo import usage
 
+    monkeypatch.setattr(usage, "_flag", {"on": True, "at": float("-inf")})
     get_settings.cache_clear()
     fake = FakeRest()
     t = httpx.MockTransport(fake.handler)
@@ -351,3 +366,62 @@ def test_suspended_accounts_are_refused_and_fall_back_to_guest(api):
     ev = {"type": "pageview", "visitor": "abcDEF123456"}
     assert client.post("/v1/events", json=ev, headers=banned).status_code == 204
     assert fake.events[-1]["_token"] == "sb_publishable_test"  # counted as a guest
+
+
+def test_admin_switches_qloo_off_for_everyone_and_calls_are_logged(api):
+    import time
+
+    from tests.conftest import new_session
+
+    client, fake = api
+    qloo_headers = {
+        "x-month-ratelimit-limit": "10000",
+        "x-month-ratelimit-remaining": "9886",
+        "x-month-ratelimit-reset": "2516230.31",
+    }
+    from app.api.routes.taste import get_qloo
+    from app.core.config import get_settings
+    from app.services.qloo.client import QlooClient
+
+    hits: list[httpx.Request] = []
+
+    def qloo(req: httpx.Request) -> httpx.Response:
+        hits.append(req)
+        return httpx.Response(200, headers=qloo_headers, json={"results": []})
+
+    client.app.dependency_overrides[get_qloo] = lambda: QlooClient(
+        get_settings(), httpx.MockTransport(qloo)
+    )
+    signed_in = {**new_session(client), "Authorization": f"Bearer {USER[0]}"}
+    assert client.get("/v1/taste/search?q=drake", headers=signed_in).status_code == 200
+    for _ in range(50):  # usage is logged in the background
+        if fake.qloo_calls:
+            break
+        time.sleep(0.01)
+    assert fake.qloo_calls == [
+        {
+            "p_endpoint": "search",
+            "p_ok": True,
+            "p_limit": 10000,
+            "p_remaining": 9886,
+            "p_reset_s": 2516230,
+        }
+    ]
+
+    user = {"Authorization": f"Bearer {USER[0]}"}
+    admin = {"Authorization": f"Bearer {ADMIN[0]}"}
+    assert client.get("/v1/admin/qloo", headers=user).status_code == 403
+    assert client.patch("/v1/admin/qloo", headers=user, json={"enabled": False}).status_code == 403
+    assert fake.qloo_on is True
+    r = client.patch("/v1/admin/qloo", headers=admin, json={"enabled": False})
+    assert r.status_code == 200 and fake.qloo_on is False
+    body = client.get("/v1/admin/qloo", headers=admin).json()
+    assert body["enabled"] is False and body["configured"] is True
+
+    assert client.get("/v1/features").json()["qloo"] is False
+    r = client.get("/v1/taste/search?q=drake", headers=signed_in)
+    assert r.status_code == 503 and r.json()["error"]["code"] == "QLOO_NOT_CONFIGURED"
+    assert len(hits) == 1  # no Qloo call while switched off
+    assert (
+        client.patch("/v1/admin/qloo", headers=admin, json={"enabled": "nope"}).status_code == 422
+    )

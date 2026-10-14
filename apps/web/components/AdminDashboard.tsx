@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type AdminStats, type AdminUser, type LayoutRequest, type RequestStatus, adminMe, adminRequests, adminStats, adminUsers, updateRequest, updateUser } from "../lib/api";
+import { type AdminQloo as QlooState, type AdminStats, type AdminUser, type LayoutRequest, type RequestStatus, adminMe, adminQloo, adminRequests, adminStats, adminUsers, setQloo, updateRequest, updateUser } from "../lib/api";
 import { authConfigured, signOut, useAuth } from "../lib/auth";
 import { TEMPLATES } from "../lib/story/templates";
 import { LoginDialog } from "./LoginDialog";
@@ -30,6 +30,7 @@ const layoutName = (id: string) => (id in TEMPLATES ? TEMPLATES[id as keyof type
 const VIEWS = [
   { path: "/admin", label: "Overview" },
   { path: "/admin/users", label: "Users" },
+  { path: "/admin/qloo", label: "Qloo" },
 ] as const;
 
 /** This page's URL with `set` merged into its query (other params, like ?days=, are kept). */
@@ -294,6 +295,109 @@ export function AdminUsers() {
   );
 }
 
+/** /admin/qloo: switch Qloo off for everyone (no redeploy), credits left and calls per day. */
+export function AdminQloo() {
+  const days = useDays();
+  const [data, setData] = useState<QlooState | { error: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    setData(null);
+    adminQloo(days).then(setData).catch((e) => setData({ error: e instanceof Error ? e.message : "Couldn't load Qloo usage." }));
+  }, [days]);
+  useEffect(load, [load]);
+
+  if (data === null) return <p className={s.note}>Loading Qloo usage…</p>;
+  if ("error" in data)
+    return (
+      <p className={s.error}>
+        {data.error} <button className={s.linkBtn} onClick={load}>Try again</button>
+      </p>
+    );
+
+  const toggle = async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const enabled = await setQloo(!data.enabled);
+      setData({ ...data, enabled, updated_at: new Date().toISOString(), updated_by: null });
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Couldn't change the Qloo switch.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const q = data.quota;
+  const calls = data.daily.reduce((a, d) => a + d.search + d.insights, 0);
+  const errors = data.daily.reduce((a, d) => a + d.errors, 0);
+  const resetDays = q ? Math.max(0, Math.ceil((new Date(q.resets_at).getTime() - Date.now()) / 86400000)) : 0;
+  const cards: [string, string][] = [
+    ["Credits left", q ? fmt.format(q.remaining) : "—"],
+    ["Used this month", q ? fmt.format(q.limit - q.remaining) : "—"],
+    ["Monthly limit", q ? fmt.format(q.limit) : "—"],
+    ["Resets in", q ? `${resetDays} d` : "—"],
+    [`Calls, ${days} days`, fmt.format(calls)],
+    ["Failed calls", fmt.format(errors)],
+  ];
+  return (
+    <>
+      <section className={s.panel} aria-labelledby="qloo-switch-title">
+        <h2 id="qloo-switch-title">Qloo for everyone</h2>
+        <div className={s.actions}>
+          <button role="switch" aria-checked={data.enabled} aria-labelledby="qloo-switch-title" className={s.switch} disabled={busy} onClick={() => void toggle()}>
+            <span className={s.knob} />
+          </button>
+          <strong>{busy ? "Saving…" : data.enabled ? "On" : "Off"}</strong>
+          {data.updated_at && (
+            <span className={s.muted}>
+              Changed {ago(data.updated_at)}
+              {data.updated_by ? ` by ${data.updated_by}` : ""}
+            </span>
+          )}
+        </div>
+        <p className={s.muted}>
+          {data.enabled
+            ? "Stories use Qloo for related artists and films, and signed-in people can add favourites."
+            : "No Qloo calls are made. Stories still get layouts and vibe-based songs; favourites search is hidden. API instances pick this up within 15 seconds."}
+        </p>
+        {!data.configured && <p className={s.error}>The API has no QLOO_API_KEY, so Qloo stays off whatever this switch says.</p>}
+        {actionError && <p role="alert" className={s.error}>{actionError}</p>}
+      </section>
+
+      <dl className={s.cards}>
+        {cards.map(([label, v]) => (
+          <div key={label} className={s.card}>
+            <dt>{label}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {q ? (
+        <div className={s.panel}>
+          <span className={s.barTrack} role="meter" aria-label="Qloo credits left" aria-valuemin={0} aria-valuemax={q.limit} aria-valuenow={q.remaining}>
+            <span className={s.barFill} style={{ width: `${(q.remaining / Math.max(1, q.limit)) * 100}%` }} />
+          </span>
+          <p className={s.muted}>
+            {Math.round((q.remaining / Math.max(1, q.limit)) * 100)}% of this month&apos;s credits left, as of the last Qloo call ({ago(q.seen_at)}). Resets {when(q.resets_at)}.
+          </p>
+        </div>
+      ) : (
+        <p className={s.note}>Credits show after the next Qloo call (Qloo reports them with every response).</p>
+      )}
+
+      <section className={s.panel} aria-labelledby="qloo-calls-title">
+        <h2 id="qloo-calls-title">Qloo calls, last {days} days</h2>
+        <DailyChart
+          days={days}
+          rows={data.daily.map((d) => ({ day: d.day, bar: d.search + d.insights, line: d.errors, tip: `${d.search} searches, ${d.insights} insights, ${d.errors} failed` }))}
+          labels={["Calls", "Failed"]}
+        />
+        <p className={s.muted}>Every request to Qloo counts, retries included. Each Story with Qloo on makes about three.</p>
+      </section>
+    </>
+  );
+}
+
 type Ask = { u: AdminUser; patch: { role?: "user" | "admin"; suspended?: boolean } };
 
 /** "Are you sure?" for account changes; suspending gets the red button. */
@@ -355,7 +459,11 @@ function Overview({ stats, days }: { stats: AdminStats; days: number }) {
       </dl>
       <section className={s.panel} aria-labelledby="traffic-title">
         <h2 id="traffic-title">Traffic, last {days} days</h2>
-        <DailyChart daily={stats.daily} days={days} />
+        <DailyChart
+          days={days}
+          rows={stats.daily.map((d) => ({ day: d.day, bar: d.pageviews, line: d.visitors, tip: `${d.pageviews} views, ${d.visitors} visitors, ${d.exports} downloads` }))}
+          labels={["Page views", "Visitors"]}
+        />
       </section>
       <div className={s.grid}>
         <BarList title="Where visitors come from" rows={stats.referrers.map((r) => ({ name: r.name === "direct" ? "Direct or unknown" : r.name, value: r.count }))} empty="No referrals yet." />
@@ -382,35 +490,38 @@ function Overview({ stats, days }: { stats: AdminStats; days: number }) {
   );
 }
 
-function DailyChart({ daily, days }: { daily: AdminStats["daily"]; days: number }) {
+type ChartDay = { day: string; bar: number; line: number; tip: string };
+
+/** Bars and a line per day over the range; `labels` names them (bars first). */
+function DailyChart({ rows, days, labels }: { rows: ChartDay[]; days: number; labels: [string, string] }) {
   // Fill missing days so the axis is continuous.
-  const byDay = new Map(daily.map((d) => [d.day, d]));
+  const byDay = new Map(rows.map((d) => [d.day, d]));
   const series = Array.from({ length: days }, (_, i) => {
     const d = new Date(Date.now() - (days - 1 - i) * 86400000).toISOString().slice(0, 10);
-    return byDay.get(d) ?? { day: d, pageviews: 0, visitors: 0, exports: 0 };
+    return byDay.get(d) ?? { day: d, bar: 0, line: 0, tip: "none" };
   });
-  const max = Math.max(1, ...series.map((d) => d.pageviews));
+  const max = Math.max(1, ...series.map((d) => Math.max(d.bar, d.line)));
   const W = 900;
   const H = 220;
   const bw = W / series.length;
   const y = (v: number) => H - 24 - (v / max) * (H - 44);
-  const line = series.map((d, i) => `${i ? "L" : "M"}${(i + 0.5) * bw},${y(d.visitors)}`).join(" ");
+  const line = series.map((d, i) => `${i ? "L" : "M"}${(i + 0.5) * bw},${y(d.line)}`).join(" ");
   return (
     <figure className={s.chart}>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Daily page views and visitors over ${days} days`}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Daily ${labels[0].toLowerCase()} and ${labels[1].toLowerCase()} over ${days} days`}>
         {series.map((d, i) => (
-          <rect key={d.day} x={i * bw + bw * 0.15} y={y(d.pageviews)} width={bw * 0.7} height={H - 24 - y(d.pageviews)} className={s.chartBar}>
-            <title>{`${d.day}: ${d.pageviews} views, ${d.visitors} visitors, ${d.exports} downloads`}</title>
+          <rect key={d.day} x={i * bw + bw * 0.15} y={y(d.bar)} width={bw * 0.7} height={H - 24 - y(d.bar)} className={s.chartBar}>
+            <title>{`${d.day}: ${d.tip}`}</title>
           </rect>
         ))}
         <path d={line} className={s.chartLine} />
         <text x={0} y={H - 6} className={s.chartAxis}>{series[0]?.day}</text>
         <text x={W} y={H - 6} textAnchor="end" className={s.chartAxis}>{series.at(-1)?.day}</text>
-        <text x={0} y={12} className={s.chartAxis}>{max} views</text>
+        <text x={0} y={12} className={s.chartAxis}>{max} {labels[0].toLowerCase()}</text>
       </svg>
       <figcaption className={s.legend}>
-        <span><i className={s.keyBar} /> Page views</span>
-        <span><i className={s.keyLine} /> Visitors</span>
+        <span><i className={s.keyBar} /> {labels[0]}</span>
+        <span><i className={s.keyLine} /> {labels[1]}</span>
       </figcaption>
     </figure>
   );

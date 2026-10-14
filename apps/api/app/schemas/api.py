@@ -701,6 +701,12 @@ class AdminUserPatch(BaseModel):
         return self
 
 
+class AdminQlooPatch(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    enabled: bool
+
+
 class LayoutRequestPatch(BaseModel):
     model_config = {"extra": "forbid"}
 

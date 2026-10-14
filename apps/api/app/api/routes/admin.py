@@ -1,4 +1,5 @@
-"""Admin dashboard API: analytics summary, per-user stats and the layout-request queue.
+"""Admin dashboard API: analytics summary, per-user stats, the Qloo switch and the layout-request
+queue.
 
 Every call runs as the signed-in user against PostgREST; RLS and is_admin() decide access, so
 a non-admin token gets 403 even if this layer were bypassed.
@@ -12,12 +13,14 @@ from app.core.auth import AuthUser, require_user
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
 from app.schemas.api import (
+    AdminQlooPatch,
     AdminUserPatch,
     LayoutRequestList,
     LayoutRequestOut,
     LayoutRequestPatch,
 )
 from app.services.insights.rest import rest
+from app.services.qloo import usage
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 UUID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -97,6 +100,33 @@ async def update_user(
     if not isinstance(data, dict):
         raise AppError("INSIGHTS_UNAVAILABLE", "Couldn't update that account.", 503, True)
     return data
+
+
+@router.get("/qloo")
+async def qloo(
+    days: int = Query(30, ge=1, le=365),
+    user: AuthUser = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """The Qloo switch, last credits Qloo reported and calls per day."""
+    data = await rest(settings, "POST", "/rpc/admin_qloo", token=user.token, body={"days": days})
+    if not isinstance(data, dict):
+        raise AppError("INSIGHTS_UNAVAILABLE", "Qloo usage is temporarily unavailable.", 503, True)
+    return {**data, "configured": settings.qloo_enabled}
+
+
+@router.patch("/qloo")
+async def set_qloo(
+    body: AdminQlooPatch,
+    user: AuthUser = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Turn Qloo on or off for everyone (no redeploy)."""
+    await rest(
+        settings, "POST", "/rpc/admin_set_qloo", token=user.token, body={"p_on": body.enabled}
+    )
+    usage.remember(body.enabled)  # this instance applies it now; others within the cache TTL
+    return {"enabled": body.enabled}
 
 
 @router.get("/requests", response_model=LayoutRequestList)

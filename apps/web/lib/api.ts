@@ -877,3 +877,42 @@ export async function setLike(id: TemplateId, visitor: string, liked: boolean): 
   if (!isObj(v) || !isNum(v.likes)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
   return v.likes;
 }
+
+export interface AdminQloo {
+  /** Admin switch: off means no Qloo calls for anyone. */
+  enabled: boolean;
+  /** The API has a Qloo key at all. */
+  configured: boolean;
+  updated_at: string | null;
+  updated_by: string | null;
+  /** Monthly credits from the last Qloo response (null until the first call is logged). */
+  quota: { limit: number; remaining: number; resets_at: string; seen_at: string } | null;
+  daily: { day: string; search: number; insights: number; errors: number }[];
+}
+
+export async function adminQloo(days: number): Promise<AdminQloo> {
+  const v = await adminGet(`/qloo?days=${days}`);
+  if (!isObj(v) || typeof v.enabled !== "boolean") throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  const n = (x: unknown) => (isNum(x) ? x : 0);
+  const q = v.quota;
+  return {
+    enabled: v.enabled,
+    configured: v.configured === true,
+    updated_at: isStr(v.updated_at) ? v.updated_at : null,
+    updated_by: isStr(v.updated_by) ? v.updated_by : null,
+    quota:
+      isObj(q) && isNum(q.limit) && isNum(q.remaining) && isStr(q.resets_at) && isStr(q.seen_at)
+        ? { limit: q.limit, remaining: q.remaining, resets_at: q.resets_at, seen_at: q.seen_at }
+        : null,
+    daily: Array.isArray(v.daily)
+      ? v.daily.filter((d): d is Record<string, unknown> => isObj(d) && isStr(d.day)).map((d) => ({ day: d.day as string, search: n(d.search), insights: n(d.insights), errors: n(d.errors) }))
+      : [],
+  };
+}
+
+/** Turn Qloo on or off for everyone. */
+export async function setQloo(enabled: boolean): Promise<boolean> {
+  const v = await adminGet("/qloo", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }) });
+  if (!isObj(v) || typeof v.enabled !== "boolean") throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  return v.enabled;
+}

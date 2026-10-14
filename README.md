@@ -283,7 +283,8 @@ it lands in the admin queue.
       <h4>🛡️ An admin dashboard</h4>
       Traffic, referrers, devices, the most-downloaded layouts and the request queue, each
       request opening with the pin, the note and where it came from. A Users tab ranks accounts by
-      activity, with the layouts each one uses most. Accounts live in a users
+      activity, with the layouts each one uses most. A Qloo tab switches Qloo off for everyone and
+      shows credits left this month and calls per day. Accounts live in a users
       table with a <code>user</code> or <code>admin</code> role, enforced by the database, not the page.
     </td>
     <td valign="top">

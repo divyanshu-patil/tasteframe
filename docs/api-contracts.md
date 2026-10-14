@@ -281,6 +281,13 @@ sessions or expired Stories.
   account (400 `NOT_SELF`). Suspending bans the account in Supabase Auth and deletes its sessions;
   a suspended account's token gets 403 `ACCOUNT_SUSPENDED` (or is treated as a guest where login
   is optional), and a suspended admin loses admin rights in the database at once.
+- `GET /v1/admin/qloo?days=1..365` returns `{enabled, configured, updated_at, updated_by, quota, daily[]}`:
+  the admin switch, whether the API has a Qloo key, the last monthly credits Qloo reported
+  (`{limit, remaining, resets_at, seen_at}` from its `x-month-ratelimit-*` headers, or null) and
+  `daily[{day, search, insights, errors}]` (every Qloo HTTP attempt, logged via `public.log_qloo_call`).
+- `PATCH /v1/admin/qloo`: `{enabled: bool}` returns `{enabled}`. Off means no Qloo calls for anyone:
+  `/v1/features` reports `qloo: false`, taste search returns 503 `QLOO_NOT_CONFIGURED`, and analysis
+  skips Qloo (`qloo_used: false`, no `qloo_error`). Other API instances follow within 15 s.
 - `GET /v1/admin/requests?status=pending|accepted|rejected|done` returns `{requests[]}`.
 - `GET /v1/admin/requests/{id}` returns one request.
 - `PATCH /v1/admin/requests/{id}`: `{status, admin_note?}` returns the updated request (stamps

@@ -16,6 +16,7 @@ import httpx
 
 from app.core.config import Settings
 from app.core.errors import AppError
+from app.services.qloo import usage
 
 log = logging.getLogger("tasteframe.qloo")
 
@@ -88,8 +89,12 @@ class QlooClient:
         self.settings = settings
         self._transport = transport
 
+    async def enabled(self) -> bool:
+        """Key configured and not switched off by an admin."""
+        return self.settings.qloo_enabled and await usage.switched_on(self.settings)
+
     async def _get(self, path: str, params: dict[str, str | int]) -> Any:
-        if not self.settings.qloo_enabled:
+        if not await self.enabled():
             raise _err("QLOO_NOT_CONFIGURED", False, 503)
         key = self.settings.qloo_api_key.get_secret_value()  # type: ignore[union-attr]
         timeout = httpx.Timeout(self.settings.qloo_timeout_seconds, connect=4.0)
@@ -105,6 +110,7 @@ class QlooClient:
                 try:
                     resp = await client.get(path, params=params)
                 except httpx.TimeoutException:
+                    usage.record(self.settings, path, None)
                     log.warning("qloo timeout path=%s attempt=%d", path, attempt)
                     if last:
                         raise _err("QLOO_TIMEOUT", True, 504) from None
@@ -117,6 +123,7 @@ class QlooClient:
                     await asyncio.sleep(0.4 * 2**attempt)
                     continue
 
+                usage.record(self.settings, path, resp)
                 status = resp.status_code
                 log.info("qloo path=%s status=%d attempt=%d", path, status, attempt)
                 if status in (401, 403):

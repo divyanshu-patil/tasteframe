@@ -238,13 +238,14 @@ async def run_analysis(
         movies: list[QlooEntity] = []
         qloo_error = None
         anchor: list[QlooEntity] = []
-        if settings.qloo_enabled:
+        qloo_on = await qloo.enabled()  # admins can switch Qloo off for everyone
+        if qloo_on:
             try:  # the vibe's lead artist joins your favourites as a Qloo signal
                 anchor = (await qloo.search_entities(vibe_songs[0][0], "artist", take=1))[:1]
             except AppError as e:
                 qloo_error = e.code
         ids = [s.entity_id for s in req.taste_seeds] + [e.entity_id for e in anchor]
-        if req.taste_seeds or anchor:
+        if qloo_on and (req.taste_seeds or anchor):
             try:
                 artists, movies = await cultural_signals(qloo, ids)
             except AppError as e:
