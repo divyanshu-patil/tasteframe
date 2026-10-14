@@ -295,7 +295,7 @@ export function AdminUsers() {
   );
 }
 
-/** /admin/qloo: switch Qloo off for everyone (no redeploy), credits left and calls per day. */
+/** /admin/qloo: switch Qloo (and Qloo layout ranking) for everyone (no redeploy), credits left and calls per day. */
 export function AdminQloo() {
   const days = useDays();
   const [data, setData] = useState<QlooState | { error: string } | null>(null);
@@ -315,12 +315,12 @@ export function AdminQloo() {
       </p>
     );
 
-  const toggle = async () => {
+  const toggle = async (change: { enabled?: boolean; layouts?: boolean }) => {
     setBusy(true);
     setActionError(null);
     try {
-      const enabled = await setQloo(!data.enabled);
-      setData({ ...data, enabled, updated_at: new Date().toISOString(), updated_by: null });
+      const flags = await setQloo(change);
+      setData({ ...data, ...flags, updated_at: new Date().toISOString(), updated_by: null });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Couldn't change the Qloo switch.");
     } finally {
@@ -344,7 +344,7 @@ export function AdminQloo() {
       <section className={s.panel} aria-labelledby="qloo-switch-title">
         <h2 id="qloo-switch-title">Qloo for everyone</h2>
         <div className={s.actions}>
-          <button role="switch" aria-checked={data.enabled} aria-labelledby="qloo-switch-title" className={s.switch} disabled={busy} onClick={() => void toggle()}>
+          <button role="switch" aria-checked={data.enabled} aria-labelledby="qloo-switch-title" className={s.switch} disabled={busy} onClick={() => void toggle({ enabled: !data.enabled })}>
             <span className={s.knob} />
           </button>
           <strong>{busy ? "Saving…" : data.enabled ? "On" : "Off"}</strong>
@@ -362,6 +362,22 @@ export function AdminQloo() {
         </p>
         {!data.configured && <p className={s.error}>The API has no QLOO_API_KEY, so Qloo stays off whatever this switch says.</p>}
         {actionError && <p role="alert" className={s.error}>{actionError}</p>}
+      </section>
+
+      <section className={s.panel} aria-labelledby="qloo-layouts-title">
+        <h2 id="qloo-layouts-title">Suggest layouts with Qloo</h2>
+        <div className={s.actions}>
+          <button role="switch" aria-checked={data.layouts} aria-labelledby="qloo-layouts-title" className={s.switch} disabled={busy || !data.enabled} onClick={() => void toggle({ layouts: !data.layouts })}>
+            <span className={s.knob} />
+          </button>
+          <strong>{busy ? "Saving…" : data.layouts ? "On" : "Off"}</strong>
+        </div>
+        <p className={s.muted}>
+          {data.layouts
+            ? "Qloo scores each layout's style tags (taken from how Pinterest classifies its reference pins) against the person's favourites and the photo's vibe artist; that score leads the ranking, with photo fit second. One or two more Qloo calls per Story."
+            : "Layouts are ranked by our own rules: photo mood, scene, subject, the image model's picks and keyword matches on Qloo's related artists."}
+          {!data.enabled && " Needs Qloo on."}
+        </p>
       </section>
 
       <dl className={s.cards}>

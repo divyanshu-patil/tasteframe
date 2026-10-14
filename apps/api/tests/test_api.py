@@ -396,3 +396,78 @@ def test_vibe_from_pose_cues():
     assert vibe_from_cues(["laugh", "friends"]) == "friendly"
     assert vibe_from_cues(["eyes closed", "headphones"]) == "chill"
     assert vibe_from_cues([]) == "aesthetic"
+
+
+def test_qloo_layout_switch_ranks_by_tag_affinity(client_with, monkeypatch):
+    """Admin switch on: Qloo's affinity to each layout's tags leads the ranking."""
+    from app.services.qloo import usage
+    from app.services.recommendations.layouts import LAYOUT_TAGS
+
+    favourite = "newspaper"
+    liked = {t["tag"] for t in LAYOUT_TAGS[favourite]}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/search":
+            return httpx.Response(404)
+        if req.url.params["filter.type"] == "urn:tag":
+            tags = req.url.params["filter.results.tags"].split(",")
+            rows = [
+                {"tag_id": t, "query": {"affinity": 0.95 if t in liked else 0.05}} for t in tags
+            ]
+            return httpx.Response(200, json={"results": {"tags": rows}})
+        return httpx.Response(200, json=load_fixture("insights_artist.json"))
+
+    client, fake = client_with(handler)
+    h = new_session(client)
+    key = upload(client, h, make_image())
+    body = {
+        "object_key": key,
+        "taste_seeds": [{"entity_id": SEED_A, "entity_type": "artist", "name": "Seed"}],
+    }
+
+    def run(on: bool) -> dict:
+        async def layouts_on(_settings) -> bool:
+            return on
+
+        monkeypatch.setattr(usage, "layouts_on", layouts_on)
+        return result_of(stream(client.post("/v1/analysis", headers=h, json=body)))
+
+    off = run(False)
+    assert not any(c.url.params.get("filter.type") == "urn:tag" for c in fake.calls)
+    assert off["provenance"]["layouts_by_qloo"] is False
+
+    on = run(True)
+    assert on["provenance"]["layouts_by_qloo"] is True
+    assert on["provenance"]["layout_rule"].startswith("Qloo tag affinity")
+    top = {x["id"]: x for x in on["layouts"][:3]}
+    assert favourite in top
+    assert top[favourite]["score"]["cultural_style_fit"] == 1.0
+    assert "Qloo matches your taste" in top[favourite]["reason"]
+    assert [x["id"] for x in on["layouts"]] != [x["id"] for x in off["layouts"]]
+
+
+def test_qloo_layout_switch_falls_back_when_qloo_fails(client_with, monkeypatch):
+    from app.services.qloo import usage
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/search":
+            return httpx.Response(404)
+        if req.url.params["filter.type"] == "urn:tag":
+            return httpx.Response(503)
+        return httpx.Response(200, json=load_fixture("insights_artist.json"))
+
+    async def layouts_on(_settings) -> bool:
+        return True
+
+    monkeypatch.setattr(usage, "layouts_on", layouts_on)
+    client, _ = client_with(handler)
+    h = new_session(client)
+    key = upload(client, h, make_image())
+    body = {
+        "object_key": key,
+        "taste_seeds": [{"entity_id": SEED_A, "entity_type": "artist", "name": "Seed"}],
+    }
+    res = result_of(stream(client.post("/v1/analysis", headers=h, json=body)))
+    assert res["provenance"]["layouts_by_qloo"] is False  # local ranking
+    assert res["provenance"]["qloo_error"] == "QLOO_UPSTREAM_ERROR"
+    assert res["cultural_recommendations"]  # the artist/film calls still worked

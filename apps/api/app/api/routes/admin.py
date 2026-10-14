@@ -121,12 +121,21 @@ async def set_qloo(
     user: AuthUser = Depends(require_admin),
     settings: Settings = Depends(get_settings),
 ) -> dict:
-    """Turn Qloo on or off for everyone (no redeploy)."""
-    await rest(
-        settings, "POST", "/rpc/admin_set_qloo", token=user.token, body={"p_on": body.enabled}
+    """Turn Qloo, or Qloo layout suggestions, on or off for everyone (no redeploy)."""
+    if body.enabled is None and body.layouts is None:
+        raise AppError("INVALID_REQUEST", "Nothing to change.", 422)
+    data = await rest(
+        settings,
+        "POST",
+        "/rpc/admin_set_qloo",
+        token=user.token,
+        body={"p_on": body.enabled, "p_layouts": body.layouts},
     )
-    usage.remember(body.enabled)  # this instance applies it now; others within the cache TTL
-    return {"enabled": body.enabled}
+    if not isinstance(data, dict):
+        raise AppError("INSIGHTS_UNAVAILABLE", "Couldn't change the Qloo switch.", 503, True)
+    # This instance applies it now; others within the cache TTL.
+    usage.remember(bool(data.get("enabled")), bool(data.get("layouts")))
+    return {"enabled": bool(data.get("enabled")), "layouts": bool(data.get("layouts"))}
 
 
 @router.get("/requests", response_model=LayoutRequestList)

@@ -4,10 +4,16 @@ Signals (all per-photo):
   visual_fit   — moods (user > vision LLM > pixel rules), scene cues, main subject, orientation
   ai_pick      — the vision LLM's own ranking of the catalogue for this photo (when available)
   cultural_fit — Qloo-returned tags matched to each template's style keywords
+  qloo_fit     — (admin switch "suggest layouts with Qloo") Qloo's affinity between the person's
+                 taste and each layout's Qloo tags (layout_tags.json, built from how Pinterest
+                 classifies the layout's reference pins). Qloo scores the tags; which tags a
+                 layout carries is our mapping. Replaces cultural_fit and leads the score.
   readability  — text over busy photos is penalised; off-photo text is neutral (not a free win)
 
 score = 0.30 visual + 0.30 ai_pick + 0.25 cultural + 0.15 readability   (with image reasoning)
 score = 0.45 visual + 0.35 cultural + 0.20 readability                   (without)
+score = 0.45 qloo + 0.25 visual + 0.20 ai_pick + 0.10 readability       (Qloo layouts on)
+score = 0.50 qloo + 0.35 visual + 0.15 readability                       (… without reasoning)
 then × (1 + 0.10 popularity + 0.08 newness): likes and recently added layouts get a small boost on
 top of photo fit, and one new or well-liked layout that already fits the photo is moved into the
 first three suggestions. An engineering heuristic — tune by human review; not a validated model.
@@ -18,9 +24,11 @@ apps/web/lib/story/templates*.ts; ids must match (a web test checks this).
 """
 
 import hashlib
+import json
 import math
 from dataclasses import dataclass, field
 from datetime import date
+from pathlib import Path
 
 from app.schemas.api import (
     LayoutId,
@@ -35,6 +43,16 @@ W_VISUAL, W_CULTURAL, W_READ = 0.45, 0.35, 0.20
 W_AI = {"visual": 0.30, "ai": 0.30, "cultural": 0.25, "read": 0.15}
 AI_RANK_FIT = (1.0, 0.86, 0.74, 0.63, 0.54)
 AI_UNPICKED = 0.22
+W_QLOO = {"qloo": 0.45, "visual": 0.25, "ai": 0.20, "read": 0.10}
+W_QLOO_NO_AI = {"qloo": 0.50, "visual": 0.35, "read": 0.15}
+QLOO_PRIOR_WEIGHT = 1.0
+QLOO_RULE = "Qloo tag affinity: 0.45 Qloo + 0.25 visual + 0.20 image model + 0.10 readability"
+QLOO_RULE_NO_AI = "Qloo tag affinity: 0.50 Qloo + 0.35 visual + 0.15 readability"
+# layout id → [{tag, name, weight, from}] (apps/api/scripts/layout_tags.py)
+_TAGS_FILE = Path(__file__).with_name("layout_tags.json")
+LAYOUT_TAGS: dict[str, list[dict]] = (
+    json.loads(_TAGS_FILE.read_text()) if _TAGS_FILE.exists() else {}
+)
 
 
 @dataclass(frozen=True)
@@ -1413,6 +1431,36 @@ def _cultural_fit(t: Template, tags: list[str]) -> tuple[float, list[str]]:
     return round(0.35 + 0.65 * min(1.0, len(hits) / 3), 3), hits
 
 
+def layout_tag_ids() -> list[str]:
+    """Every Qloo tag any layout carries (what tag_affinity is asked about)."""
+    return sorted({x["tag"] for tags in LAYOUT_TAGS.values() for x in tags})
+
+
+def qloo_layout_fit(affinity: dict[str, float]) -> dict[str, tuple[float, list[str]]]:
+    """Layout id → (0..1 fit, tag names that drove it), from Qloo's tag affinities.
+
+    A layout's raw fit is the weight-averaged affinity of its tags (a tag Qloo left out counts
+    as 0), shrunk toward 0.5 by a prior worth QLOO_PRIOR_WEIGHT of tag weight, so a layout with
+    one lucky tag can't outrank one with several good ones. Fits are then scaled so the best
+    layout scores 1. Empty when Qloo returned nothing."""
+    raw: dict[str, tuple[float, list[str]]] = {}
+    for layout, tags in LAYOUT_TAGS.items():
+        total = sum(x["weight"] for x in tags)
+        if not total:
+            continue
+        hit = sum(x["weight"] * affinity.get(x["tag"], 0.0) for x in tags)
+        fit = (hit + 0.5 * QLOO_PRIOR_WEIGHT) / (total + QLOO_PRIOR_WEIGHT)
+        top = sorted(
+            (x for x in tags if x["tag"] in affinity),
+            key=lambda x: -x["weight"] * affinity[x["tag"]],
+        )
+        raw[layout] = (fit, list(dict.fromkeys(x["name"].lower() for x in top))[:3])
+    best = max((f for f, _ in raw.values()), default=0.0)
+    if not affinity or best <= 0:
+        return {}
+    return {k: (round(f / best, 3), names) for k, (f, names) in raw.items()}
+
+
 def _readability(t: Template, p: VisualProfile) -> float:
     if not t.text_on_photo:
         return 0.75  # text sits on paper/cards: fine, but not an automatic win
@@ -1473,8 +1521,10 @@ def score_all(
     topic: str | None = None,
     likes: dict[str, int] | None = None,
     today: date | None = None,
+    qloo_fit: dict[str, tuple[float, list[str]]] | None = None,
 ) -> list[tuple[Template, LayoutScore, list[str]]]:
-    """Every template scored, best first (photo-specific tie-breaks)."""
+    """Every template scored, best first (photo-specific tie-breaks). With `qloo_fit` (Qloo
+    layouts on), Qloo's tag affinity replaces the keyword match and leads the score."""
     scene = scene or []
     likes = likes or {}
     if people and subject is None:
@@ -1484,10 +1534,19 @@ def score_all(
         v = _visual_fit(t, p, scene, subject, topic)
         if people and t.id in SPLITS_PHOTO:
             v = round(v * 0.7, 3)  # selfies/portraits: keep the person in one intact frame
-        c, hits = _cultural_fit(t, qloo_tags)
+        if qloo_fit is not None:
+            c, hits = qloo_fit.get(t.id, (0.5, []))  # no tags yet: neutral
+        else:
+            c, hits = _cultural_fit(t, qloo_tags)
         r = _readability(t, p)
         a = _ai_fit(t, ai_picks) if ai_picks is not None else None
-        if a is not None:
+        if qloo_fit is not None and a is not None:
+            total = W_QLOO["qloo"] * c + W_QLOO["visual"] * v + W_QLOO["ai"] * a
+            total += W_QLOO["read"] * r
+        elif qloo_fit is not None:
+            total = W_QLOO_NO_AI["qloo"] * c + W_QLOO_NO_AI["visual"] * v
+            total += W_QLOO_NO_AI["read"] * r
+        elif a is not None:
             total = W_AI["visual"] * v + W_AI["ai"] * a + W_AI["cultural"] * c + W_AI["read"] * r
         else:
             total = W_VISUAL * v + W_CULTURAL * c + W_READ * r
@@ -1577,6 +1636,7 @@ def rank_layouts(
     topic: str | None = None,
     likes: dict[str, int] | None = None,
     today: date | None = None,
+    qloo_fit: dict[str, tuple[float, list[str]]] | None = None,
 ) -> list[LayoutSuggestion]:
     """All templates ranked for this photo (or the top `k`), families interleaved per 3.
 
@@ -1584,7 +1644,8 @@ def rank_layouts(
     `subject`: (kind, x, y) of the main subject from image reasoning — crop focus + ranking.
     `ai_picks`: the vision model's ranked template ids for this photo.
     `subjects`: per-photo (kind, x, y) for multi-photo Stories (crop focus per photo).
-    `likes`: like counts per layout id (community boost); `today` pins newness in tests."""
+    `likes`: like counts per layout id (community boost); `today` pins newness in tests.
+    `qloo_fit`: from qloo_layout_fit(); when given, Qloo's tag affinity leads the ranking."""
     people = bool(subject and subject[0] in ("person", "people"))
     per_photo = subjects or ([subject] if subject else [])
     focuses = [
@@ -1597,7 +1658,9 @@ def rank_layouts(
     kind = subject[0] if subject else None
     likes = likes or {}
     ordered = _promote(
-        _interleave(score_all(p, qloo_tags, people, scene, kind, ai_picks, topic, likes, today)),
+        _interleave(
+            score_all(p, qloo_tags, people, scene, kind, ai_picks, topic, likes, today, qloo_fit)
+        ),
         likes,
         today,
     )
@@ -1622,7 +1685,9 @@ def rank_layouts(
             reason += f" Made for {topic.replace('_', ' & ')} photos."
         if ai_picks and t.id in ai_picks[:3]:
             reason += " The image model picked it for this photo."
-        if hits:
+        if hits and qloo_fit is not None:
+            reason += f" Qloo matches your taste to its {' / '.join(hits[:2])} style."
+        elif hits:
             reason += f" Qloo results tagged “{hits[0]}” point to this style."
         fresh = newness(t.id, today) > 0
         liked = likes.get(t.id, 0)

@@ -125,3 +125,30 @@ def test_normalize_entity_rejects_garbage():
         "movie",
     )
     assert e and e.name == "N" and e.descriptor == "1999" and e.tags == ["Drama"]
+
+
+def test_tag_affinity_chunks_and_keeps_only_asked_tags(env):
+    """Shape checked live 2026-10-14: results.tags[].{tag_id, query.affinity}."""
+    asked: list[dict] = []
+
+    def handler(r: httpx.Request) -> httpx.Response:
+        asked.append(dict(r.url.params))
+        tags = r.url.params["filter.results.tags"].split(",")
+        rows = [{"tag_id": t, "query": {"affinity": 0.5}} for t in tags[:2]]
+        rows += [
+            {"tag_id": "urn:tag:style:qloo:not_asked", "query": {"affinity": 0.9}},
+            {"tag_id": tags[-1], "query": {}},  # no affinity: skipped
+            {"tag_id": tags[-2], "query": {"affinity": 7}},  # out of range: skipped
+        ]
+        return httpx.Response(200, json={"success": True, "results": {"tags": rows}})
+
+    ids = [f"urn:tag:style:qloo:t{i}" for i in range(60)]
+    out = run(client(handler).tag_affinity(["e1", "e2"], ids))
+    assert len(asked) == 2 and asked[0]["take"] == "50" and asked[1]["take"] == "10"
+    assert asked[0]["filter.type"] == "urn:tag"
+    assert asked[0]["signal.interests.entities"] == "e1,e2"
+    assert out == {ids[0]: 0.5, ids[1]: 0.5, ids[50]: 0.5, ids[51]: 0.5}
+    bad = {"success": True, "results": {"entities": []}}
+    assert code_of(
+        lambda r: httpx.Response(200, json=bad), lambda c: c.tag_affinity(["e"], ids)
+    ) == ("QLOO_UPSTREAM_ERROR")

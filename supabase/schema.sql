@@ -390,8 +390,9 @@ revoke all on function public.admin_set_user(uuid, public.user_role, boolean) fr
 grant execute on function public.admin_set_user(uuid, public.user_role, boolean) to authenticated;
 
 -- App-wide switches admins flip without a redeploy. One row. The API reads qloo_enabled with the
--- publishable key; only admin_set_qloo() changes it. qloo_quota holds the last credit headers
--- Qloo returned (x-month-ratelimit-*), so the dashboard shows credits even after an API restart.
+-- publishable key; only admin_set_qloo() changes it. qloo_layouts: rank layouts by Qloo's tag
+-- affinity (off = the local ranking). qloo_quota holds the last credit headers Qloo returned
+-- (x-month-ratelimit-*), so the dashboard shows credits even after an API restart.
 create table if not exists public.app_flags (
     id boolean primary key default true check (id),
     qloo_enabled boolean not null default true,
@@ -399,10 +400,11 @@ create table if not exists public.app_flags (
     updated_at timestamptz not null default now(),
     updated_by uuid references auth.users (id) on delete set null
 );
+alter table public.app_flags add column if not exists qloo_layouts boolean not null default false;
 insert into public.app_flags (id) values (true) on conflict do nothing;
 alter table public.app_flags enable row level security;
 revoke all on table public.app_flags from anon, authenticated;
-grant select (qloo_enabled) on table public.app_flags to anon, authenticated;
+grant select (qloo_enabled, qloo_layouts) on table public.app_flags to anon, authenticated;
 drop policy if exists "app_flags_read" on public.app_flags;
 create policy "app_flags_read" on public.app_flags for select to anon, authenticated using (true);
 
@@ -445,6 +447,7 @@ begin
     end if;
     return (select jsonb_build_object(
         'enabled', f.qloo_enabled,
+        'layouts', f.qloo_layouts,
         'updated_at', f.updated_at,
         'updated_by', (select email from public.users where id = f.updated_by),
         'quota', f.qloo_quota,
@@ -459,18 +462,25 @@ $$;
 revoke all on function public.admin_qloo(int) from public;
 grant execute on function public.admin_qloo(int) to authenticated;
 
-create or replace function public.admin_set_qloo(p_on boolean) returns jsonb
+-- Either switch (null leaves it as is).
+drop function if exists public.admin_set_qloo(boolean);
+create or replace function public.admin_set_qloo(p_on boolean default null, p_layouts boolean default null)
+returns jsonb
 language plpgsql security definer set search_path = public as $$
+declare
+    f public.app_flags;
 begin
     if not public.is_admin() then
         raise exception 'NOT_ADMIN' using errcode = '42501';
     end if;
-    update public.app_flags set qloo_enabled = p_on, updated_at = now(), updated_by = auth.uid() where id;
-    return jsonb_build_object('enabled', p_on);
+    update public.app_flags set qloo_enabled = coalesce(p_on, qloo_enabled),
+        qloo_layouts = coalesce(p_layouts, qloo_layouts), updated_at = now(), updated_by = auth.uid()
+        where id returning * into f;
+    return jsonb_build_object('enabled', f.qloo_enabled, 'layouts', f.qloo_layouts);
 end;
 $$;
-revoke all on function public.admin_set_qloo(boolean) from public;
-grant execute on function public.admin_set_qloo(boolean) to authenticated;
+revoke all on function public.admin_set_qloo(boolean, boolean) from public;
+grant execute on function public.admin_set_qloo(boolean, boolean) to authenticated;
 
 -- Layout likes: one per signed-in account (u:<uid>) or anonymous visitor (v:<server-hashed id>)
 -- per layout. No direct table access — only the three functions below.

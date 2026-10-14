@@ -359,6 +359,7 @@ class Provenance(BaseModel):
     image_reasoning_error: str | None = None  # safe error code only
     track_level_result: bool
     seeds: list[str]
+    layouts_by_qloo: bool = False  # ranked by Qloo's affinity to each layout's tags
     layout_rule: str = "local heuristic: 0.45 visual + 0.35 cultural + 0.20 readability"
 
 
@@ -704,7 +705,8 @@ class AdminUserPatch(BaseModel):
 class AdminQlooPatch(BaseModel):
     model_config = {"extra": "forbid"}
 
-    enabled: bool
+    enabled: bool | None = None  # Qloo for everyone
+    layouts: bool | None = None  # rank layouts with Qloo's tag affinity
 
 
 class LayoutRequestPatch(BaseModel):

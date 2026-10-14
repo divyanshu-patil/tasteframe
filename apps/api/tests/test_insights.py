@@ -67,6 +67,7 @@ class FakeRest:
         self.likes: set[tuple[str, str]] = set()
         self.set_user: list[dict] = []
         self.qloo_on = True
+        self.qloo_layouts = False
         self.qloo_calls: list[dict] = []
 
     def handler(self, req: httpx.Request) -> httpx.Response:
@@ -128,7 +129,8 @@ class FakeRest:
                 json={"id": body["p_id"], "role": body["p_role"] or "user", "suspended": True},
             )
         if path == "/app_flags":
-            return httpx.Response(200, json=[{"qloo_enabled": self.qloo_on}])
+            row = {"qloo_enabled": self.qloo_on, "qloo_layouts": self.qloo_layouts}
+            return httpx.Response(200, json=[row])
         if path == "/rpc/log_qloo_call":
             self.qloo_calls.append(json.loads(req.content))
             return httpx.Response(204)
@@ -136,8 +138,13 @@ class FakeRest:
             if token != ADMIN[0]:
                 return httpx.Response(403, json={"message": "NOT_ADMIN"})
             if path == "/rpc/admin_set_qloo":
-                self.qloo_on = json.loads(req.content)["p_on"]
-            return httpx.Response(200, json={"enabled": self.qloo_on, "daily": []})
+                body = json.loads(req.content)
+                if body["p_on"] is not None:
+                    self.qloo_on = body["p_on"]
+                if body["p_layouts"] is not None:
+                    self.qloo_layouts = body["p_layouts"]
+            flags = {"enabled": self.qloo_on, "layouts": self.qloo_layouts}
+            return httpx.Response(200, json={**flags, "daily": []})
         if path == "/rpc/admin_users":
             if token != ADMIN[0]:
                 return httpx.Response(403, json={"message": "NOT_ADMIN"})
@@ -182,7 +189,7 @@ def api(client_with, monkeypatch):
     from app.services.insights import rest
     from app.services.qloo import usage
 
-    monkeypatch.setattr(usage, "_flag", {"on": True, "at": float("-inf")})
+    monkeypatch.setattr(usage, "_flag", {"on": True, "layouts": False, "at": float("-inf")})
     get_settings.cache_clear()
     fake = FakeRest()
     t = httpx.MockTransport(fake.handler)
@@ -413,8 +420,14 @@ def test_admin_switches_qloo_off_for_everyone_and_calls_are_logged(api):
     assert client.get("/v1/admin/qloo", headers=user).status_code == 403
     assert client.patch("/v1/admin/qloo", headers=user, json={"enabled": False}).status_code == 403
     assert fake.qloo_on is True
+    r = client.patch("/v1/admin/qloo", headers=admin, json={"layouts": True})
+    assert r.json() == {"enabled": True, "layouts": True} and fake.qloo_layouts is True
+    from app.services.qloo import usage
+
+    assert asyncio.run(usage.layouts_on(get_settings())) is True
     r = client.patch("/v1/admin/qloo", headers=admin, json={"enabled": False})
-    assert r.status_code == 200 and fake.qloo_on is False
+    assert r.status_code == 200 and fake.qloo_on is False and fake.qloo_layouts is True
+    assert client.patch("/v1/admin/qloo", headers=admin, json={}).status_code == 422
     body = client.get("/v1/admin/qloo", headers=admin).json()
     assert body["enabled"] is False and body["configured"] is True
 

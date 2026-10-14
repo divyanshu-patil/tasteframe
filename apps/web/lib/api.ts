@@ -133,6 +133,8 @@ export interface Analysis {
     image_reasoning_error?: string | null;
     track_level_result: boolean;
     seeds: string[];
+    /** Ranked by Qloo's affinity to each layout's tags (admin switch). */
+    layouts_by_qloo?: boolean;
     layout_rule: string;
   };
 }
@@ -881,6 +883,8 @@ export async function setLike(id: TemplateId, visitor: string, liked: boolean): 
 export interface AdminQloo {
   /** Admin switch: off means no Qloo calls for anyone. */
   enabled: boolean;
+  /** Admin switch: rank layouts by Qloo's affinity to each layout's tags (off = local ranking). */
+  layouts: boolean;
   /** The API has a Qloo key at all. */
   configured: boolean;
   updated_at: string | null;
@@ -897,6 +901,7 @@ export async function adminQloo(days: number): Promise<AdminQloo> {
   const q = v.quota;
   return {
     enabled: v.enabled,
+    layouts: v.layouts === true,
     configured: v.configured === true,
     updated_at: isStr(v.updated_at) ? v.updated_at : null,
     updated_by: isStr(v.updated_by) ? v.updated_by : null,
@@ -911,8 +916,8 @@ export async function adminQloo(days: number): Promise<AdminQloo> {
 }
 
 /** Turn Qloo on or off for everyone. */
-export async function setQloo(enabled: boolean): Promise<boolean> {
-  const v = await adminGet("/qloo", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }) });
-  if (!isObj(v) || typeof v.enabled !== "boolean") throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
-  return v.enabled;
+export async function setQloo(change: { enabled?: boolean; layouts?: boolean }): Promise<{ enabled: boolean; layouts: boolean }> {
+  const v = await adminGet("/qloo", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(change) });
+  if (!isObj(v) || typeof v.enabled !== "boolean" || typeof v.layouts !== "boolean") throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  return { enabled: v.enabled, layouts: v.layouts };
 }

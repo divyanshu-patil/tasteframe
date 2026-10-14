@@ -167,9 +167,13 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
               <details className={s.details}>
                 <summary>Why this ranking</summary>
                 <Bar label="Visual fit" value={layout.score.visual_fit} />
-                <Bar label="Cultural style" value={layout.score.cultural_style_fit} />
+                <Bar label={prov?.layouts_by_qloo ? "Qloo taste fit" : "Cultural style"} value={layout.score.cultural_style_fit} />
                 <Bar label="Readability" value={layout.score.readability_fit} />
-                <p className={s.small}>Internal heuristic ({prov?.layout_rule}), not a provider score.</p>
+                <p className={s.small}>
+                  {prov?.layouts_by_qloo
+                    ? `Qloo scored each layout's style tags against your taste; the weighting (${prov.layout_rule}) is ours.`
+                    : `Internal heuristic (${prov?.layout_rule}), not a provider score.`}
+                </p>
               </details>
             )}
             <button className={s.primary} onClick={() => onEdit(layout.id)}>Edit this Story</button>

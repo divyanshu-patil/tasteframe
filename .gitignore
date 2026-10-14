@@ -57,3 +57,6 @@ design-refs/pinterest/**/*.jpg
 design-refs/pinterest/**/*.png
 design-refs/pinterest/**/*.jpeg
 design-refs/pinterest/**/*.webp
+
+# Qloo tag lookups made by apps/api/scripts/layout_tags.py (local only)
+apps/api/scripts/.layout_tags_cache.json

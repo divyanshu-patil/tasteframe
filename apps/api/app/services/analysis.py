@@ -23,8 +23,15 @@ from app.services.insights.likes import like_counts
 from app.services.music.itunes import find_tracks
 from app.services.music.trending import REELS_UPDATED, chart_keys, key, trend_of
 from app.services.music.vibes import rotate, songs_for, vibe_from_cues
+from app.services.qloo import usage
 from app.services.qloo.client import QlooClient, QlooEntity
-from app.services.recommendations.layouts import rank_layouts
+from app.services.recommendations.layouts import (
+    QLOO_RULE,
+    QLOO_RULE_NO_AI,
+    layout_tag_ids,
+    qloo_layout_fit,
+    rank_layouts,
+)
 from app.services.storage.store import Storage
 from app.services.vision.analyzer import (
     analyze,
@@ -41,6 +48,10 @@ music_transport = None
 
 
 LANGUAGE_NAMES = {"en": "English", "hi": "Hindi", "pa": "Punjabi", "es": "Spanish", "ko": "Korean"}
+
+
+async def _no_affinity() -> dict[str, float]:
+    return {}
 
 
 async def cultural_signals(
@@ -245,12 +256,25 @@ async def run_analysis(
             except AppError as e:
                 qloo_error = e.code
         ids = [s.entity_id for s in req.taste_seeds] + [e.entity_id for e in anchor]
+        qloo_fit: dict[str, tuple[float, list[str]]] | None = None
         if qloo_on and (req.taste_seeds or anchor):
-            try:
-                artists, movies = await cultural_signals(qloo, ids)
-            except AppError as e:
-                qloo_error = e.code  # degrade: layouts still work, UI labels the gap
-                log.warning("qloo unavailable code=%s", e.code)
+            # Admin switch: Qloo also scores each layout's tags against the same taste signal.
+            by_qloo = await usage.layouts_on(settings)
+            signals, affinity = await asyncio.gather(
+                cultural_signals(qloo, ids),
+                qloo.tag_affinity(ids, layout_tag_ids()) if by_qloo else _no_affinity(),
+                return_exceptions=True,
+            )
+            for r in (signals, affinity):
+                if isinstance(r, AppError):
+                    qloo_error = r.code  # degrade: layouts still work, UI labels the gap
+                    log.warning("qloo unavailable code=%s", r.code)
+                elif isinstance(r, BaseException):
+                    raise r
+            if not isinstance(signals, BaseException):
+                artists, movies = signals
+            if by_qloo and isinstance(affinity, dict):
+                qloo_fit = qloo_layout_fit(affinity) or None  # nothing back: local ranking
 
         seed_names = [s.name for s in req.taste_seeds]
         evidence = [*seed_names, *(e.name for e in anchor)]
@@ -298,6 +322,7 @@ async def run_analysis(
             ai_picks=reasoning.layout_picks if reasoning else None,
             subjects=[(x.subject, x.x, x.y) for x in reasoning.subjects] if reasoning else None,
             likes=await like_counts(settings),
+            qloo_fit=qloo_fit,
         )
 
         result = AnalysisOut(
@@ -309,13 +334,17 @@ async def run_analysis(
             music_pending=True,
             image_reasoning=reasoning,
             provenance=Provenance(
-                qloo_used=bool(artists or movies),
+                qloo_used=bool(artists or movies or qloo_fit),
                 qloo_error=qloo_error,
                 visual_analysis_used=True,
                 image_reasoning_used=reasoning is not None,
                 image_reasoning_error=reasoning_error,
                 track_level_result=False,  # songs follow in the {"music": …} event
                 seeds=seed_names,
+                layouts_by_qloo=qloo_fit is not None,
+                **(
+                    {"layout_rule": QLOO_RULE if reasoning else QLOO_RULE_NO_AI} if qloo_fit else {}
+                ),
             ),
         )
         yield {"result": result.model_dump()}

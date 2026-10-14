@@ -1,0 +1,3546 @@
+{
+ "appswitch": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.6,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.6,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.51,
+   "from": [
+    "minimal"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:indie",
+   "name": "Indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:indie",
+   "name": "indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  }
+ ],
+ "badge": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  }
+ ],
+ "bigletters": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.6,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.6,
+   "from": [
+    "bold"
+   ]
+  }
+ ],
+ "bigpolaroid": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.57,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.57,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  }
+ ],
+ "bluehour": [
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.48,
+   "from": [
+    "minimal"
+   ]
+  }
+ ],
+ "booth": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.48,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.48,
+   "from": [
+    "nostalgic"
+   ]
+  }
+ ],
+ "bwstack": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.48,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.48,
+   "from": [
+    "cinematic"
+   ]
+  }
+ ],
+ "calendarcard": [
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.51,
+   "from": [
+    "minimal"
+   ]
+  }
+ ],
+ "camcorder": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.57,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.57,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  }
+ ],
+ "camlyric": [
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.6,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.6,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:lyric",
+   "name": "Lyric",
+   "weight": 0.4,
+   "from": [
+    "lyric card"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:stars",
+   "name": "Stars",
+   "weight": 0.4,
+   "from": [
+    "chrome stars"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:stars",
+   "name": "Stars",
+   "weight": 0.4,
+   "from": [
+    "chrome stars"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  }
+ ],
+ "camtilt": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.6,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.6,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.51,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.51,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:night",
+   "name": "Night",
+   "weight": 0.4,
+   "from": [
+    "night vision"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:night",
+   "name": "Night",
+   "weight": 0.4,
+   "from": [
+    "night vision"
+   ]
+  }
+ ],
+ "cctv": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:surveillance",
+   "name": "Surveillance",
+   "weight": 0.4,
+   "from": [
+    "surveillance hud"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:red",
+   "name": "Red",
+   "weight": 0.4,
+   "from": [
+    "red boxes"
+   ]
+  }
+ ],
+ "chat": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  }
+ ],
+ "checklist": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.54,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.54,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bright",
+   "name": "Bright",
+   "weight": 0.48,
+   "from": [
+    "bright"
+   ]
+  }
+ ],
+ "cinematic": [
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.6,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.6,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:drama",
+   "name": "Drama",
+   "weight": 0.4,
+   "from": [
+    "drama"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:drama",
+   "name": "Drama",
+   "weight": 0.4,
+   "from": [
+    "drama"
+   ]
+  }
+ ],
+ "clockit": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.48,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.48,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:k_pop",
+   "name": "K Pop",
+   "weight": 0.4,
+   "from": [
+    "k-pop"
+   ]
+  }
+ ],
+ "colorbox": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.6,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.6,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:hip_hop",
+   "name": "Hip-Hop",
+   "weight": 0.4,
+   "from": [
+    "hip hop"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:hip_hop",
+   "name": "Hip hop",
+   "weight": 0.4,
+   "from": [
+    "hip hop"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:rap",
+   "name": "Rap",
+   "weight": 0.4,
+   "from": [
+    "rap"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:fashion",
+   "name": "Fashion",
+   "weight": 0.4,
+   "from": [
+    "fashion"
+   ]
+  }
+ ],
+ "coverbubble": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.57,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.57,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.48,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.48,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:k_pop",
+   "name": "K Pop",
+   "weight": 0.4,
+   "from": [
+    "k-pop"
+   ]
+  }
+ ],
+ "covercorner": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:music",
+   "name": "Music",
+   "weight": 0.4,
+   "from": [
+    "music sticker"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:music",
+   "name": "Music",
+   "weight": 0.4,
+   "from": [
+    "music sticker"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:rock",
+   "name": "Rock and Roll",
+   "weight": 0.4,
+   "from": [
+    "rock"
+   ]
+  },
+  {
+   "tag": "urn:tag:subgenre:qloo:rock",
+   "name": "Rock",
+   "weight": 0.4,
+   "from": [
+    "rock"
+   ]
+  }
+ ],
+ "coverface": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.51,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.51,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:hip_hop",
+   "name": "Hip-Hop",
+   "weight": 0.4,
+   "from": [
+    "hip hop"
+   ]
+  }
+ ],
+ "coverfloat": [
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.51,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.51,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:indie",
+   "name": "Indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:indie",
+   "name": "indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:lo_fi",
+   "name": "Lo-fi",
+   "weight": 0.4,
+   "from": [
+    "lo-fi"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:lo_fi",
+   "name": "Lo-Fi",
+   "weight": 0.4,
+   "from": [
+    "lo-fi"
+   ]
+  }
+ ],
+ "covermouth": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.57,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.57,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.48,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.48,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:music",
+   "name": "Music",
+   "weight": 0.4,
+   "from": [
+    "music sticker"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:music",
+   "name": "Music",
+   "weight": 0.4,
+   "from": [
+    "music sticker"
+   ]
+  }
+ ],
+ "coverpolaroid": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.51,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.51,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:indie",
+   "name": "Indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:indie",
+   "name": "indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  }
+ ],
+ "coversepia": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.57,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.57,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.51,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.51,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:music",
+   "name": "Music",
+   "weight": 0.4,
+   "from": [
+    "music sticker"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:music",
+   "name": "Music",
+   "weight": 0.4,
+   "from": [
+    "music sticker"
+   ]
+  }
+ ],
+ "coversingle": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.51,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.51,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:indie",
+   "name": "Indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  }
+ ],
+ "cutout": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.54,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.54,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:words",
+   "name": "Words",
+   "weight": 0.4,
+   "from": [
+    "huge words"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:words",
+   "name": "Words",
+   "weight": 0.4,
+   "from": [
+    "huge words"
+   ]
+  }
+ ],
+ "daysplit": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.6,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.6,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  }
+ ],
+ "desktop": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.48,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.48,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:laptop",
+   "name": "Laptop",
+   "weight": 0.4,
+   "from": [
+    "laptop"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:k_pop",
+   "name": "K Pop",
+   "weight": 0.4,
+   "from": [
+    "k-pop"
+   ]
+  }
+ ],
+ "diagonal": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.48,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.48,
+   "from": [
+    "cinematic"
+   ]
+  }
+ ],
+ "doodlefit": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bright",
+   "name": "Bright",
+   "weight": 0.54,
+   "from": [
+    "bright"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:vertical",
+   "name": "Vertical",
+   "weight": 0.4,
+   "from": [
+    "vertical type"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:indie_pop",
+   "name": "Indie Pop",
+   "weight": 0.4,
+   "from": [
+    "indie pop"
+   ]
+  }
+ ],
+ "doodlesun": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bright",
+   "name": "Bright",
+   "weight": 0.48,
+   "from": [
+    "bright"
+   ]
+  }
+ ],
+ "duo": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:flowers",
+   "name": "Flowers",
+   "weight": 0.4,
+   "from": [
+    "flowers"
+   ]
+  }
+ ],
+ "editorial": [
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.48,
+   "from": [
+    "minimal"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.4,
+   "from": [
+    "bold type"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.4,
+   "from": [
+    "bold type"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:jazz",
+   "name": "Jazz",
+   "weight": 0.4,
+   "from": [
+    "jazz"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:jazz",
+   "name": "Jazz",
+   "weight": 0.4,
+   "from": [
+    "jazz"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:electronic",
+   "name": "Electronic",
+   "weight": 0.4,
+   "from": [
+    "electronic"
+   ]
+  }
+ ],
+ "filmburn": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.54,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.54,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:film",
+   "name": "Film",
+   "weight": 0.4,
+   "from": [
+    "film burn"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:film",
+   "name": "Film",
+   "weight": 0.4,
+   "from": [
+    "film burn"
+   ]
+  }
+ ],
+ "filmslant": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.51,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.51,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:film",
+   "name": "Film",
+   "weight": 0.4,
+   "from": [
+    "film strip"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:film",
+   "name": "Film",
+   "weight": 0.4,
+   "from": [
+    "film strip"
+   ]
+  }
+ ],
+ "filmstrip": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:rock",
+   "name": "Rock and Roll",
+   "weight": 0.4,
+   "from": [
+    "rock"
+   ]
+  },
+  {
+   "tag": "urn:tag:subgenre:qloo:rock",
+   "name": "Rock",
+   "weight": 0.4,
+   "from": [
+    "rock"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:punk",
+   "name": "Punk",
+   "weight": 0.4,
+   "from": [
+    "punk"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:punk",
+   "name": "Punk",
+   "weight": 0.4,
+   "from": [
+    "punk"
+   ]
+  }
+ ],
+ "focus": [
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.51,
+   "from": [
+    "minimal"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.48,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.48,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:sharp",
+   "name": "Sharp",
+   "weight": 0.4,
+   "from": [
+    "sharp eye strip"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:sharp",
+   "name": "Sharp",
+   "weight": 0.4,
+   "from": [
+    "sharp eye strip"
+   ]
+  }
+ ],
+ "framein": [
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.48,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.48,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:loop",
+   "name": "Loop",
+   "weight": 0.4,
+   "from": [
+    "loop"
+   ]
+  }
+ ],
+ "grid": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:film",
+   "name": "Film",
+   "weight": 0.4,
+   "from": [
+    "film frames"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:film",
+   "name": "Film",
+   "weight": 0.4,
+   "from": [
+    "film frames"
+   ]
+  }
+ ],
+ "halfword": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  }
+ ],
+ "handnote": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  }
+ ],
+ "hearts": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.57,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.57,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.51,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.51,
+   "from": [
+    "dreamy"
+   ]
+  }
+ ],
+ "journal": [
+  {
+   "tag": "urn:tag:genre:music:natural",
+   "name": "Natural",
+   "weight": 0.54,
+   "from": [
+    "natural"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:folk",
+   "name": "Folk",
+   "weight": 0.4,
+   "from": [
+    "folk"
+   ]
+  },
+  {
+   "tag": "urn:tag:subgenre:qloo:folk",
+   "name": "Folk",
+   "weight": 0.4,
+   "from": [
+    "folk"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:acoustic",
+   "name": "Acoustic",
+   "weight": 0.4,
+   "from": [
+    "acoustic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:acoustic",
+   "name": "Acoustic",
+   "weight": 0.4,
+   "from": [
+    "acoustic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:poetry",
+   "name": "Poetry",
+   "weight": 0.4,
+   "from": [
+    "poetry"
+   ]
+  }
+ ],
+ "kissmark": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.54,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.54,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.51,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.51,
+   "from": [
+    "dreamy"
+   ]
+  }
+ ],
+ "magazine": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:fashion",
+   "name": "Fashion",
+   "weight": 0.4,
+   "from": [
+    "fashion"
+   ]
+  },
+  {
+   "tag": "urn:tag:subgenre:qloo:fashion",
+   "name": "Fashion",
+   "weight": 0.4,
+   "from": [
+    "fashion"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:luxury",
+   "name": "Luxury",
+   "weight": 0.4,
+   "from": [
+    "luxury"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  }
+ ],
+ "minimal": [
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 1.0,
+   "from": [
+    "minimal"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:framed",
+   "name": "Framed",
+   "weight": 0.4,
+   "from": [
+    "framed photo"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:dark",
+   "name": "Dark",
+   "weight": 0.4,
+   "from": [
+    "dark matte"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dark",
+   "name": "Dark",
+   "weight": 0.4,
+   "from": [
+    "dark matte"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:ambient",
+   "name": "Ambient",
+   "weight": 0.4,
+   "from": [
+    "ambient"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:ambient",
+   "name": "Ambient",
+   "weight": 0.4,
+   "from": [
+    "ambient"
+   ]
+  }
+ ],
+ "moodboard": [
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.48,
+   "from": [
+    "minimal"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:fashion",
+   "name": "Fashion",
+   "weight": 0.4,
+   "from": [
+    "fashion"
+   ]
+  },
+  {
+   "tag": "urn:tag:subgenre:qloo:fashion",
+   "name": "Fashion",
+   "weight": 0.4,
+   "from": [
+    "fashion"
+   ]
+  }
+ ],
+ "mosaic": [
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.54,
+   "from": [
+    "minimal"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:natural",
+   "name": "Natural",
+   "weight": 0.48,
+   "from": [
+    "natural"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:clean",
+   "name": "Clean",
+   "weight": 0.4,
+   "from": [
+    "clean gutters"
+   ]
+  }
+ ],
+ "navheader": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.57,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.57,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:bar",
+   "name": "Bar",
+   "weight": 0.4,
+   "from": [
+    "nav bar"
+   ]
+  }
+ ],
+ "newspaper": [
+  {
+   "tag": "urn:tag:genre:media:news",
+   "name": "News",
+   "weight": 0.4,
+   "from": [
+    "news"
+   ]
+  },
+  {
+   "tag": "urn:tag:subgenre:qloo:news",
+   "name": "News",
+   "weight": 0.4,
+   "from": [
+    "news"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:politics",
+   "name": "Politics",
+   "weight": 0.4,
+   "from": [
+    "politics"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:politics",
+   "name": "Politics",
+   "weight": 0.4,
+   "from": [
+    "politics"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:history",
+   "name": "History",
+   "weight": 0.4,
+   "from": [
+    "history"
+   ]
+  },
+  {
+   "tag": "urn:tag:subgenre:qloo:history",
+   "name": "History",
+   "weight": 0.4,
+   "from": [
+    "history"
+   ]
+  }
+ ],
+ "note": [
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.48,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.48,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:note",
+   "name": "Note",
+   "weight": 0.4,
+   "from": [
+    "torn note"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:singer_songwriter",
+   "name": "Singer & Songwriter",
+   "weight": 0.4,
+   "from": [
+    "singer-songwriter"
+   ]
+  }
+ ],
+ "notesapp": [
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.54,
+   "from": [
+    "minimal"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:natural",
+   "name": "Natural",
+   "weight": 0.48,
+   "from": [
+    "natural"
+   ]
+  }
+ ],
+ "notesdark": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.48,
+   "from": [
+    "minimal"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:dark",
+   "name": "Dark",
+   "weight": 0.4,
+   "from": [
+    "dark notes"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dark",
+   "name": "Dark",
+   "weight": 0.4,
+   "from": [
+    "dark notes"
+   ]
+  }
+ ],
+ "nowplaying": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.48,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.48,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.48,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.48,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:music",
+   "name": "Music",
+   "weight": 0.4,
+   "from": [
+    "music player"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:music",
+   "name": "Music",
+   "weight": 0.4,
+   "from": [
+    "music player"
+   ]
+  }
+ ],
+ "phones": [
+  {
+   "tag": "urn:tag:style:qloo:retro",
+   "name": "Retro",
+   "weight": 0.8,
+   "from": [
+    "retro phones",
+    "retro"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:retro",
+   "name": "Retro",
+   "weight": 0.8,
+   "from": [
+    "retro phones",
+    "retro"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.51,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.51,
+   "from": [
+    "dreamy"
+   ]
+  }
+ ],
+ "photodump": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:k_pop",
+   "name": "K Pop",
+   "weight": 0.4,
+   "from": [
+    "k-pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:subgenre:qloo:k_pop",
+   "name": "K-pop",
+   "weight": 0.4,
+   "from": [
+    "k-pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:comedy",
+   "name": "Comedy",
+   "weight": 0.4,
+   "from": [
+    "comedy"
+   ]
+  }
+ ],
+ "playercut": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.57,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.57,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.51,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.51,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:alt",
+   "name": "Alt",
+   "weight": 0.4,
+   "from": [
+    "alt"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:indie",
+   "name": "Indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  }
+ ],
+ "playlist": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.57,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.57,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:music",
+   "name": "Music",
+   "weight": 0.4,
+   "from": [
+    "music library"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:music",
+   "name": "Music",
+   "weight": 0.4,
+   "from": [
+    "music library"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:indie",
+   "name": "Indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  }
+ ],
+ "polaroids": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  }
+ ],
+ "postcard": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  }
+ ],
+ "quotemarks": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.48,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.48,
+   "from": [
+    "cinematic"
+   ]
+  }
+ ],
+ "receipt": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.54,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.54,
+   "from": [
+    "playful"
+   ]
+  }
+ ],
+ "redblock": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.6,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.6,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:red",
+   "name": "Red",
+   "weight": 0.4,
+   "from": [
+    "red block"
+   ]
+  }
+ ],
+ "refresh": [
+  {
+   "tag": "urn:tag:genre:music:natural",
+   "name": "Natural",
+   "weight": 0.6,
+   "from": [
+    "natural"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.51,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.51,
+   "from": [
+    "dreamy"
+   ]
+  }
+ ],
+ "scrapbook": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.6,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bright",
+   "name": "Bright",
+   "weight": 0.48,
+   "from": [
+    "bright"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:k_pop",
+   "name": "K Pop",
+   "weight": 0.4,
+   "from": [
+    "k-pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:subgenre:qloo:k_pop",
+   "name": "K-pop",
+   "weight": 0.4,
+   "from": [
+    "k-pop"
+   ]
+  }
+ ],
+ "scripttitle": [
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.6,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.6,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  }
+ ],
+ "sepiabooth": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.6,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.51,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.51,
+   "from": [
+    "moody"
+   ]
+  }
+ ],
+ "softfocus": [
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.6,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.6,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:natural",
+   "name": "Natural",
+   "weight": 0.48,
+   "from": [
+    "natural"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:ambient",
+   "name": "Ambient",
+   "weight": 0.4,
+   "from": [
+    "ambient"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:ambient",
+   "name": "Ambient",
+   "weight": 0.4,
+   "from": [
+    "ambient"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dream_pop",
+   "name": "Dream Pop",
+   "weight": 0.4,
+   "from": [
+    "dream pop"
+   ]
+  }
+ ],
+ "songbox": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.6,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.6,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.51,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.51,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:alternative",
+   "name": "Alternative",
+   "weight": 0.4,
+   "from": [
+    "alternative"
+   ]
+  },
+  {
+   "tag": "urn:tag:audience:qloo:alternative",
+   "name": "Alternative",
+   "weight": 0.4,
+   "from": [
+    "alternative"
+   ]
+  }
+ ],
+ "splitscreen": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.48,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.48,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.48,
+   "from": [
+    "minimal"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:text",
+   "name": "Text",
+   "weight": 0.4,
+   "from": [
+    "text band"
+   ]
+  }
+ ],
+ "spotlight": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.6,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.6,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.54,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.54,
+   "from": [
+    "cinematic"
+   ]
+  }
+ ],
+ "stackedcards": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.51,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.51,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.48,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.48,
+   "from": [
+    "nostalgic"
+   ]
+  }
+ ],
+ "stats": [
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.54,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.48,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.48,
+   "from": [
+    "cinematic"
+   ]
+  }
+ ],
+ "sticky": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.57,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.57,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bright",
+   "name": "Bright",
+   "weight": 0.48,
+   "from": [
+    "bright"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:note",
+   "name": "Note",
+   "weight": 0.4,
+   "from": [
+    "sticky note"
+   ]
+  }
+ ],
+ "stills": [
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.54,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.54,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.48,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.48,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:three",
+   "name": "Three",
+   "weight": 0.4,
+   "from": [
+    "three crops"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:indie",
+   "name": "Indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  }
+ ],
+ "subtitlebar": [
+  {
+   "tag": "urn:tag:style:qloo:cinematic",
+   "name": "Cinématic",
+   "weight": 0.6,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:cinematic",
+   "name": "Cinematic",
+   "weight": 0.6,
+   "from": [
+    "cinematic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.48,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.48,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:cinema",
+   "name": "Cinema",
+   "weight": 0.4,
+   "from": [
+    "cinema"
+   ]
+  }
+ ],
+ "ticket": [
+  {
+   "tag": "urn:tag:genre:music:travel",
+   "name": "Travel",
+   "weight": 0.4,
+   "from": [
+    "travel"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:travel",
+   "name": "Travel",
+   "weight": 0.4,
+   "from": [
+    "travel"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:reggae",
+   "name": "Reggae",
+   "weight": 0.4,
+   "from": [
+    "reggae"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:latin",
+   "name": "Latin",
+   "weight": 0.4,
+   "from": [
+    "latin"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:afrobeats",
+   "name": "Afrobeats",
+   "weight": 0.4,
+   "from": [
+    "afrobeats"
+   ]
+  }
+ ],
+ "torn": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.48,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.48,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:indie",
+   "name": "Indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:indie",
+   "name": "indie",
+   "weight": 0.4,
+   "from": [
+    "indie"
+   ]
+  }
+ ],
+ "torncollage": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.48,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.48,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:bands",
+   "name": "Bands",
+   "weight": 0.4,
+   "from": [
+    "torn bands"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:bands",
+   "name": "Bands",
+   "weight": 0.4,
+   "from": [
+    "torn bands"
+   ]
+  }
+ ],
+ "tornstrip": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.51,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.51,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:magazine",
+   "name": "Magazine",
+   "weight": 0.4,
+   "from": [
+    "magazine cover"
+   ]
+  }
+ ],
+ "triptych": [
+  {
+   "tag": "urn:tag:style:qloo:dreamy",
+   "name": "Dreamy",
+   "weight": 0.57,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:dreamy",
+   "name": "Dreamy",
+   "weight": 0.57,
+   "from": [
+    "dreamy"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.51,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.51,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:three",
+   "name": "Three",
+   "weight": 0.4,
+   "from": [
+    "three frames"
+   ]
+  }
+ ],
+ "verticalday": [
+  {
+   "tag": "urn:tag:genre:music:minimal",
+   "name": "Minimal",
+   "weight": 0.48,
+   "from": [
+    "minimal"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:media:vertical",
+   "name": "Vertical",
+   "weight": 0.4,
+   "from": [
+    "vertical type"
+   ]
+  }
+ ],
+ "viewfinder": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:camera",
+   "name": "Camera",
+   "weight": 0.4,
+   "from": [
+    "camera screen"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:focus",
+   "name": "Focus",
+   "weight": 0.4,
+   "from": [
+    "focus brackets"
+   ]
+  }
+ ],
+ "vintage": [
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.6,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.6,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.57,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.57,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:light",
+   "name": "Light",
+   "weight": 0.4,
+   "from": [
+    "light leak"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:disco",
+   "name": "Disco",
+   "weight": 0.4,
+   "from": [
+    "disco"
+   ]
+  }
+ ],
+ "vinyl": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.54,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:warm",
+   "name": "Warm",
+   "weight": 0.48,
+   "from": [
+    "warm"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:record",
+   "name": "Record",
+   "weight": 0.4,
+   "from": [
+    "record"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:jazz",
+   "name": "Jazz",
+   "weight": 0.4,
+   "from": [
+    "jazz"
+   ]
+  }
+ ],
+ "wavecut": [
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.54,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.54,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:bright",
+   "name": "Bright",
+   "weight": 0.48,
+   "from": [
+    "bright"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:wavy",
+   "name": "Wavy",
+   "weight": 0.4,
+   "from": [
+    "wavy"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:band",
+   "name": "Band",
+   "weight": 0.4,
+   "from": [
+    "paper band"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:band",
+   "name": "Band",
+   "weight": 0.4,
+   "from": [
+    "paper band"
+   ]
+  }
+ ],
+ "weekday": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 1.0,
+   "from": [
+    "bold",
+    "bold type"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 1.0,
+   "from": [
+    "bold",
+    "bold type"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  }
+ ],
+ "xerox": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.57,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:moody",
+   "name": "Moody",
+   "weight": 0.48,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:moody",
+   "name": "Moody",
+   "weight": 0.48,
+   "from": [
+    "moody"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:k_pop",
+   "name": "K Pop",
+   "weight": 0.4,
+   "from": [
+    "k-pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:subgenre:qloo:k_pop",
+   "name": "K-pop",
+   "weight": 0.4,
+   "from": [
+    "k-pop"
+   ]
+  }
+ ],
+ "y2k": [
+  {
+   "tag": "urn:tag:style:qloo:bold",
+   "name": "Bold",
+   "weight": 0.6,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:bold",
+   "name": "Bold",
+   "weight": 0.6,
+   "from": [
+    "bold"
+   ]
+  },
+  {
+   "tag": "urn:tag:style:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:playful",
+   "name": "Playful",
+   "weight": 0.48,
+   "from": [
+    "playful"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:pop",
+   "name": "Pop",
+   "weight": 0.4,
+   "from": [
+    "pop"
+   ]
+  },
+  {
+   "tag": "urn:tag:genre:music:hip_hop",
+   "name": "Hip-Hop",
+   "weight": 0.4,
+   "from": [
+    "hip hop"
+   ]
+  }
+ ],
+ "yearbook": [
+  {
+   "tag": "urn:tag:style:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.51,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:music:qloo:nostalgic",
+   "name": "Nostalgic",
+   "weight": 0.51,
+   "from": [
+    "nostalgic"
+   ]
+  },
+  {
+   "tag": "urn:tag:keyword:qloo:portrait",
+   "name": "Portrait",
+   "weight": 0.4,
+   "from": [
+    "portrait cards"
+   ]
+  }
+ ]
+}

@@ -23,6 +23,24 @@ Sources: hackathon developer guide, `GET /search` and Insights deep-dive referen
 | Response fields read | Insights `results.entities[]`: `entity_id`, `name`, `properties.{release_year, short_description, description, image.url}`, `tags[].name`. Search `results[]`: same entity fields |
 | Rate limits | Not published ("high enough for typical hackathon projects"). We handle 429 with ≤ 2 backoff retries |
 
+| Tag lookup | `GET /v2/tags?filter.query=<text>&take=<n>` → `results.tags[].{id, name, type}` (build time only) |
+| Tag affinity | `GET /v2/insights?filter.type=urn:tag&filter.results.tags=<urn,…>&signal.interests.entities=<id,…>&take=<n>` → `results.tags[].{tag_id, query.affinity}`; tags with no affinity are omitted (checked live 2026-10-14) |
+
+### Layout suggestions with Qloo (admin switch, 2026-10-14)
+
+Qloo doesn't know our layouts, so the mapping is ours and the scoring is Qloo's:
+1. `apps/api/scripts/layout_tags.py` collects terms per layout: how Pinterest classifies the layout's
+   reference pins (`design-refs/pinterest/pin_meta.json`: visual annotations, category breadcrumbs,
+   related interests) plus the layout's own moods/style tags/keywords. Each term is resolved to real
+   tag ids via `/v2/tags` (exact name match; only tag types that get affinity from artist/film
+   signals: `style:qloo`, `genre:music`, `genre:media`, `subgenre:qloo`, `keyword:qloo`,
+   `music:qloo`, `artist:qloo`, `audience:qloo`). Output: `layout_tags.json` (≤ 6 tags per layout).
+2. At analysis time, with the switch on, one tag-affinity call per 50 tags scores those tags against
+   the same entities as the artist/film calls (confirmed seeds + the photo-vibe artist).
+3. A layout's Qloo fit = weighted mean of its tags' affinities (missing = 0), scaled so the best
+   layout is 1. It replaces the keyword match and leads the score (see `layouts.py`); photo fit
+   stays in so a single photo doesn't get a 4-photo grid. Switch off = the local ranking unchanged.
+
 Queries the app makes per analysis (only when the user confirmed ≥ 1 seed): two Insights calls,
 `filter.type=urn:entity:artist` (take 8) and `filter.type=urn:entity:movie` (take 5), both
 signalled by the confirmed entity IDs. Seeds are excluded from results. Each taste search is one

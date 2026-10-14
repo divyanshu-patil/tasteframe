@@ -17,27 +17,47 @@ log = logging.getLogger("tasteframe.qloo")
 
 FLAG_TTL_SECONDS = 15.0
 # ponytail: per-process cache, so other API instances see a toggle within FLAG_TTL_SECONDS.
-_flag: dict[str, float | bool] = {"on": True, "at": float("-inf")}
+_flag: dict[str, float | bool] = {"on": True, "layouts": False, "at": float("-inf")}
 _pending: set[asyncio.Task] = set()
 
 
-def remember(on: bool) -> None:
-    _flag.update(on=on, at=time.monotonic())
+def remember(on: bool | None = None, layouts: bool | None = None) -> None:
+    _flag["at"] = time.monotonic()
+    if on is not None:
+        _flag["on"] = on
+    if layouts is not None:
+        _flag["layouts"] = layouts
+
+
+async def _refresh(settings: Settings) -> None:
+    """Read both switches (cached briefly). If Supabase can't be read, keep the last values."""
+    if time.monotonic() - float(_flag["at"]) < FLAG_TTL_SECONDS:
+        return
+    try:
+        rows = await rest(
+            settings, "GET", "/app_flags", params={"select": "qloo_enabled,qloo_layouts"}
+        )
+        row = rows[0] if rows else {}
+        remember(bool(row.get("qloo_enabled", True)), bool(row.get("qloo_layouts", False)))
+    except (AppError, LookupError, TypeError, AttributeError):
+        log.warning("qloo switch unreadable; keeping last value")
+        _flag["at"] = time.monotonic()  # don't hammer Supabase while it's down
 
 
 async def switched_on(settings: Settings) -> bool:
-    """The admin switch (cached briefly). If Supabase can't be read, keep the last known value."""
+    """The admin's Qloo switch. Without Supabase it's always on."""
     if not settings.supabase_enabled:
         return True
-    if time.monotonic() - float(_flag["at"]) < FLAG_TTL_SECONDS:
-        return bool(_flag["on"])
-    try:
-        rows = await rest(settings, "GET", "/app_flags", params={"select": "qloo_enabled"})
-        remember(bool(rows[0]["qloo_enabled"]) if rows else True)
-    except (AppError, LookupError, TypeError):
-        log.warning("qloo switch unreadable; keeping last value")
-        _flag["at"] = time.monotonic()  # don't hammer Supabase while it's down
+    await _refresh(settings)
     return bool(_flag["on"])
+
+
+async def layouts_on(settings: Settings) -> bool:
+    """The admin's "suggest layouts with Qloo" switch. Without Supabase it's off."""
+    if not settings.supabase_enabled:
+        return False
+    await _refresh(settings)
+    return bool(_flag["layouts"])
 
 
 def _int(resp: httpx.Response | None, name: str) -> int | None:

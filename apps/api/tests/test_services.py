@@ -337,3 +337,18 @@ def test_decode_keeps_full_size_bytes_but_a_small_image_for_analysis():
     stored = Image.open(io.BytesIO(clean))
     assert stored.size == (2000, 3000) and 0x0112 not in stored.getexif()  # full size, no EXIF
     assert ctype == "image/jpeg"
+
+
+def test_every_layout_has_qloo_tags():
+    """Rerun apps/api/scripts/layout_tags.py after adding a layout."""
+    from app.services.recommendations.layouts import CATALOGUE, LAYOUT_TAGS, qloo_layout_fit
+
+    assert not [t.id for t in CATALOGUE if not LAYOUT_TAGS.get(t.id)]
+    assert set(LAYOUT_TAGS) <= {t.id for t in CATALOGUE}
+    assert all(
+        x["tag"].startswith("urn:tag:") and x["weight"] > 0 for v in LAYOUT_TAGS.values() for x in v
+    )
+    some = LAYOUT_TAGS["cinematic"][0]["tag"]
+    fit = qloo_layout_fit({some: 0.9})
+    assert max(f for f, _ in fit.values()) == 1.0 and fit["cinematic"][1]
+    assert qloo_layout_fit({}) == {}

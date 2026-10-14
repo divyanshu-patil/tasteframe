@@ -5,6 +5,9 @@ Verified against docs.qloo.com + github.com/qloo/docs-public (2026-10-10):
 - GET /search?query=&types=<urn>&take=
 - GET /v2/insights?filter.type=<urn>&signal.interests.entities=<id,id>&take=
 - No track/song entity type exists; music is artist-level (urn:entity:artist).
+- GET /v2/insights?filter.type=urn:tag&filter.results.tags=<urn,urn>&signal.interests.entities=
+  scores the given tags against the signal; each returned tag carries query.affinity (0..1), and
+  tags with no affinity are left out (checked live 2026-10-14).
 """
 
 import asyncio
@@ -172,3 +175,29 @@ class QlooClient:
         if not isinstance(entities, list):
             raise _err("QLOO_UPSTREAM_ERROR", True)
         return [e for r in entities if (e := normalize_entity(r, target_type))]
+
+    async def tag_affinity(self, entity_ids: list[str], tag_ids: list[str]) -> dict[str, float]:
+        """Qloo's affinity (0..1) of each given tag to the entities. Tags Qloo leaves out are
+        absent from the result. One call per 50 tags (Insights' max take)."""
+        out: dict[str, float] = {}
+        for i in range(0, len(tag_ids), 50):
+            chunk = tag_ids[i : i + 50]
+            data = await self._get(
+                "/v2/insights",
+                {
+                    "filter.type": "urn:tag",
+                    "filter.results.tags": ",".join(chunk),
+                    "signal.interests.entities": ",".join(entity_ids),
+                    "take": len(chunk),
+                },
+            )
+            results = data.get("results") if isinstance(data, dict) else None
+            tags = results.get("tags") if isinstance(results, dict) else None
+            if data is not None and not isinstance(tags, list):
+                raise _err("QLOO_UPSTREAM_ERROR", True)
+            for t in tags or []:
+                tid = t.get("tag_id") if isinstance(t, dict) else None
+                aff = (t.get("query") or {}).get("affinity") if isinstance(t, dict) else None
+                if tid in chunk and isinstance(aff, int | float) and 0 <= aff <= 1:
+                    out[tid] = float(aff)
+        return out
