@@ -135,6 +135,8 @@ export interface Analysis {
     seeds: string[];
     /** Ranked by Qloo's affinity to each layout's tags (admin switch). */
     layouts_by_qloo?: boolean;
+    /** No song suggested because Qloo is off. */
+    music_off?: boolean;
     layout_rule: string;
   };
 }

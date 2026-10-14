@@ -514,6 +514,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           onEditLogin={guest ? (reason) => unlock(reason).then((r) => r !== false, () => true) : undefined}
           music={songFor(analysis?.layouts.find((l) => l.id === story.templateId) ?? null, analysis)}
           musicPending={analysis?.music_pending ?? false}
+          musicOff={analysis?.provenance.music_off === true}
           onBack={
             analysis || objectKeys
               ? () => {

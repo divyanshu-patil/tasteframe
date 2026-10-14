@@ -339,7 +339,7 @@ async def run_analysis(
                 kind="none",
                 explanation="Picking songs for your photo…"
                 if music_task
-                else "Song suggestions are off right now.",
+                else "Can't suggest music while Qloo is off.",
             ),
             music_pending=music_task is not None,
             image_reasoning=reasoning,
@@ -352,6 +352,7 @@ async def run_analysis(
                 track_level_result=False,  # songs follow in the {"music": …} event
                 seeds=seed_names,
                 layouts_by_qloo=qloo_fit is not None,
+                music_off=music_task is None,
                 **(
                     {"layout_rule": QLOO_RULE if reasoning else QLOO_RULE_NO_AI} if qloo_fit else {}
                 ),

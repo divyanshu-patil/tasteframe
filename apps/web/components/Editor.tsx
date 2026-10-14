@@ -36,6 +36,8 @@ interface Props {
   suggested: TemplateId[];
   music: Music | null;
   musicPending?: boolean;
+  /** Qloo is off, so no song was suggested. */
+  musicOff?: boolean;
   onBack?: () => void;
   onStartOver: () => void;
   /** Present only when saving is configured and the photo is uploaded. */
@@ -82,7 +84,7 @@ function download(blob: Blob, name: string) {
 
 const stickerName = (st: Sticker) => STICKER_KINDS.find((k) => k.kind === st.kind)?.label ?? "Sticker";
 
-export function Editor({ photos, story, setStory, input, suggested, music, musicPending = false, onBack, onStartOver, onSave, signedIn = false, onSongLogin, onAddPhotos, onEditLogin }: Props) {
+export function Editor({ photos, story, setStory, input, suggested, music, musicPending = false, musicOff = false, onBack, onStartOver, onSave, signedIn = false, onSongLogin, onAddPhotos, onEditLogin }: Props) {
   const width = usePreviewWidth();
   const apply = (a: EditorAction) => setStory((cur) => (cur ? editorReducer(cur, a) : cur));
   /** Guests can look and download; any change asks them to log in first, then goes through. */
@@ -338,6 +340,8 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
               <> · <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer">listen ↗</a></>
             )}
           </div>
+        ) : musicOff ? (
+          <div className={s.songNow} role="status">♪ Can&apos;t suggest music while Qloo is off.</div>
         ) : null}
         <p className={s.small}>Tap to select · drag to move · scroll or pinch to zoom · arrow keys nudge</p>
         {tpl.needsMask && !masks && <p className={s.small} role="status">Cutting you out of the photo on your device (the first time loads a small model)…</p>}

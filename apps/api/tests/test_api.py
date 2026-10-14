@@ -498,4 +498,5 @@ def test_no_songs_while_qloo_is_off(client_with, monkeypatch):
     res = events[-1]["result"]  # nothing follows the result: no {"music": …} event
     assert res["music_pending"] is False
     assert res["music"]["kind"] == "none" and "off" in res["music"]["explanation"]
+    assert res["provenance"]["music_off"] is True
     assert res["layouts"] and not looked_up and not qloo.calls

@@ -360,6 +360,7 @@ class Provenance(BaseModel):
     track_level_result: bool
     seeds: list[str]
     layouts_by_qloo: bool = False  # ranked by Qloo's affinity to each layout's tags
+    music_off: bool = False  # no song suggested because Qloo is off (admin switch or no key)
     layout_rule: str = "local heuristic: 0.45 visual + 0.35 cultural + 0.20 readability"
 
 

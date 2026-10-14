@@ -143,7 +143,13 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
       )}
       {prov?.layouts_by_qloo === true && (
         <p role="status" className={s.notice}>
-          <strong>Layouts suggested by Qloo: ranked by how your taste matches each layout&apos;s style.</strong>
+          <strong>Layout suggestions powered by Qloo: ranked by how your taste matches each layout&apos;s style.</strong>
+        </p>
+      )}
+      {prov?.music_off === true && (
+        <p role="status" className={s.notice}>
+          <strong>Can&apos;t suggest music while Qloo is off.</strong> You can still add a song with
+          Instagram&apos;s Music sticker after you post.
         </p>
       )}
       {prov?.qloo_error && (
