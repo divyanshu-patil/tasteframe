@@ -127,7 +127,9 @@ function QlooPanel({ analysis }: { analysis: Analysis }) {
       <p className={s.small}>
         <strong>What it shaped:</strong>{" "}
         {[
-          artists + films > 0 && `${artists} related artist${artists === 1 ? "" : "s"}${films ? ` and ${films} film${films === 1 ? "" : "s"}` : ""}`,
+          [artists && `${artists} related artist${artists === 1 ? "" : "s"}`, films && `${films} film${films === 1 ? "" : "s"}`]
+            .filter(Boolean)
+            .join(" and "),
           fromQloo > 0 && `${fromQloo} of ${songs.length} suggested songs (marked “Found by Qloo”)`,
           prov.layouts_by_qloo && "the order of your layouts",
         ]
