@@ -141,6 +141,11 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
           Qloo data was used. You can still edit and export.
         </p>
       )}
+      {prov?.layouts_by_qloo === true && (
+        <p role="status" className={s.notice}>
+          <strong>Layouts suggested by Qloo: ranked by how your taste matches each layout&apos;s style.</strong>
+        </p>
+      )}
       {prov?.qloo_error && (
         <p role="status" className={s.notice}>
           Qloo cultural recommendations were unavailable ({prov.qloo_error}). Layouts below use your
