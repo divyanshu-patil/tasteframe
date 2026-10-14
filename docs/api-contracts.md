@@ -68,7 +68,9 @@ Response: `application/x-ndjson`, one JSON object per line:
 {"stage":"taste"}
 {"stage":"layouts"}
 {"result":{ …AnalysisOut… }}      ← or {"error":{…}} at any point; "music_pending": true
-{"music":{ …MusicSuggestion… }}   ← songs follow the layouts (always sent after a result)
+{"music":{ …MusicSuggestion… }}   ← songs follow the layouts (sent after every result while Qloo
+                                    is on; with Qloo off: "music_pending": false, music.kind
+                                    "none", and no {"music"} event)
 ```
 `AnalysisOut` (values illustrative):
 ```json
@@ -287,7 +289,8 @@ sessions or expired Stories.
   `daily[{day, search, insights, errors}]` (every Qloo HTTP attempt, logged via `public.log_qloo_call`).
 - `PATCH /v1/admin/qloo`: `{enabled?: bool, layouts?: bool}` (at least one) returns `{enabled, layouts}`.
   `enabled` off means no Qloo calls for anyone: `/v1/features` reports `qloo: false`, taste search
-  returns 503 `QLOO_NOT_CONFIGURED`, and analysis skips Qloo (`qloo_used: false`, no `qloo_error`).
+  returns 503 `QLOO_NOT_CONFIGURED`, and analysis skips Qloo (`qloo_used: false`, no `qloo_error`)
+  and suggests no songs.
   `layouts` on (needs `enabled`) ranks layouts by Qloo's affinity between the person's taste and each
   layout's Qloo tags (`provenance.layouts_by_qloo: true`, `layout_rule` starts "Qloo tag affinity",
   `score.cultural_style_fit` = that affinity); if that call fails the local ranking is used and

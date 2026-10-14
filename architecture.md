@@ -124,6 +124,8 @@ Separate artist recommendation, track metadata, playback rights and Instagram mu
    RSS, refreshed in the background every 6 h, plus a dated Reels list in `trending.py`) are
    preferred when they fit. Songs stream as a `{"music": …}` event after `{"result": …}`
    (`music_pending: true`), so layouts render first; each layout gets its own song by rank.
+   Songs are only suggested while Qloo is on (admin switch and key): with Qloo off the result
+   has `music.kind: "none"` and no song lookups are made.
 7. Favourites (Qloo taste seeds) need a signed-in user when Supabase auth is configured.
 8. Video export muxes only a user-supplied audio file (no streaming previews in exports).
 

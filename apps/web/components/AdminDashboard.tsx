@@ -357,8 +357,8 @@ export function AdminQloo() {
         </div>
         <p className={s.muted}>
           {data.enabled
-            ? "Stories use Qloo for related artists and films, and signed-in people can add favourites."
-            : "No Qloo calls are made. Stories still get layouts and vibe-based songs; favourites search is hidden. API instances pick this up within 15 seconds."}
+            ? "Stories use Qloo for related artists and films, suggest songs, and signed-in people can add favourites."
+            : "No Qloo calls are made. Stories still get layouts, but no song suggestions; favourites search is hidden. API instances pick this up within 15 seconds."}
         </p>
         {!data.configured && <p className={s.error}>The API has no QLOO_API_KEY, so Qloo stays off whatever this switch says.</p>}
         {actionError && <p role="alert" className={s.error}>{actionError}</p>}

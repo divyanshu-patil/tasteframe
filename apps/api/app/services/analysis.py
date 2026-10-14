@@ -291,19 +291,24 @@ async def run_analysis(
         ]
 
         # Start on the songs now so they overlap the layout work; sent after the result.
-        music_task = asyncio.create_task(
-            pick_music(
-                vibe_songs,
-                [e.name for e in rotate(artists[:4], seed)],
-                bool(req.taste_seeds),
-                vibe,
-                req.music_language,
-                evidence,
-                seed,
-                settings,
-                country,
-                reasoning,
+        # Songs are only suggested while Qloo is on (admin switch / key configured).
+        music_task = (
+            asyncio.create_task(
+                pick_music(
+                    vibe_songs,
+                    [e.name for e in rotate(artists[:4], seed)],
+                    bool(req.taste_seeds),
+                    vibe,
+                    req.music_language,
+                    evidence,
+                    seed,
+                    settings,
+                    country,
+                    reasoning,
+                )
             )
+            if qloo_on
+            else None
         )
         yield {"stage": "layouts"}
         tags = [t for e in [*artists, *movies] for t in e.tags]
@@ -330,8 +335,13 @@ async def run_analysis(
             visual_profile=profile,
             cultural_recommendations=recs,
             layouts=layouts,
-            music=MusicSuggestion(kind="none", explanation="Picking songs for your photo…"),
-            music_pending=True,
+            music=MusicSuggestion(
+                kind="none",
+                explanation="Picking songs for your photo…"
+                if music_task
+                else "Song suggestions are off right now.",
+            ),
+            music_pending=music_task is not None,
             image_reasoning=reasoning,
             provenance=Provenance(
                 qloo_used=bool(artists or movies or qloo_fit),
@@ -348,6 +358,8 @@ async def run_analysis(
             ),
         )
         yield {"result": result.model_dump()}
+        if music_task is None:
+            return
         # Songs come after the layouts are on screen: fetching and ranking them takes a while.
         try:
             music = await music_task

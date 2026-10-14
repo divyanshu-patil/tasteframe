@@ -471,3 +471,31 @@ def test_qloo_layout_switch_falls_back_when_qloo_fails(client_with, monkeypatch)
     assert res["provenance"]["layouts_by_qloo"] is False  # local ranking
     assert res["provenance"]["qloo_error"] == "QLOO_UPSTREAM_ERROR"
     assert res["cultural_recommendations"]  # the artist/film calls still worked
+
+
+def test_no_songs_while_qloo_is_off(client_with, monkeypatch):
+    """Admin switched Qloo off (or no key): no song is suggested and no song lookups are made."""
+    from app.services import analysis
+    from app.services.qloo.client import QlooClient
+
+    looked_up: list[httpx.Request] = []
+    monkeypatch.setenv("MUSIC_METADATA_PROVIDER", "itunes")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        analysis, "music_transport", httpx.MockTransport(lambda r: looked_up.append(r))
+    )
+
+    async def off(_self) -> bool:
+        return False
+
+    monkeypatch.setattr(QlooClient, "enabled", off)
+    client, qloo = client_with()
+    h = new_session(client)
+    body = {"object_key": upload(client, h, make_image()), "manual_mood": ["playful"]}
+    events = stream(client.post("/v1/analysis", headers=h, json=body))
+    res = events[-1]["result"]  # nothing follows the result: no {"music": …} event
+    assert res["music_pending"] is False
+    assert res["music"]["kind"] == "none" and "off" in res["music"]["explanation"]
+    assert res["layouts"] and not looked_up and not qloo.calls
