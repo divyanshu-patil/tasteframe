@@ -47,9 +47,10 @@ async def rest(
         raise unavailable() from None
     if resp.status_code >= 400:
         try:
-            message = resp.json().get("message")
+            err = resp.json()
+            message, code = err.get("message"), err.get("code")
         except (ValueError, AttributeError):
-            message = None
+            message = code = None
         if message == "REQUEST_LIMIT":
             raise AppError(
                 "REQUEST_LIMIT", "You've sent a lot of requests today. Try again tomorrow.", 429
@@ -62,7 +63,9 @@ async def rest(
             raise AppError("NOT_ADMIN", "This page is for admins.", 403)
         if resp.status_code == 401:
             raise AppError("AUTH_REQUIRED", "Log in to continue.", 401)
-        log.warning("postgrest error %s %s status=%d", method, path, resp.status_code)
+        # PostgREST/Postgres error code only (e.g. PGRST202 function not found, 21000 bare
+        # UPDATE): says why without logging the message, which can echo request data.
+        log.warning("postgrest error %s %s status=%d code=%s", method, path, resp.status_code, code)
         raise unavailable()
     if resp.status_code == 204 or not resp.content:
         return None
