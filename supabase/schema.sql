@@ -427,7 +427,7 @@ begin
     on conflict (day, endpoint) do update set calls = u.calls + 1, errors = u.errors + excluded.errors;
     if p_limit > 0 and p_remaining between 0 and p_limit and p_reset_s between 0 and 3000000 then
         update public.app_flags set qloo_quota = jsonb_build_object('limit', p_limit,
-            'remaining', p_remaining, 'resets_at', now() + make_interval(secs => p_reset_s), 'seen_at', now());
+            'remaining', p_remaining, 'resets_at', now() + make_interval(secs => p_reset_s), 'seen_at', now()) where id;
     end if;
 end;
 $$;
@@ -465,7 +465,7 @@ begin
     if not public.is_admin() then
         raise exception 'NOT_ADMIN' using errcode = '42501';
     end if;
-    update public.app_flags set qloo_enabled = p_on, updated_at = now(), updated_by = auth.uid();
+    update public.app_flags set qloo_enabled = p_on, updated_at = now(), updated_by = auth.uid() where id;
     return jsonb_build_object('enabled', p_on);
 end;
 $$;
