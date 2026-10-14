@@ -1,11 +1,13 @@
 import { type Analysis, type LayoutSuggestion, type Music, musicFor } from "../api";
+import { songShift } from "../songShift";
 import type { TemplateInput } from "./types";
 
 /** Template inputs from an API suggestion; neutral defaults when analysis is unavailable. */
 /** The song for this layout: each layout (by rank) gets its own from the suggested list. */
 export function songFor(layout: LayoutSuggestion | null, a: Analysis | null): Music | null {
   if (!a || a.music.kind === "none") return null;
-  return musicFor(a.music, layout ? Math.max(0, a.layouts.findIndex((l) => l.id === layout.id)) : 0);
+  const rank = layout ? Math.max(0, a.layouts.findIndex((l) => l.id === layout.id)) : 0;
+  return musicFor(a.music, rank + songShift(a.analysis_id)); // the player's pick leads
 }
 
 export function inputFor(layout: LayoutSuggestion | null, a: Analysis | null, date: Date): TemplateInput {

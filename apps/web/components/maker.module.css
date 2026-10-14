@@ -448,3 +448,37 @@ textarea.input { width: 100%; resize: vertical; }
 .previewBtn { justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 1px solid var(--color-ink-black); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 14px; cursor: pointer; }
 .previewBtn[aria-pressed="true"] { background: var(--color-ink-black); color: var(--color-bone-cream); }
 .previewBtn:focus-visible { outline: 2px solid var(--color-ember-orange); outline-offset: 2px; }
+
+/* Song player (SongPlayer) */
+.player { display: grid; gap: var(--spacing-10); padding: var(--spacing-22); background: var(--color-ink-black); color: var(--color-bone-cream); border-radius: 18px; }
+.player .kicker, .player .small, .player .muted { color: rgba(236, 232, 228, 0.78); }
+.player .textLink { color: var(--color-bone-cream); }
+.playerHead { display: flex; gap: var(--spacing-14); align-items: center; }
+.playerArt { width: 96px; height: 96px; border-radius: 10px; flex: none; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
+.playerMeta { display: grid; gap: 4px; min-width: 0; }
+.playerTitle { font-size: 20px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+.playerArtist { font-size: 15px; opacity: 0.8; }
+.qlooChip { justify-self: start; display: inline-block; margin-left: 6px; padding: 2px 9px; border-radius: 999px; background: var(--color-ember-orange); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
+.playerMeta .qlooChip { margin-left: 0; }
+.vibeChip { justify-self: start; padding: 2px 9px; border-radius: 999px; border: 1px solid rgba(236, 232, 228, 0.5); font-size: 12px; }
+.playerControls { display: flex; align-items: center; gap: var(--spacing-10); }
+.ctrlBtn { width: 40px; height: 40px; border-radius: 999px; border: 1px solid rgba(236, 232, 228, 0.35); background: transparent; color: inherit; font-size: 16px; cursor: pointer; }
+.ctrlBtn:hover { background: rgba(236, 232, 228, 0.12); }
+.ctrlOn { background: var(--color-ember-orange); border-color: var(--color-ember-orange); }
+.playBtn { width: 56px; height: 56px; border-radius: 999px; border: 0; background: var(--color-bone-cream); color: var(--color-ink-black); font-size: 20px; cursor: pointer; }
+.playBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.playBtn:focus-visible, .ctrlBtn:focus-visible, .upNextBtn:focus-visible { outline: 2px solid var(--color-ember-orange); outline-offset: 2px; }
+.playerProgress { display: flex; align-items: center; gap: var(--spacing-10); font-size: 13px; }
+.playerTrack { flex: 1; height: 4px; border-radius: 4px; background: rgba(236, 232, 228, 0.25); overflow: hidden; }
+.playerTrack > span { display: block; height: 100%; background: var(--color-ember-orange); transition: width 0.25s linear; }
+.upNext { list-style: none; display: grid; gap: 4px; padding: 0; margin: 0; }
+.upNextBtn { width: 100%; text-align: left; padding: 6px 8px; border: 0; border-radius: 8px; background: rgba(236, 232, 228, 0.06); color: inherit; font: inherit; font-size: 14px; cursor: pointer; }
+.upNextBtn:hover { background: rgba(236, 232, 228, 0.14); }
+.upNextBtn .muted { color: rgba(236, 232, 228, 0.65); }
+@media (prefers-reduced-motion: reduce) { .playerTrack > span { transition: none; } }
+
+/* Qloo panel (Results) */
+.qlooPanel { display: grid; gap: var(--spacing-10); padding: var(--spacing-14) var(--spacing-22); border: 2px solid var(--color-ember-orange); border-radius: 14px; background: var(--color-bone-cream); max-width: 880px; }
+.qlooPanel h3 { font-size: 18px; }
+.qlooSignals { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.qlooSignals li { padding: 3px 10px; border-radius: 999px; background: #fff; border: 1px solid rgba(29, 29, 27, 0.15); font-size: 13px; }

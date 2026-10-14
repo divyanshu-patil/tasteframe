@@ -14,6 +14,9 @@ import { useMasks } from "./useMasks";
 import { StoryCanvas } from "./StoryCanvas";
 import { track } from "../lib/analytics";
 import { PreviewCredit, SongPreview } from "./SongPreview";
+import { SongPlayer } from "./SongPlayer";
+import { useSongShift } from "../lib/songShift";
+import { songsOf } from "../lib/api";
 import s from "./maker.module.css";
 
 interface Props {
@@ -101,6 +104,41 @@ export function MusicCard({ music, moods = [] }: { music: Music; moods?: string[
   );
 }
 
+/** What Qloo did for this Story: the taste signals it was given and what it shaped. */
+function QlooPanel({ analysis }: { analysis: Analysis }) {
+  const prov = analysis.provenance;
+  const signals = analysis.cultural_recommendations[0]?.evidence ?? prov.seeds;
+  const songs = songsOf(analysis.music);
+  const fromQloo = songs.filter((x) => x.source === "qloo").length;
+  const artists = analysis.cultural_recommendations.filter((r) => r.kind === "artist").length;
+  const films = analysis.cultural_recommendations.filter((r) => r.kind === "movie").length;
+  return (
+    <section className={s.qlooPanel} aria-labelledby="qloo-panel-title">
+      <p className={s.kicker}>Taste intelligence</p>
+      <h3 id="qloo-panel-title">Personalised by Qloo</h3>
+      {signals.length > 0 && (
+        <>
+          <p className={s.small}>Qloo read your taste from:</p>
+          <ul className={s.qlooSignals}>
+            {signals.map((x) => <li key={x}>{x}</li>)}
+          </ul>
+        </>
+      )}
+      <p className={s.small}>
+        <strong>What it shaped:</strong>{" "}
+        {[
+          artists + films > 0 && `${artists} related artist${artists === 1 ? "" : "s"}${films ? ` and ${films} film${films === 1 ? "" : "s"}` : ""}`,
+          fromQloo > 0 && `${fromQloo} of ${songs.length} suggested songs (marked “Found by Qloo”)`,
+          prov.layouts_by_qloo && "the order of your layouts",
+        ]
+          .filter(Boolean)
+          .join(" · ") || "your cultural profile below"}
+        .
+      </p>
+    </section>
+  );
+}
+
 function Bar({ label, value }: { label: string; value: number }) {
   return (
     <div className={s.bar}>
@@ -126,10 +164,11 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
   };
   const pages = Math.max(1, Math.ceil(suggestions.length / 3));
   const shown = suggestions.slice((page % pages) * 3, (page % pages) * 3 + 3);
+  const shift = useSongShift(analysis?.analysis_id); // the song picked in the player leads
   const previews = useMemo(
     () => shown.map((l) => ({ layout: l, state: defaultState(l.id, inputFor(l, analysis, date)) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `shown` is derived from these
-    [suggestions, analysis, date, page],
+    [suggestions, analysis, date, page, shift],
   );
   const others = TEMPLATE_IDS.filter((id) => !shown.some((l) => l.id === id));
   const vp = analysis?.visual_profile;
@@ -157,6 +196,7 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
           Qloo data was used. You can still edit and export.
         </p>
       )}
+      {analysis && prov?.qloo_used && <QlooPanel analysis={analysis} />}
       {prov?.layouts_by_qloo === true && (
         <p role="status" className={s.notice}>
           <strong>Layout suggestions powered by Qloo: ranked by how your taste matches each layout&apos;s style.</strong>
@@ -287,8 +327,11 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
           {analysis.music_pending ? (
             <MusicLoading />
           ) : (
-            // Follows the shuffle: this page's first layout's song leads.
-            <MusicCard music={songFor(shown[0] ?? null, analysis) ?? analysis.music} moods={prov?.music_moods} />
+            analysis.music.kind === "track" ? (
+              <SongPlayer music={analysis.music} analysisId={analysis.analysis_id} moods={prov?.music_moods} />
+            ) : (
+              <MusicCard music={songFor(shown[0] ?? null, analysis) ?? analysis.music} moods={prov?.music_moods} />
+            )
           )}
         </div>
       )}
