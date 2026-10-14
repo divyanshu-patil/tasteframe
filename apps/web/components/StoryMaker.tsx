@@ -25,6 +25,7 @@ import { sampleFile } from "../lib/sample";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
 import { inputFor, songFor } from "../lib/story/input";
 import { regionHint, setPhotoTopic, track } from "../lib/analytics";
+import { clearResume, loadResume, saveResume } from "../lib/resume";
 import { TEMPLATE_IDS, type StoryState, type TemplateId } from "../lib/story/types";
 import { MAX_BYTES, checkFile } from "../lib/upload";
 import { Editor } from "./Editor";
@@ -91,7 +92,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   const [storyDate, setStoryDate] = useState(() => new Date());
   const [features, setFeatures] = useState<Features | null>(null);
   const [savedVersion, setSavedVersion] = useState(0); // bump to refresh the saved list
-  const { user } = useAuth();
+  const { user, ready: authReady } = useAuth();
   // With accounts configured, guests get the top 3 layouts as-is; favourites, shuffling, other
   // layouts and any edit need an account. Songs never do.
   const guest = authConfigured && !user;
@@ -144,11 +145,68 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nav only reads preset
   }, [photos, analysis, storyDate, preset]);
 
-  // A reload loses the in-memory photos: show setup at a URL that matches it.
+  // A reload loses the in-memory photos: show setup at a URL that matches it — unless a
+  // signed-in person's Story is kept in this browser (restored below once auth is known).
   useEffect(() => {
     if (new URLSearchParams(location.search).get("step")) nav("setup", null, "replace");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, []);
+
+  // Signed in: bring back the Story from before the refresh (not when opening a gallery layout).
+  const restored = useRef(false);
+  const lastUser = useRef<string | null>(null);
+  useEffect(() => {
+    if (!authReady) return;
+    if (!user) {
+      if (lastUser.current) void clearResume(); // signed out: don't keep their photos here
+      lastUser.current = null;
+      return;
+    }
+    lastUser.current = user.id;
+    if (restored.current || preset || photos.length) return;
+    restored.current = true;
+    void loadResume(user.id).then(async (snap) => {
+      if (!snap) return;
+      const loaded: PhotoFile[] = [];
+      try {
+        for (const [i, p] of snap.photos.entries()) {
+          const file = new File([p.blob], p.name || `photo-${i + 1}`, { type: p.type });
+          const url = URL.createObjectURL(file);
+          loaded.push({ file, type: p.type, url, img: await loadImage(url) });
+        }
+      } catch {
+        loaded.forEach((p) => URL.revokeObjectURL(p.url));
+        return;
+      }
+      setPhotos(loaded);
+      setObjectKeys(snap.objectKeys);
+      setAnalysis(snap.analysis);
+      setStory(snap.story);
+      setStoryDate(new Date(snap.storyDate));
+      const to = snap.phase === "edit" && snap.story ? "edit" : "results";
+      setPhase(to);
+      nav(to, to === "edit" ? snap.story!.templateId : null, "replace");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when auth settles
+  }, [authReady, user?.id]);
+
+  // …and keep that snapshot current while they look at results or edit (debounced).
+  useEffect(() => {
+    if (!user || (phase !== "results" && phase !== "edit") || !photos.length || analysis?.music_pending) return;
+    const t = setTimeout(() => {
+      void saveResume({
+        userId: user.id,
+        photos: photos.map((p) => ({ blob: p.file, type: p.type, name: p.file.name })),
+        objectKeys,
+        analysis,
+        story,
+        phase,
+        storyDate: storyDate.toISOString(),
+        savedAt: Date.now(),
+      });
+    }, 800);
+    return () => clearTimeout(t);
+  }, [user, phase, photos, objectKeys, analysis, story, storyDate]);
 
   // Switching layouts inside the editor keeps the address bar in step (no extra history).
   useEffect(() => {
@@ -179,6 +237,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
 
   /** Any change to the photo set invalidates uploads and results derived from them. */
   const invalidate = () => {
+    void clearResume(); // a different photo set: the kept Story no longer applies
     cleanupUploads(objectKeys);
     setObjectKeys(null);
     setAnalysis(null);
@@ -244,6 +303,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   };
 
   const removePhoto = () => {
+    void clearResume();
     abort.current?.abort();
     runId.current++;
     cleanupUploads(objectKeys);
