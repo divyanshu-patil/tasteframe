@@ -30,8 +30,10 @@ Sources: hackathon developer guide, `GET /search` and Insights deep-dive referen
 
 Qloo doesn't know our layouts, so the mapping is ours and the scoring is Qloo's:
 1. `apps/api/scripts/layout_tags.py` collects terms per layout: how Pinterest classifies the layout's
-   reference pins (`design-refs/pinterest/pin_meta.json`: visual annotations, category breadcrumbs,
-   related interests) plus the layout's own moods/style tags/keywords. Each term is resolved to real
+   reference pins (`design-refs/pinterest/pin_annotations.tsv`: each pin's visual annotations as its
+   pin page shows them, read by hand in a browser on 2026-10-14 — Pinterest's robots.txt disallows
+   crawlers; the 8 most frequent meaningful words/bigrams per layout are kept) plus the layout's own
+   moods/style tags/keywords. Each term is resolved to real
    tag ids via `/v2/tags` (exact name match; only tag types that get affinity from artist/film
    signals: `style:qloo`, `genre:music`, `genre:media`, `subgenre:qloo`, `keyword:qloo`,
    `music:qloo`, `artist:qloo`, `audience:qloo`). Output: `layout_tags.json` (≤ 6 tags per layout).

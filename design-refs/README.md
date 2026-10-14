@@ -18,6 +18,12 @@ same references as shared in chat (local only).
 Pinterest's oEmbed thumbnail URL, layouts). Per-pin layout links for the aesthetic/cover sets live in
 `pinterest/pin_layouts.json`; oEmbed answers are cached in `pinterest/oembed_cache.json`.
 
+`pinterest/pin_annotations.tsv` (committed): each pin's Pinterest visual annotations (the labels
+Pinterest's classifier shows on the pin page, e.g. "Film Grain Texture"), one line per pin:
+`pin id<TAB>label|label|…`. Read by hand in a signed-in browser (2026-10-14), not crawled —
+Pinterest's robots.txt disallows bots. `apps/api/scripts/layout_tags.py` turns them into each
+layout's Qloo tags.
+
 ## What each template borrows
 
 | Template | Reference cues |
