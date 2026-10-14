@@ -26,6 +26,18 @@ Sources: hackathon developer guide, `GET /search` and Insights deep-dive referen
 | Tag lookup | `GET /v2/tags?filter.query=<text>&take=<n>` → `results.tags[].{id, name, type}` (build time only) |
 | Tag affinity | `GET /v2/insights?filter.type=urn:tag&filter.results.tags=<urn,…>&signal.interests.entities=<id,…>&take=<n>` → `results.tags[].{tag_id, query.affinity}`; tags with no affinity are omitted (checked live 2026-10-14) |
 
+### Music mood and region signals (2026-10-14)
+
+- The music someone describes is matched locally to a fixed mood list (`services/music/moods.py`);
+  each mood carries Qloo tag ids checked live (e.g. sultry → `urn:tag:music:qloo:sultry`,
+  mild/mellow → `urn:tag:genre:music:mellow`). Only those ids go to Qloo
+  (`signal.interests.tags` on the artist Insights call), never the text. Live check: Doja Cat +
+  sultry/sensual moved related artists to Ella Mai, Summer Walker, Kiana Ledé.
+- Region: `signal.location.query=<country name>` on the same calls (ISO codes don't work: "IN"
+  matched elsewhere, "GB" returned nothing), from a fixed code → name map (`services/region.py`).
+- Activity: the most listened/exported artists near someone (last 30 days) are resolved with
+  `/search` and added as signals when they have no favourites (ids cached in-process for a day).
+
 ### Layout suggestions with Qloo (admin switch, 2026-10-14)
 
 Qloo doesn't know our layouts, so the mapping is ours and the scoring is Qloo's:

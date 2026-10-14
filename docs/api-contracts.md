@@ -53,6 +53,15 @@ Request:
 }
 ```
 - `music_language` ∈ `en | hi | pa | es | ko` (default `en`): language of the suggested songs.
+- `music_wish` (optional, ≤ 200 chars): the music they want in their words ("baddie, sexy, mild
+  tone"). Matched to fixed moods (`services/music/moods.py`); the mood picks the song pool, its
+  fixed Qloo tag ids go to Qloo as `signal.interests.tags`, and the text goes only to the
+  song-ranking model. `provenance.music_moods` lists the moods read.
+- `region` (optional, `^[A-Z]{2}$`): country from the browser locale. The host's geo header
+  (`x-vercel-ip-country` / `cf-ipcountry`) wins. Known countries become Qloo's
+  `signal.location.query` (country name), and it selects what people near them pick
+  (`community_picks`: layouts exported nearby, the photo type's most-chosen layouts, and the
+  most-played artists as extra Qloo signals when there are no favourites).
 - `taste_seeds` need a signed-in user (`Authorization: Bearer <Supabase token>`) when Supabase is
   configured, else 401 `AUTH_REQUIRED`. Song suggestions never need one.
 - `object_key` must belong to the caller's session (else 404 `OBJECT_NOT_FOUND`, same as missing).
@@ -248,8 +257,11 @@ sessions or expired Stories.
 
 
 ## Insights (public, rate-limited)
-- `POST /v1/events`: `{type: pageview|analysis|layout_open|export|save|request|gallery_pick,
-  visitor, path?, referrer?, layout?, device?}` returns 204. The visitor id is HMAC-hashed and the
+- `POST /v1/events`: `{type: pageview|analysis|layout_open|export|save|request|gallery_pick|song_listen,
+  visitor, path?, referrer?, layout?, device?, region?, artist?, title?, song_source?, topic?}`
+  returns 204. `region` is a country code (the geo header wins over the browser's); `artist`/`title`/
+  `song_source` (`vibe|qloo|picked`) name the song listened to or on the exported Story; `topic` is
+  the photo type the layout was opened/exported for (image model's topic, e.g. `selfie`). The visitor id is HMAC-hashed and the
   referrer is reduced to its host, an app name (`android-app://com.whatsapp/` → `whatsapp`) or a
   `?utm_source=` / `?ref=` tag the page was opened with. With a valid Bearer token the event is
   inserted as that user, so the row's `user_id` defaults to `auth.uid()` (RLS rejects any other id). It's a no-op when Supabase isn't configured, and never fails
@@ -295,6 +307,9 @@ sessions or expired Stories.
   layout's Qloo tags (`provenance.layouts_by_qloo: true`, `layout_rule` starts "Qloo tag affinity",
   `score.cultural_style_fit` = that affinity); if that call fails the local ranking is used and
   `qloo_error` is set. Other API instances follow within 15 s.
+- `GET /v1/admin/music?days=1..365` returns `{by_source[{source, listens, exports}],
+  by_region[{region, listens, exports, qloo_exports}], top[{artist, title, source, listens, exports}]}`
+  (`public.admin_music`): whether Qloo-related songs get listened to and exported.
 - `GET /v1/admin/requests?status=pending|accepted|rejected|done` returns `{requests[]}`.
 - `GET /v1/admin/requests/{id}` returns one request.
 - `PATCH /v1/admin/requests/{id}`: `{status, admin_note?}` returns the updated request (stamps

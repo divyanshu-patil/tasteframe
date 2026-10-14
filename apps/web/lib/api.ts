@@ -135,6 +135,8 @@ export interface Analysis {
     seeds: string[];
     /** Ranked by Qloo's affinity to each layout's tags (admin switch). */
     layouts_by_qloo?: boolean;
+    /** Moods read from the music wish, e.g. ["confident", "sultry", "mellow"]. */
+    music_moods?: string[];
     /** No song suggested because Qloo is off. */
     music_off?: boolean;
     layout_rule: string;
@@ -406,6 +408,10 @@ export interface AnalysisRequest {
   taste_seeds: { entity_id: string; entity_type: TasteType; name: string }[];
   manual_mood: Mood[];
   music_language: Language;
+  /** What music they want, in their words ("baddie, sexy, mild tone"). */
+  music_wish?: string;
+  /** Country from the browser locale (the server prefers its geo header). */
+  region?: string;
 }
 
 export async function analyze(
@@ -918,6 +924,30 @@ export async function adminQloo(days: number): Promise<AdminQloo> {
 }
 
 /** Turn Qloo on or off for everyone. */
+export interface AdminMusic {
+  by_source: { source: string; listens: number; exports: number }[];
+  by_region: { region: string; listens: number; exports: number; qloo_exports: number }[];
+  top: { artist: string; title: string | null; source: string | null; listens: number; exports: number }[];
+}
+
+export async function adminMusic(days: number): Promise<AdminMusic> {
+  const v = await adminGet(`/music?days=${days}`);
+  if (!isObj(v)) throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);
+  const rows = (x: unknown) => (Array.isArray(x) ? x.filter(isObj) : []);
+  const n = (x: unknown) => (isNum(x) ? x : 0);
+  return {
+    by_source: rows(v.by_source).map((r) => ({ source: String(r.source), listens: n(r.listens), exports: n(r.exports) })),
+    by_region: rows(v.by_region).map((r) => ({ region: String(r.region), listens: n(r.listens), exports: n(r.exports), qloo_exports: n(r.qloo_exports) })),
+    top: rows(v.top).map((r) => ({
+      artist: String(r.artist),
+      title: isStr(r.title) ? r.title : null,
+      source: isStr(r.source) ? r.source : null,
+      listens: n(r.listens),
+      exports: n(r.exports),
+    })),
+  };
+}
+
 export async function setQloo(change: { enabled?: boolean; layouts?: boolean }): Promise<{ enabled: boolean; layouts: boolean }> {
   const v = await adminGet("/qloo", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(change) });
   if (!isObj(v) || typeof v.enabled !== "boolean" || typeof v.layouts !== "boolean") throw new ApiError("BAD_RESPONSE", "Received an unexpected response.", true);

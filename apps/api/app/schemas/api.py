@@ -657,6 +657,7 @@ class EventIn(BaseModel):
     artist: str | None = Field(None, max_length=120)
     title: str | None = Field(None, max_length=160)
     song_source: SongSource | None = None
+    topic: str | None = Field(None, pattern=r"^[a-z_]{2,32}$")  # photo type the layout was for
 
 
 class PinPreview(BaseModel):

@@ -140,6 +140,7 @@ class FakeRest:
                     "region": "IN",
                     "layouts": {"newspaper": 40, "x": "bad"},
                     "artists": ["A", 3],
+                    "topic_layouts": {"magazine": 7},
                 },
             )
         if path == "/rpc/log_qloo_call":
@@ -470,8 +471,9 @@ def test_song_listens_and_exports_are_tracked_with_region(api):
     assert r.status_code == 204
     row = fake.events[-1]
     assert row["region"] == "IN" and row["artist"] == "SZA" and row["song_source"] == "qloo"
-    client.post("/v1/events", json={**ev, "type": "export", "layout": "vintage"})
-    assert fake.events[-1]["region"] == "GB" and fake.events[-1]["layout"] == "vintage"
+    client.post("/v1/events", json={**ev, "type": "export", "layout": "vintage", "topic": "selfie"})
+    row = fake.events[-1]
+    assert row["region"] == "GB" and row["layout"] == "vintage" and row["topic"] == "selfie"
     bad = {**ev, "region": "India"}
     assert client.post("/v1/events", json=bad).status_code == 422
 
@@ -482,10 +484,11 @@ def test_community_picks_are_parsed_and_cached(api):
 
     _, fake = api
     community._cache.clear()
-    picks = asyncio.run(community.community_picks(get_settings(), "IN"))
+    picks = asyncio.run(community.community_picks(get_settings(), "IN", "selfie"))
     assert picks.region == "IN" and picks.layouts == {"newspaper": 40} and picks.artists == ["A"]
-    asyncio.run(community.community_picks(get_settings(), "IN"))
-    assert fake.picks_asked == [{"p_region": "IN"}]  # second call served from cache
+    assert picks.topic_layouts == {"magazine": 7}
+    asyncio.run(community.community_picks(get_settings(), "IN", "selfie"))
+    assert fake.picks_asked == [{"p_region": "IN", "p_topic": "selfie"}]  # then from cache
 
 
 def test_admin_music_breakdown_is_admin_only(api):

@@ -364,3 +364,15 @@ def test_exports_near_you_boost_a_layout():
     ids = [x.id for x in boosted]
     assert ids.index(pick) < base.index(pick)
     assert "Often exported by people near you." in boosted[ids.index(pick)].reason
+
+
+def test_layouts_chosen_for_this_kind_of_photo_get_boosted():
+    from app.services.recommendations.layouts import rank_layouts
+
+    p = profile()
+    base = [x.id for x in rank_layouts(p, [], None, topic="food")]
+    pick = base[-1]
+    out = rank_layouts(p, [], None, topic="food", topic_uses={pick: 30, base[0]: 1})
+    ids = [x.id for x in out]
+    assert ids.index(pick) < base.index(pick)
+    assert "Often chosen for food photos." in out[ids.index(pick)].reason

@@ -215,13 +215,21 @@ alter table public.events add column if not exists artist text check (char_lengt
 alter table public.events add column if not exists title text check (char_length(title) <= 160);
 alter table public.events add column if not exists song_source text
     check (song_source in ('vibe', 'qloo', 'picked'));
+-- What kind of photo the layout was opened/exported for (image model's topic, e.g. selfie, food),
+-- so ranking learns which layouts people choose for which photos.
+alter table public.events add column if not exists topic text check (topic ~ '^[a-z_]{2,32}$');
+create index if not exists events_topic_idx on public.events (topic, created_at desc)
+    where topic is not null;
 create index if not exists events_picks_idx on public.events (type, region, created_at desc)
     where type in ('export', 'song_listen');
 
 -- Community signal for ranking (called by the API with the publishable key; aggregates only):
 -- layouts exported and artists listened to/exported in the last `days`, in `p_region` when it has
--- enough activity (≥ 20 events), else everywhere.
-create or replace function public.community_picks(p_region text default null, days int default 30)
+-- enough activity (≥ 20 events), else everywhere; and, for photos of `p_topic`, how often each
+-- layout was chosen (opens + 3 × exports, everywhere).
+drop function if exists public.community_picks(text, int);
+create or replace function public.community_picks(p_region text default null, days int default 30,
+    p_topic text default null)
 returns jsonb
 language sql stable security definer set search_path = public as $$
     with recent as (
@@ -242,10 +250,17 @@ language sql stable security definer set search_path = public as $$
             where type = 'export' and layout is not null group by layout) l),
         'artists', (select coalesce(jsonb_agg(artist order by n desc), '[]'::jsonb) from (
             select artist, count(*) as n from picked
-            where artist is not null group by artist order by n desc limit 5) a));
+            where artist is not null group by artist order by n desc limit 5) a),
+        'topic_layouts', (select coalesce(jsonb_object_agg(layout, n), '{}'::jsonb) from (
+            select layout, sum(case when type = 'export' then 3 else 1 end) as n
+            from public.events
+            where p_topic is not null and topic = p_topic and layout is not null
+                and type in ('layout_open', 'export')
+                and created_at > now() - make_interval(days => greatest(1, least(days, 365)))
+            group by layout) t));
 $$;
-revoke all on function public.community_picks(text, int) from public;
-grant execute on function public.community_picks(text, int) to anon, authenticated;
+revoke all on function public.community_picks(text, int, text) from public;
+grant execute on function public.community_picks(text, int, text) to anon, authenticated;
 
 -- Layout requests from the landing page: a Pinterest pin someone wants turned into a layout.
 create table if not exists public.layout_requests (

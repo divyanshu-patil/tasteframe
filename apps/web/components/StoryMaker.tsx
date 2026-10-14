@@ -24,7 +24,7 @@ import { authConfigured, useAuth } from "../lib/auth";
 import { sampleFile } from "../lib/sample";
 import { TEMPLATES, defaultState } from "../lib/story/templates";
 import { inputFor, songFor } from "../lib/story/input";
-import { track } from "../lib/analytics";
+import { regionHint, setPhotoTopic, track } from "../lib/analytics";
 import { TEMPLATE_IDS, type StoryState, type TemplateId } from "../lib/story/types";
 import { MAX_BYTES, checkFile } from "../lib/upload";
 import { Editor } from "./Editor";
@@ -77,12 +77,14 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
   const [moods, setMoods] = useState<Mood[]>([]);
   const [seeds, setSeeds] = useState<Seed[]>([]);
   const [language, setLanguage] = useState<Language>("en");
+  const [musicWish, setMusicWish] = useState("");
   const [progress, setProgress] = useState<{
     upload: number;
     stage: Stage | null;
   }>({ upload: 0, stage: null });
   const [runError, setRunError] = useState<ApiError | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  useEffect(() => setPhotoTopic(analysis?.image_reasoning?.about), [analysis]);
   // Uploaded keys, aligned with `photos`; null when the current photos aren't uploaded yet.
   const [objectKeys, setObjectKeys] = useState<string[] | null>(null);
   const [story, setStory] = useState<StoryState | null>(null);
@@ -287,6 +289,8 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           object_keys: keys,
           manual_mood: moods,
           music_language: language,
+          music_wish: musicWish.trim() || undefined,
+          region: regionHint(),
           taste_seeds: (guest ? [] : seeds).map(({ entity_id, entity_type, name }) => ({
             entity_id,
             entity_type,
@@ -306,6 +310,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
       );
       if (!live()) return;
       setAnalysis(result);
+      setPhotoTopic(result.image_reasoning?.about); // before the layout_open below
       track("analysis");
       const date = new Date();
       setStoryDate(date);
@@ -381,6 +386,7 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
     removePhoto();
     setMoods([]);
     setSeeds([]);
+    setMusicWish("");
   };
 
   /** Re-open a saved Story: photos come back through the API (same-origin, canvas-safe). */
@@ -677,6 +683,22 @@ export function StoryMaker({ preset }: { preset?: TemplateId } = {}) {
           >
             {LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
           </select>
+          <label className={s.small} htmlFor="music-wish">
+            Describe the music you want <span className={s.muted}>(optional)</span>
+          </label>
+          <textarea
+            id="music-wish"
+            className={s.input}
+            rows={2}
+            maxLength={200}
+            placeholder="e.g. make me look like a baddie, sexy, with a mild tone"
+            value={musicWish}
+            onChange={(e) => setMusicWish(e.target.value)}
+          />
+          <p className={s.small}>
+            Qloo turns the mood you describe into taste signals to find artists that fit. Your words
+            themselves aren&apos;t sent to Qloo.
+          </p>
         </div>
 
         <div className={s.step}>

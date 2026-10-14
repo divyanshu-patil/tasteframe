@@ -5,7 +5,13 @@
 import { accessToken } from "./auth";
 import type { TemplateId } from "./story/types";
 
-type EventType = "pageview" | "analysis" | "layout_open" | "export" | "save" | "request" | "gallery_pick";
+type EventType = "pageview" | "analysis" | "layout_open" | "export" | "save" | "request" | "gallery_pick" | "song_listen";
+/** A song listened to or on an exported Story, and where it came from. */
+export interface SongEvent {
+  artist?: string;
+  title?: string;
+  song_source?: "vibe" | "qloo" | "picked";
+}
 const API = "/api";
 const KEY = "tf_visitor";
 
@@ -63,9 +69,29 @@ export function externalReferrer(): string | undefined {
   }
 }
 
-export function track(type: EventType, extra: { path?: string; referrer?: string; layout?: TemplateId } = {}): void {
+/** Country from the browser's own locale ("en-IN" → "IN"), only when it names one. The server
+ * prefers its host's geo header; neither is more precise than a country. */
+export function regionHint(): string | undefined {
+  try {
+    const r = new Intl.Locale(navigator.language).region;
+    return r && /^[A-Z]{2}$/.test(r) ? r : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// What kind of photo is being designed (the image model's topic, e.g. "selfie"), attached to
+// layout/song events so ranking learns which layouts people choose for which photos.
+let photoTopic: string | undefined;
+export function setPhotoTopic(topic: string | null | undefined): void {
+  photoTopic = topic && /^[a-z_]{2,32}$/.test(topic) ? topic : undefined;
+}
+const WITH_TOPIC = new Set<EventType>(["layout_open", "export", "save", "song_listen"]);
+
+export function track(type: EventType, extra: { path?: string; referrer?: string; layout?: TemplateId } & SongEvent = {}): void {
   if (!trackingAllowed()) return;
-  const body = JSON.stringify({ type, visitor: visitorId(), device: device(), ...extra });
+  const topic = WITH_TOPIC.has(type) ? photoTopic : undefined;
+  const body = JSON.stringify({ type, visitor: visitorId(), device: device(), region: regionHint(), topic, ...extra });
   // keepalive lets exports/navigation-time events finish; failures are ignored on purpose.
   void accessToken()
     .catch(() => null)

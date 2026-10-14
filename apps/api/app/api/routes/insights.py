@@ -100,6 +100,7 @@ async def record_event(
             "artist": body.artist,
             "title": body.title,
             "song_source": body.song_source,
+            "topic": body.topic,
         }
         try:
             # Signed in: sent as the user, so the row's user_id defaults to auth.uid() (RLS

@@ -1639,6 +1639,7 @@ def rank_layouts(
     today: date | None = None,
     qloo_fit: dict[str, tuple[float, list[str]]] | None = None,
     uses: dict[str, int] | None = None,
+    topic_uses: dict[str, int] | None = None,
 ) -> list[LayoutSuggestion]:
     """All templates ranked for this photo (or the top `k`), families interleaved per 3.
 
@@ -1648,6 +1649,7 @@ def rank_layouts(
     `subjects`: per-photo (kind, x, y) for multi-photo Stories (crop focus per photo).
     `likes`: like counts per layout id (community boost); `today` pins newness in tests.
     `uses`: exports per layout id (people in your region, or everyone) — same boost as likes.
+    `topic_uses`: how often each layout was chosen for photos like this one (same boost).
     `qloo_fit`: from qloo_layout_fit(); when given, Qloo's tag affinity leads the ranking."""
     people = bool(subject and subject[0] in ("person", "people"))
     per_photo = subjects or ([subject] if subject else [])
@@ -1659,8 +1661,11 @@ def rank_layouts(
     ]
     focus = (subject[1], subject[2]) if subject and subject[0] != "scene" else (0.5, 0.5)
     kind = subject[0] if subject else None
-    likes, uses = likes or {}, uses or {}
-    pop = {k: likes.get(k, 0) + uses.get(k, 0) for k in {*likes, *uses}}
+    likes, uses, topic_uses = likes or {}, uses or {}, topic_uses or {}
+    pop = {
+        k: likes.get(k, 0) + uses.get(k, 0) + topic_uses.get(k, 0)
+        for k in {*likes, *uses, *topic_uses}
+    }
     ordered = _promote(
         _interleave(
             score_all(p, qloo_tags, people, scene, kind, ai_picks, topic, pop, today, qloo_fit)
@@ -1701,6 +1706,8 @@ def rank_layouts(
             reason += f" Liked by {liked} {'person' if liked == 1 else 'people'}."
         if popularity(t.id, uses) >= 0.5:
             reason += " Often exported by people near you."
+        if topic and popularity(t.id, topic_uses) >= 0.5:
+            reason += f" Often chosen for {topic.replace('_', ' & ')} photos."
         if t.text_on_photo and score.readability_fit < 0.6:
             reason += " Text sits on an overlay to stay readable."
         n = p.photo_count

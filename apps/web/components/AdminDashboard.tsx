@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type AdminQloo as QlooState, type AdminStats, type AdminUser, type LayoutRequest, type RequestStatus, adminMe, adminQloo, adminRequests, adminStats, adminUsers, setQloo, updateRequest, updateUser } from "../lib/api";
+import { type AdminMusic, type AdminQloo as QlooState, type AdminStats, type AdminUser, type LayoutRequest, type RequestStatus, adminMe, adminMusic, adminQloo, adminRequests, adminStats, adminUsers, setQloo, updateRequest, updateUser } from "../lib/api";
 import { authConfigured, signOut, useAuth } from "../lib/auth";
 import { TEMPLATES } from "../lib/story/templates";
 import { LoginDialog } from "./LoginDialog";
@@ -410,7 +410,70 @@ export function AdminQloo() {
         />
         <p className={s.muted}>Every request to Qloo counts, retries included. Each Story with Qloo on makes about three.</p>
       </section>
+
+      <MusicActivity days={days} />
     </>
+  );
+}
+
+const SOURCE_LABEL: Record<string, string> = { qloo: "Qloo-related artist", vibe: "Our vibe pool", picked: "Picked by the person", none: "No song" };
+
+/** Did Qloo's songs get picked? Listens (Apple Music taps) and exports by where the song came from. */
+function MusicActivity({ days }: { days: number }) {
+  const [data, setData] = useState<AdminMusic | { error: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    adminMusic(days)
+      .then((d) => live && setData(d))
+      .catch((e) => live && setData({ error: e instanceof Error ? e.message : "Couldn't load music activity." }));
+    return () => {
+      live = false;
+    };
+  }, [days]);
+  return (
+    <section className={s.panel} aria-labelledby="music-activity-title">
+      <h2 id="music-activity-title">Music people chose, last {days} days</h2>
+      {data === null ? (
+        <p className={s.note}>Loading music activity…</p>
+      ) : "error" in data ? (
+        <p className={s.error}>{data.error}</p>
+      ) : data.by_source.length === 0 ? (
+        <p className={s.note}>No song listens or exports yet.</p>
+      ) : (
+        <div className={s.tableWrap}>
+          <table className={s.table}>
+            <thead><tr><th>Where the song came from</th><th>Listens</th><th>Exports</th></tr></thead>
+            <tbody>
+              {data.by_source.map((r) => (
+                <tr key={r.source}><td>{SOURCE_LABEL[r.source] ?? r.source}</td><td>{fmt.format(r.listens)}</td><td>{fmt.format(r.exports)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <table className={s.table}>
+            <thead><tr><th>Country</th><th>Listens</th><th>Exports</th><th>Exports with a Qloo song</th></tr></thead>
+            <tbody>
+              {data.by_region.map((r) => (
+                <tr key={r.region}><td>{r.region}</td><td>{fmt.format(r.listens)}</td><td>{fmt.format(r.exports)}</td><td>{fmt.format(r.qloo_exports)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <table className={s.table}>
+            <thead><tr><th>Song</th><th>Source</th><th>Listens</th><th>Exports</th></tr></thead>
+            <tbody>
+              {data.top.map((r) => (
+                <tr key={`${r.artist}-${r.title}-${r.source}`}>
+                  <td>{r.title ? <><strong>{r.title}</strong> — {r.artist}</> : r.artist}</td>
+                  <td>{SOURCE_LABEL[r.source ?? "none"] ?? r.source}</td><td>{fmt.format(r.listens)}</td><td>{fmt.format(r.exports)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className={s.muted}>
+        Compare the Qloo row with the vibe-pool row: a higher share of listens and exports for Qloo-related artists means Qloo&apos;s signals (favourites, the mood people describe, their region) are helping.
+      </p>
+    </section>
   );
 }
 

@@ -277,7 +277,7 @@ async def run_analysis(
         # its Qloo tags steer the related artists.
         wish = clean_wish(req.music_wish)
         wish_moods = moods_in(wish)
-        picks = await community_picks(settings, region)
+        picks = await community_picks(settings, region, reasoning.about if reasoning else None)
         vibe = (
             vibe_for(wish_moods)
             or (reasoning.vibe if reasoning else None)
@@ -384,6 +384,7 @@ async def run_analysis(
             likes=await like_counts(settings),
             qloo_fit=qloo_fit,
             uses=picks.layouts,
+            topic_uses=picks.topic_layouts,
         )
 
         result = AnalysisOut(

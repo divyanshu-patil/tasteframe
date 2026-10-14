@@ -12,6 +12,7 @@ import { pinsFor } from "../lib/story/pins";
 import { LikeButton, NewBadge } from "./LikeButton";
 import { useMasks } from "./useMasks";
 import { StoryCanvas } from "./StoryCanvas";
+import { track } from "../lib/analytics";
 import s from "./maker.module.css";
 
 interface Props {
@@ -38,7 +39,11 @@ export function MusicLoading() {
   );
 }
 
-export function MusicCard({ music }: { music: Music }) {
+function listened(artist: string | null, title: string | null, source: "qloo" | "vibe" | null) {
+  track("song_listen", { artist: artist ?? undefined, title: title ?? undefined, song_source: source ?? undefined });
+}
+
+export function MusicCard({ music, moods = [] }: { music: Music; moods?: string[] }) {
   return (
     <article className={s.music} aria-label="Music suggestion">
       <p className={s.kicker}>
@@ -52,10 +57,11 @@ export function MusicCard({ music }: { music: Music }) {
           {music.artist_source === "qloo" && <span className={s.tags}> · via Qloo</span>}
         </p>
       )}
+      {moods.length > 0 && <p className={s.small}>Matched to the mood you asked for: <strong>{moods.join(" · ")}</strong></p>}
       {music.trending && <p className={s.small}><strong>{TREND_LABEL[music.trending]}</strong></p>}
       {music.why && <p className={s.small}>“{music.why}”</p>}
       {music.url && (
-        <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer">
+        <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer" onClick={() => listened(music.artist, music.title, music.artist_source)}>
           Open in Apple Music ↗
         </a>
       )}
@@ -66,7 +72,7 @@ export function MusicCard({ music }: { music: Music }) {
             {music.alternatives.slice(0, 3).map((a) => (
               <li key={`${a.artist}-${a.title}`}>
                 {a.url ? (
-                  <a className={s.textLink} href={a.url} target="_blank" rel="noopener noreferrer">{a.title}</a>
+                  <a className={s.textLink} href={a.url} target="_blank" rel="noopener noreferrer" onClick={() => listened(a.artist, a.title, a.source)}>{a.title}</a>
                 ) : (
                   <strong>{a.title}</strong>
                 )}{" "}
@@ -272,7 +278,7 @@ export function Results({ photo, analysis, suggestions, date, onEdit, onStartOve
             <MusicLoading />
           ) : (
             // Follows the shuffle: this page's first layout's song leads.
-            <MusicCard music={songFor(shown[0] ?? null, analysis) ?? analysis.music} />
+            <MusicCard music={songFor(shown[0] ?? null, analysis) ?? analysis.music} moods={prov?.music_moods} />
           )}
         </div>
       )}

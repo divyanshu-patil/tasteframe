@@ -23,7 +23,7 @@ import { StoryCanvas } from "./StoryCanvas";
 import { FontPicker } from "./FontPicker";
 import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
 import { useMasks } from "./useMasks";
-import { track } from "../lib/analytics";
+import { type SongEvent, track } from "../lib/analytics";
 import { PROPS } from "../lib/story/elements";
 import s from "./maker.module.css";
 
@@ -188,13 +188,22 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
       setSaving({ kind: "error", msg: e instanceof Error && e.message ? e.message : "Saving failed." });
     }
   };
+  // The song on this Story (for analytics): the suggestion for this layout, or one they picked.
+  const songEvent = (): SongEvent =>
+    story.cover?.title
+      ? {
+          title: story.cover.title,
+          artist: story.cover.artist ?? undefined,
+          song_source: music?.title === story.cover.title ? (music.artist_source ?? "vibe") : "picked",
+        }
+      : {};
   const doExport = async () => {
     setExporting("busy");
     try {
       const blob = await exportPng(photos, story, { cover: coverImg, masks, art });
       download(blob, exportFilename(story));
       setExporting("done");
-      track("export", { layout: story.templateId });
+      track("export", { layout: story.templateId, ...songEvent() });
     } catch {
       setExporting("error");
     }
@@ -207,7 +216,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
       const { blob, ext } = await exportVideo(photos, story, { cover: coverImg, masks, art }, audio, clipSeconds);
       download(blob, exportFilename(story).replace(/\.png$/, `.${ext}`));
       setVideo({ kind: "done" });
-      track("export", { layout: story.templateId });
+      track("export", { layout: story.templateId, ...songEvent() });
     } catch (e) {
       setVideo({ kind: "error", msg: e instanceof Error && e.message ? e.message : "Video export failed." });
     }
@@ -337,7 +346,7 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
             {story.cover.artist && <> — {story.cover.artist}</>}
             {music?.title === story.cover.title && music.trending && <> · {music.trending === "chart" ? "🔥 top on Apple Music now" : "🔥 trending on Reels"}</>}
             {music?.title === story.cover.title && music.url && (
-              <> · <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer">listen ↗</a></>
+              <> · <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer" onClick={() => track("song_listen", songEvent())}>listen ↗</a></>
             )}
           </div>
         ) : musicOff ? (
