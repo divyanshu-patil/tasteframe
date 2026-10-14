@@ -67,12 +67,28 @@ async def cultural_signals(
     """Two documented Insights queries (artist + movie) anchored on the given entity ids. The
     music mood asked for (fixed Qloo tag ids) and the region steer the artists."""
     seed_ids = set(ids)
+
+    async def related_artists() -> list[QlooEntity]:
+        if not mood_tags:
+            return await qloo.get_insights(ids, "artist", take=8, location=location)
+        # Mood-tagged queries are sometimes slow on Qloo's side: one try, then the plain query
+        # (taste + region) so related artists still come through.
+        try:
+            return await qloo.get_insights(
+                ids, "artist", take=8, tags=mood_tags, location=location, retries=0
+            )
+        except AppError as e:
+            log.warning("qloo mood-tagged artists failed code=%s; retrying without tags", e.code)
+            return await qloo.get_insights(ids, "artist", take=8, location=location)
+
     results = await asyncio.gather(
-        qloo.get_insights(ids, "artist", take=8, tags=mood_tags, location=location),
+        related_artists(),
         qloo.get_insights(ids, "movie", take=5, location=location),
         return_exceptions=True,
     )
     errors = [r for r in results if isinstance(r, BaseException)]
+    for e in errors:
+        log.warning("qloo insights call failed: %s", getattr(e, "code", type(e).__name__))
     if len(errors) == len(results):
         raise errors[0]
     artists, movies = (

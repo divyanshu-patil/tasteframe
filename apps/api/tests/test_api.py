@@ -527,3 +527,29 @@ def test_music_wish_and_region_steer_qloo(client_with):
     assert artist.url.params["signal.location.query"] == "India"
     assert all("baddie" not in str(c.url) for c in fake.calls)  # their words stay here
     assert res["music"]["vibe"] == "baddie"
+
+
+def test_slow_mood_tagged_query_falls_back_to_plain_artists(client_with):
+    """Qloo times out on the mood-tagged artist call: one try, then the untagged call."""
+    insights = load_fixture("insights_artist.json")
+    tagged: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/search":
+            return httpx.Response(404)
+        if "signal.interests.tags" in req.url.params:
+            tagged.append(req)
+            raise httpx.ReadTimeout("slow", request=req)
+        return httpx.Response(200, json=insights)
+
+    client, _ = client_with(handler)
+    h = new_session(client)
+    body = {
+        "object_key": upload(client, h, make_image()),
+        "taste_seeds": [{"entity_id": SEED_A, "entity_type": "artist", "name": "Seed"}],
+        "music_wish": "sexy and mellow",
+    }
+    res = result_of(stream(client.post("/v1/analysis", headers=h, json=body)))
+    assert len(tagged) == 1  # no retries for the tagged call
+    assert any(r["kind"] == "artist" for r in res["cultural_recommendations"])
+    assert res["provenance"]["qloo_error"] is None

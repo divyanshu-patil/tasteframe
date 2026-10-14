@@ -99,12 +99,14 @@ class QlooClient:
         """Key configured and not switched off by an admin."""
         return self.settings.qloo_enabled and await usage.switched_on(self.settings)
 
-    async def _get(self, path: str, params: dict[str, str | int]) -> Any:
+    async def _get(
+        self, path: str, params: dict[str, str | int], retries: int | None = None
+    ) -> Any:
         if not await self.enabled():
             raise _err("QLOO_NOT_CONFIGURED", False, 503)
         key = self.settings.qloo_api_key.get_secret_value()  # type: ignore[union-attr]
         timeout = httpx.Timeout(self.settings.qloo_timeout_seconds, connect=4.0)
-        attempts = self.settings.qloo_max_retries + 1
+        attempts = (self.settings.qloo_max_retries if retries is None else retries) + 1
         async with httpx.AsyncClient(
             base_url=self.settings.qloo_base_url,
             timeout=timeout,
@@ -169,6 +171,7 @@ class QlooClient:
         take: int = 8,
         tags: list[str] | None = None,
         location: str | None = None,
+        retries: int | None = None,
     ) -> list[QlooEntity]:
         """`tags` and `location` must be our own fixed values (mood tag ids, country names),
         never browser text."""
@@ -181,7 +184,7 @@ class QlooClient:
             params["signal.interests.tags"] = ",".join(tags)
         if location:
             params["signal.location.query"] = location
-        data = await self._get("/v2/insights", params)
+        data = await self._get("/v2/insights", params, retries)
         if data is None:
             return []
         results = data.get("results") if isinstance(data, dict) else None
