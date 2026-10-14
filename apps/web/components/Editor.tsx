@@ -16,7 +16,6 @@ import { CoverPanel, useCoverImage, useTrackArt } from "./CoverPanel";
 import { CutoutRefiner } from "./CutoutRefiner";
 import { ModelProgress } from "./ModelProgress";
 import { ColorField, Section, Segmented, Slider, Toggle, deg, pct, px, times } from "./controls";
-import { MusicCard, MusicLoading } from "./Results";
 import { LikeButton, NewBadge } from "./LikeButton";
 import { PinSource } from "./PinSource";
 import { StoryCanvas } from "./StoryCanvas";
@@ -24,7 +23,7 @@ import { FontPicker } from "./FontPicker";
 import { FilterSwatch, PhotoThumb, StickerSwatch } from "./Swatches";
 import { useMasks } from "./useMasks";
 import { type SongEvent, track } from "../lib/analytics";
-import { SongPreview } from "./SongPreview";
+import { EditorSongBar } from "./SongPlayer";
 import { PROPS } from "../lib/story/elements";
 import s from "./maker.module.css";
 
@@ -340,23 +339,37 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
         />
         {musicPending ? (
           <div className={s.songNow} role="status">♪ Finding a song for this Story…</div>
-        ) : story.cover?.title ? (
+        ) : story.cover?.title || music?.kind === "track" ? (
           // The song on the sticker: the suggestion for this layout, or the one you picked.
-          <div className={s.songNow}>
-            ♪ Song for this Story: <strong>{story.cover.title}</strong>
-            {story.cover.artist && <> — {story.cover.artist}</>}
-            {music?.title === story.cover.title && music.trending && <> · {music.trending === "chart" ? "🔥 top on Apple Music now" : "🔥 trending on Reels"}</>}
-            {music?.title === story.cover.title && music.url && (
-              <> · <a className={s.textLink} href={music.url} target="_blank" rel="noopener noreferrer" onClick={() => track("song_listen", songEvent())}>listen ↗</a></>
-            )}
-            {music?.title === story.cover.title && music.preview_url && (
-              <>
-                {" "}
-                <SongPreview url={music.preview_url} label={`${music.title} by ${music.artist}`} song={songEvent()} />
-                <span className={s.small}> Preview courtesy of Apple Music.</span>
-              </>
-            )}
-          </div>
+          <EditorSongBar
+            songs={songsOf(music)}
+            current={
+              story.cover?.title
+                ? { title: story.cover.title, artist: story.cover.artist, trackId: story.cover.trackId }
+                : { title: music?.title ?? "", artist: music?.artist ?? "", trackId: music?.track_id ?? undefined }
+            }
+            onPick={
+              story.cover
+                ? async (x) => {
+                    if (onSongLogin && !(await onSongLogin())) return;
+                    const old = { title: story.cover?.title ?? "", artist: story.cover?.artist ?? "" };
+                    dispatch({ type: "cover", patch: { title: x.title, artist: x.artist, trackId: x.track_id ?? undefined } });
+                    // Text still showing the old song's automatic line follows the new song; text you typed stays.
+                    const swaps: [string, string][] = [
+                      [`now playing — ${old.title} · ${old.artist}`, `now playing — ${x.title} · ${x.artist}`],
+                      [`Song · ${old.artist}`, `Song · ${x.artist}`],
+                      [old.title, x.title],
+                      [old.artist, x.artist],
+                      [old.artist.toUpperCase(), x.artist.toUpperCase()],
+                    ];
+                    for (const key of ["headline", "caption"] as const) {
+                      const hit = swaps.find(([from]) => from.trim() && story[key].text === from);
+                      if (hit) dispatch({ type: "text", key, patch: { text: hit[1] } });
+                    }
+                  }
+                : undefined
+            }
+          />
         ) : musicOff ? (
           <div className={s.songNow} role="status">♪ Can&apos;t suggest music while Qloo is off.</div>
         ) : null}
@@ -653,7 +666,6 @@ export function Editor({ photos, story, setStory, input, suggested, music, music
             </div>
           </Section>
         )}
-        {musicPending ? <MusicLoading /> : music && music.kind !== "none" && <MusicCard music={music} />}
       </div>
       {refining !== null && autoMasks && photos[refining] && (
         <CutoutRefiner

@@ -449,11 +449,12 @@ const turningsoul: Template = {
     ctx.stroke();
     ctx.restore();
     if (on(s, "song") && s.cover?.title) {
-      uiText(ctx, s.cover.title, 660, 600, 19, "#222", 400, "left", 1.2);
+      // Above the title's first line (ends ~y 665), like the pin's quote.
+      uiText(ctx, s.cover.title, 660, 572, 19, "#222", 400, "left", 1.2);
       if (s.cover.artist) {
-        uiText(ctx, `-  ${s.cover.artist}`, 666, 690, 19, "#222", 400);
+        uiText(ctx, `-  ${s.cover.artist}`, 666, 630, 19, "#222", 400);
         ctx.fillStyle = "#d0302c";
-        ctx.fillRect(684, 714, Math.min(140, 12 * s.cover.artist.length), 2);
+        ctx.fillRect(684, 654, Math.min(140, 12 * s.cover.artist.length), 2);
       }
     }
     uiText(ctx, `${dd}\n${mm}`, 782, 894, 26, "#d0302c", 400, "left", 1.1);

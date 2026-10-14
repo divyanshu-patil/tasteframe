@@ -482,3 +482,12 @@ textarea.input { width: 100%; resize: vertical; }
 .qlooPanel h3 { font-size: 18px; }
 .qlooSignals { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
 .qlooSignals li { padding: 3px 10px; border-radius: 999px; background: #fff; border: 1px solid rgba(29, 29, 27, 0.15); font-size: 13px; }
+
+/* Editor "now playing" bar (EditorSongBar) */
+.songBar { display: grid; gap: var(--spacing-10); padding: var(--spacing-14) var(--spacing-18, 16px); background: var(--color-ink-black); color: var(--color-bone-cream); border-radius: 16px; }
+.songBar .kicker, .songBar .small, .songBar .muted { color: rgba(236, 232, 228, 0.78); }
+.songBar .textLink { color: var(--color-bone-cream); margin-left: auto; font-size: 14px; }
+.songBarMain { display: flex; align-items: center; gap: var(--spacing-14); }
+.songBarMain .playerArt { width: 72px; height: 72px; }
+.songBarMain .playerMeta { flex: 1; }
+.songBarMain .playerTitle { font-size: 18px; }

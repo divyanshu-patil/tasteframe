@@ -150,3 +150,132 @@ export function SongPlayer({ music, analysisId, moods = [] }: { music: Music; an
     </article>
   );
 }
+
+/** The editor's "now playing" bar: the Story's song with its preview, and previous / next /
+ * shuffle through the suggestions, which switch the Story's song (and its sticker). */
+export function EditorSongBar({
+  songs,
+  current,
+  onPick,
+}: {
+  songs: Song[];
+  /** The Story's song (its sticker title/artist); may be one picked from search. */
+  current: { title: string; artist: string; trackId?: number };
+  /** Switch the Story's song; omitted when this layout has no song sticker. */
+  onPick?: (x: Song) => void | Promise<void>;
+}) {
+  const p = usePreview();
+  const [shuffled, setShuffled] = useState(false);
+  const shuffledRef = useRef(shuffled);
+  shuffledRef.current = shuffled;
+  const n = songs.length;
+  const idx = songs.findIndex((x) => x.title === current.title && x.artist === current.artist);
+  const cur: Song | null = idx >= 0 ? songs[idx]! : null;
+  const preview = cur?.preview_url ?? null;
+  const isCur = p.url !== null && p.url === preview;
+  const playing = isCur && p.playing;
+  const event = (x: Song) => ({ artist: x.artist, title: x.title, song_source: x.source });
+
+  function play(x: Song, j: number) {
+    playPreview(x.preview_url!, event(x), () => step(shuffledRef.current ? randomOther(j) : j + 1, true));
+  }
+  function randomOther(from: number) {
+    if (n < 2) return from;
+    let j = from;
+    while (j === from) j = Math.floor(Math.random() * n);
+    return j;
+  }
+  async function step(k: number, autoplay = playing) {
+    if (!onPick || !n) return;
+    const j = ((k % n) + n) % n;
+    const next = songs[j]!;
+    await onPick(next);
+    if (autoplay && next.preview_url) play(next, j);
+    else stopPreview();
+  }
+  const from = idx >= 0 ? idx : -1;
+  const upNext = n > 1 ? Array.from({ length: Math.min(3, n - 1) }, (_, k) => (from + 1 + k + n) % n).filter((j) => j !== idx) : [];
+
+  return (
+    <section className={s.songBar} aria-label="Song for this Story">
+      <div className={s.songBarMain}>
+        <Art trackId={current.trackId ?? cur?.track_id ?? null} label={`${current.title} by ${current.artist}`} />
+        <div className={s.playerMeta}>
+          <p className={s.kicker}>Song for this Story{n > 1 && idx >= 0 && <> · {idx + 1}/{n}</>}</p>
+          <p className={s.playerTitle}>{current.title}</p>
+          {current.artist && <p className={s.playerArtist}>{current.artist}</p>}
+          {cur?.source === "qloo" ? (
+            <span className={s.qlooChip}>Found by Qloo</span>
+          ) : cur ? (
+            <span className={s.vibeChip}>Picked for your photo&apos;s vibe</span>
+          ) : (
+            <span className={s.vibeChip}>Picked by you</span>
+          )}
+        </div>
+        <button
+          type="button"
+          className={s.playBtn}
+          disabled={!preview}
+          onClick={() => (playing ? stopPreview() : cur && play(cur, idx))}
+          aria-label={!preview ? "No preview for this song" : playing ? `Pause ${current.title}` : `Play a 30-second preview of ${current.title}`}
+        >
+          {playing ? "❚❚" : "▶"}
+        </button>
+      </div>
+      <div className={s.playerProgress}>
+        <span className={s.playerTrack}>
+          <span style={{ width: `${isCur ? Math.min(100, (p.time / (p.duration || 30)) * 100) : 0}%` }} />
+        </span>
+        <span className={s.mono}>{mmss(isCur ? p.time : 0)} / {mmss(isCur ? p.duration || 30 : 30)}</span>
+      </div>
+      {onPick && n > 1 && (
+        <div className={s.playerControls}>
+          <button type="button" className={s.ctrlBtn} onClick={() => void step(from - 1)} aria-label="Previous suggested song">⏮</button>
+          <button type="button" className={s.ctrlBtn} onClick={() => void step(from + 1)} aria-label="Next suggested song">⏭</button>
+          <button
+            type="button"
+            className={`${s.ctrlBtn} ${shuffled ? s.ctrlOn : ""}`}
+            aria-pressed={shuffled}
+            onClick={() => {
+              setShuffled(true);
+              void step(randomOther(Math.max(0, from)));
+            }}
+            aria-label="Shuffle: switch to a random suggested song and keep shuffling"
+            title="Shuffle"
+          >
+            🔀
+          </button>
+          {shuffled && (
+            <button type="button" className={s.linkBtn} onClick={() => setShuffled(false)}>
+              shuffle off
+            </button>
+          )}
+          {cur?.url && (
+            <a className={s.textLink} href={cur.url} target="_blank" rel="noopener noreferrer">
+              Apple Music ↗
+            </a>
+          )}
+        </div>
+      )}
+      {onPick && upNext.length > 0 && (
+        <ol className={s.upNext} aria-label="Up next">
+          {upNext.map((j) => {
+            const x = songs[j]!;
+            return (
+              <li key={`${x.artist}-${x.title}`}>
+                <button type="button" className={s.upNextBtn} onClick={() => void step(j)}>
+                  <strong>{x.title}</strong> <span className={s.muted}>{x.artist}</span>
+                  {x.source === "qloo" && <span className={s.qlooChip}>Qloo</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      {cur?.why && <p className={s.small}>“{cur.why}”</p>}
+      <p className={s.small}>
+        {preview ? "Preview courtesy of Apple Music. " : ""}Add the song with Instagram&apos;s Music sticker after you post.
+      </p>
+    </section>
+  );
+}
