@@ -169,6 +169,8 @@ export interface TextOpts {
   fit?: boolean;
   /** Keep the text on a single line (mastheads); combine with `fit`. */
   oneLine?: boolean;
+  /** Per-line size multipliers, cycled (e.g. [1.5, 1] for big/small alternating lines). */
+  lineScale?: number[];
 }
 
 /** Draw a text layer; returns its bounding box (for hit-testing / dragging in the editor). */
@@ -186,7 +188,12 @@ export function drawText(ctx: Ctx, layer: TextLayer, opts: TextOpts = {}): Rect 
   ctx.textAlign = layer.align;
   ctx.textBaseline = "top";
   const maxW = layer.width * STORY_W;
-  let lines = opts.oneLine ? [layer.text.replace(/\s*\n\s*/g, " ")] : wrap(ctx, layer.text, maxW);
+  // Mixed-size lines (lineScale) follow the typed line breaks; other text wraps to the width.
+  let lines = opts.oneLine
+    ? [layer.text.replace(/\s*\n\s*/g, " ")]
+    : opts.lineScale?.length
+      ? layer.text.split("\n")
+      : wrap(ctx, layer.text, maxW);
   if (opts.fit) {
     const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
     if (widest > maxW) {
@@ -209,17 +216,21 @@ export function drawText(ctx: Ctx, layer: TextLayer, opts: TextOpts = {}): Rect 
     ctx.shadowOffsetY = 2;
   }
   let widest = 0;
+  let y = ay;
   lines.forEach((l, i) => {
+    const k = opts.lineScale?.length ? opts.lineScale[i % opts.lineScale.length]! : 1;
+    if (opts.lineScale?.length) ctx.font = layerFont(layer, layer.size * k);
     if (opts.outline) {
       ctx.strokeStyle = layer.color;
       ctx.lineWidth = opts.outline;
-      ctx.strokeText(l, ax, ay + i * lh);
-    } else ctx.fillText(l, ax, ay + i * lh);
+      ctx.strokeText(l, ax, y);
+    } else ctx.fillText(l, ax, y);
     widest = Math.max(widest, ctx.measureText(l).width);
+    y += lh * k;
   });
   ctx.restore();
   const left = layer.align === "left" ? ax : layer.align === "center" ? ax - widest / 2 : ax - widest;
-  const box = { x: left, y: ay, w: widest, h: lines.length * lh };
+  const box = { x: left, y: ay, w: widest, h: y - ay };
   if (!opts.rotate) return box;
   // Rotated text: the axis-aligned box around the rotated block (for hit-testing/selection).
   const c = Math.cos(opts.rotate);

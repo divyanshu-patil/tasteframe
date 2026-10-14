@@ -2,11 +2,11 @@
 // the references and scaled to 1080×1920. Flowers are the owner-supplied photographic PNGs
 // (elements.ts); phone UI text uses the system font so it renders like the screenshot on iOS.
 // Brand marks (streaming apps) become generic shapes.
-import { type Ctx, type Photo, drawPhoto, rgba, roundRect } from "./draw";
-import { rotatedPhoto } from "./filters";
+import { type Ctx, type Photo, drawBlurred, drawPhoto, rgba, roundRect } from "./draw";
+import { filteredPhoto, rotatedPhoto } from "./filters";
 import { type Slots, type Template, boxAt, decos, on, t } from "./kit";
 import { WHITE, el, slotPhoto } from "./templates-refs";
-import type { Rect } from "./types";
+import type { Rect, StoryState } from "./types";
 import { STORY_H as H, STORY_W as W } from "./types";
 
 const UI_FONT = `-apple-system, "SF Pro Text", "Helvetica Neue", Arimo, Helvetica, Arial, sans-serif`;
@@ -336,6 +336,329 @@ const sidecollage: Template = {
   text: { headline: { tracking: 0, oneLine: true, fit: true }, caption: { tracking: 0.02, oneLine: true, fit: true } },
 };
 
+// ---- Date bits from the Story's stamp ("'YY MM DD").
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function stampParts(s: StoryState) {
+  const [yy = "00", mm = "01", dd = "01"] = s.stamp.replace("'", "").split(" ");
+  return { yy, mm, dd, month: MONTHS[Math.max(0, Math.min(11, Number(mm) - 1))]! };
+}
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Text at fixed spots (decorative labels the pins carry), system font. */
+function uiText(ctx: Ctx, text: string, x: number, y: number, size: number, color: string, weight = 600, align: CanvasTextAlign = "left", lh = 1.2) {
+  ctx.save();
+  ui(ctx, weight, size);
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.textBaseline = "top";
+  text.split("\n").forEach((l, i) => ctx.fillText(l, x, y + i * size * lh));
+  ctx.restore();
+}
+
+// ---- pin 1900024840094743: a day's recap — nine photo tiles in a 3×3 grid over your full
+// photo, script title, round date badge and a caption line.
+const TG_COLS = [200, 437, 674];
+const TG_ROWS = [517, 814, 1111];
+const TG_TILE = { w: 228, h: 288 };
+const tgTile = (k: number): Rect => ({ x: TG_COLS[k % 3]!, y: TG_ROWS[Math.floor(k / 3)]!, ...TG_TILE });
+function circleText(ctx: Ctx, text: string, cx: number, cy: number, r: number, size: number) {
+  ctx.save();
+  ui(ctx, 700, size);
+  ctx.fillStyle = WHITE;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const chars = [...text];
+  const step = (Math.PI * 2) / chars.length;
+  chars.forEach((ch, k) => {
+    const a = -Math.PI / 2 + k * step;
+    ctx.save();
+    ctx.translate(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+    ctx.rotate(a + Math.PI / 2);
+    ctx.fillText(ch, 0, 0);
+    ctx.restore();
+  });
+  ctx.restore();
+}
+const travelgrid: Template = {
+  id: "travelgrid",
+  name: "Day Recap Grid",
+  blurb: "Nine photo tiles in a grid over your full photo, a script title and a round date badge.",
+  overlayLabel: "Photo tint",
+  capacity: 4,
+  decorations: decos([["labels", "Corner labels", true], ["badge", "Date badge", true]]),
+  slotRects: () => [{ x: 0, y: 0, w: W, h: H }, tgTile(1), tgTile(2), tgTile(3)],
+  defaults: (i) => ({
+    headline: t({ text: i.headline, font: "hand", size: 74, color: WHITE, x: 108 / W, y: 462 / H, width: 0.42 }),
+    caption: t({ text: i.caption || "", font: "sans", size: 20, color: WHITE, x: 0.5, y: 1428 / H, width: 0.84, align: "center" }),
+    overlay: { strength: 0, color: "#000000" },
+    decorations: { labels: true, badge: true },
+  }),
+  draw(ctx, _p, s, slots) {
+    drawPhoto(ctx, slots.photo(0), { x: 0, y: 0, w: W, h: H }, slots.crop(0));
+    ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength);
+    ctx.fillRect(0, 0, W, H);
+    for (let k = 0; k < 9; k++) slotPhoto(ctx, slots, (k + 1) % 4, tgTile(k), 0, undefined, `tile${k}`);
+    if (on(s, "labels")) {
+      uiText(ctx, "Creative\nStory", 204, 291, 19, WHITE, 600, "left", 1.15);
+      uiText(ctx, "Shot on iPhone", 560, 312, 19, WHITE, 600, "center");
+      uiText(ctx, "Me Time\nslow days", 910, 296, 19, WHITE, 600, "right", 1.15);
+      uiText(ctx, "Made by", 560, 1822, 15, "rgba(255,255,255,0.85)", 400, "center");
+    }
+    if (on(s, "badge")) {
+      const { dd, month } = stampParts(s);
+      circleText(ctx, `${month} - ${month} - ${month} - `, 880, 509, 66, 22);
+      uiText(ctx, String(Number(dd)), 880, 482, 52, WHITE, 700, "center");
+    }
+  },
+  text: { headline: { shadow: false, tracking: 0 }, caption: { tracking: 0 } },
+};
+
+// ---- pin 4996249583549325: an editorial note over your photo — red year, big lowercase
+// title, a small paragraph, your song quoted with a red underline, colour swatches, and a
+// frosted card with the date, three thumbnails and a time rule.
+const TS_CARD: Rect = { x: 107, y: 1413, w: 872, h: 249 };
+const TS_THUMBS: Rect[] = [226, 502, 775].map((x) => ({ x, y: 1441, w: 240, h: 139 }));
+const turningsoul: Template = {
+  id: "turningsoul",
+  name: "Turning Soul",
+  blurb: "Editorial note over your photo: red year, big lowercase title, your song quoted, a frosted photo card.",
+  overlayLabel: "Card frost",
+  capacity: 4,
+  decorations: decos([["card", "Photo card", true], ["swatches", "Colour swatches", true], ["song", "Song quote", true]]),
+  slotRects: () => [{ x: 0, y: 0, w: W, h: H }, ...TS_THUMBS],
+  defaults: (i) => ({
+    headline: t({ text: i.headline.toLowerCase(), font: "serif", family: "Arimo", size: 70, color: "#111111", x: 480 / W, y: 0.362, width: 0.3 }),
+    caption: t({ text: i.caption || "the sea was quiet today, and so was i.\n\nsome days are only for breathing.", font: "serif", family: "Arimo", size: 19, color: "#222222", x: 205 / W, y: 797 / H, width: 210 / W }),
+    overlay: { strength: 0.55, color: "#ffffff" },
+    decorations: { card: true, swatches: true, song: true },
+  }),
+  draw(ctx, _p, s, slots) {
+    drawPhoto(ctx, slots.photo(0), { x: 0, y: 0, w: W, h: H }, slots.crop(0));
+    const { yy, mm, dd } = stampParts(s);
+    uiText(ctx, `2K${yy}`, 362, 566, 30, "#d0302c", 400);
+    ctx.save();
+    ctx.strokeStyle = "#111";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(405, 693, 15, 0, Math.PI * 2);
+    ctx.moveTo(397, 693);
+    ctx.lineTo(413, 693);
+    ctx.moveTo(407, 686);
+    ctx.lineTo(413, 693);
+    ctx.lineTo(407, 700);
+    ctx.stroke();
+    ctx.restore();
+    if (on(s, "song") && s.cover?.title) {
+      uiText(ctx, s.cover.title, 660, 600, 19, "#222", 400, "left", 1.2);
+      if (s.cover.artist) {
+        uiText(ctx, `-  ${s.cover.artist}`, 666, 690, 19, "#222", 400);
+        ctx.fillStyle = "#d0302c";
+        ctx.fillRect(684, 714, Math.min(140, 12 * s.cover.artist.length), 2);
+      }
+    }
+    uiText(ctx, `${dd}\n${mm}`, 782, 894, 26, "#d0302c", 400, "left", 1.1);
+    if (on(s, "swatches")) {
+      const pal = [...s.palette, "#8a8f8f", "#b9c8c6", "#3e4442"];
+      [[751, 920, 0], [751, 963, 1], [797, 963, 2]].forEach(([x, y, k]) => {
+        ctx.fillStyle = pal[k as number]!;
+        ctx.fillRect(x as number, y as number, 30, 30);
+      });
+    }
+    if (on(s, "card")) {
+      ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength);
+      roundRect(ctx, TS_CARD, 32);
+      ctx.fill();
+      uiText(ctx, `${dd}\n${mm}`, 155, 1478, 31, "#111", 400, "left", 1.05);
+      TS_THUMBS.forEach((r, k) => slotPhoto(ctx, slots, k + 1, r, 18));
+      uiText(ctx, "16 : 14", 140, 1612, 16, "#222", 400);
+      ctx.fillStyle = "#333";
+      ctx.fillRect(217, 1621, W - 217, 1.5);
+    }
+    uiText(ctx, "archive by you\nshot on a slow day", 136, 1700, 18, WHITE, 400, "left", 1.25);
+    uiText(ctx, "CREATIVE\nSTORY", 811, 1700, 18, WHITE, 400, "left", 1.05);
+  },
+  text: { headline: { tracking: -0.02, lineHeight: 1.19 }, caption: { tracking: 0, lineHeight: 1.18 } },
+};
+
+// ---- pin 38984353019569576: a half-circle portrait in black and white beside three tiles cut
+// by a larger circle; bold uppercase title and paragraph on warm grey.
+const CC_C1 = { x: 587, y: 581, r: 472 };
+const CC_C2 = { x: 622, y: 826, r: 719 };
+const CC_BANDS: Rect[] = [107, 597, 1086].map((y, k) => ({ x: 622, y, w: W - 622, h: k === 2 ? 455 : 458 }));
+function clipped(ctx: Ctx, clip: () => void, draw: () => void) {
+  ctx.save();
+  ctx.beginPath();
+  clip();
+  ctx.clip();
+  draw();
+  ctx.restore();
+}
+const circlecollage: Template = {
+  id: "circlecollage",
+  name: "Circle Collage",
+  blurb: "A half-circle portrait in black and white beside three circle-cut tiles, bold uppercase type.",
+  overlayLabel: "Paper",
+  capacity: 4,
+  decorations: [],
+  slotRects: () => [{ x: 115, y: 109, w: 473, h: 944 }, ...CC_BANDS],
+  defaults: (i) => ({
+    headline: t({ text: i.headline.toUpperCase(), font: "sans", size: 59, color: "#2b2b2b", x: 107 / W, y: 1180 / H, width: 0.33 }),
+    caption: t({ text: (i.caption || "the only way forward is to let go of the past and hold on to today.").toUpperCase(), font: "sans", size: 22, color: "#2b2b2b", x: 107 / W, y: 1497 / H, width: 0.317 }),
+    overlay: { strength: 1, color: "#e6e5e2" },
+    decorations: {},
+  }),
+  draw(ctx, _p, s, slots) {
+    ctx.fillStyle = s.overlay.color;
+    ctx.fillRect(0, 0, W, H);
+    const bw = (p: Photo) => filteredPhoto(p, "bw");
+    clipped(ctx, () => {
+      ctx.arc(CC_C1.x, CC_C1.y, CC_C1.r, 0, Math.PI * 2);
+    }, () => {
+      ctx.beginPath();
+      ctx.rect(0, 0, 588, H);
+      ctx.clip();
+      slotPhoto(ctx, slots, 0, { x: 115, y: 109, w: 473, h: 944 }, 0, bw);
+    });
+    CC_BANDS.forEach((r, k) =>
+      clipped(ctx, () => ctx.arc(CC_C2.x, CC_C2.y, CC_C2.r, 0, Math.PI * 2), () => slotPhoto(ctx, slots, k + 1, r, 0, k === 2 ? bw : undefined)),
+    );
+    const { yy, mm, dd } = stampParts(s);
+    uiText(ctx, `'${yy}`, 107, 124, 26, "#2b2b2b", 700);
+    uiText(ctx, `${dd}.${mm}.20${yy}`, 107, 1790, 22, "#2b2b2b", 700);
+  },
+  text: { headline: { tracking: -0.02, lineHeight: 0.95 }, caption: { tracking: 0, lineHeight: 1.15 } },
+};
+
+// ---- pin 368661919519569281: four overlapping bordered photos over your photo washed in pale
+// yellow, a bold block of type with big and small lines.
+const LV_TILES: Rect[] = [
+  { x: 34, y: 530, w: 553, h: 743 },
+  { x: 468, y: 173, w: 515, h: 518 },
+  { x: 599, y: 699, w: 436, h: 586 },
+  { x: 112, y: 1280, w: 478, h: 485 },
+];
+const LV_ORDER = [1, 0, 2, 3]; // the big left photo sits over the top-right one
+const lovelooks: Template = {
+  id: "lovelooks",
+  name: "Love Looks",
+  blurb: "Four overlapping bordered photos on a pale wash of yours, a bold block of big and small lines.",
+  overlayLabel: "Wash",
+  capacity: 4,
+  decorations: [],
+  slotRects: () => LV_TILES,
+  defaults: (i) => ({
+    headline: t({ text: "LOVE\nLOOKS PRETTY\nON YOU,\nLOOK\nPRETTY ON ME", font: "sans", size: 58, color: "#111111", x: 613 / W, y: 1312 / H, width: 0.4 }),
+    caption: t({ text: i.caption || "", font: "sans", size: 26, color: "#111111", x: 613 / W, y: 1262 / H, width: 0.38 }),
+    overlay: { strength: 0.62, color: "#eceeaa" },
+    decorations: {},
+  }),
+  draw(ctx, _p, s, slots) {
+    drawPhoto(ctx, slots.photo(0), { x: 0, y: 0, w: W, h: H }, slots.crop(0));
+    ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength);
+    ctx.fillRect(0, 0, W, H);
+    for (const k of LV_ORDER) {
+      const r = LV_TILES[k]!;
+      ctx.fillStyle = "#f4f2cf";
+      ctx.fillRect(r.x - 5, r.y - 5, r.w + 10, r.h + 10);
+      slotPhoto(ctx, slots, k, r);
+    }
+  },
+  text: { headline: { tracking: 0, lineHeight: 1.06, lineScale: [1, 0.64, 1.17, 1, 0.64] }, caption: { tracking: 0 } },
+};
+
+// ---- pin 1105915252266068730: a 2×2 day grid — the last tile blurred under the phone's Focus
+// menu (Do Not Disturb, Sleep, your own focus "on").
+const FM_Q: Rect[] = [
+  { x: 0, y: 0, w: 540, h: 960 },
+  { x: 540, y: 0, w: 540, h: 960 },
+  { x: 0, y: 960, w: 540, h: 960 },
+  { x: 540, y: 960, w: 540, h: 960 },
+];
+function pill(ctx: Ctx, y: number, fill: string, label: string, sub: string | null, ink: string, icon: (cx: number, cy: number) => void) {
+  const r: Rect = { x: 602, y, w: 416, h: 100 };
+  ctx.fillStyle = fill;
+  roundRect(ctx, r, 50);
+  ctx.fill();
+  icon(651, y + 50);
+  ctx.save();
+  ui(ctx, 500, 21);
+  ctx.fillStyle = ink;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, 809, sub ? y + 40 : y + 50);
+  if (sub) {
+    ui(ctx, 400, 15);
+    ctx.fillStyle = "#8e8e93";
+    ctx.fillText(sub, 809, y + 64);
+  }
+  ui(ctx, 700, 22);
+  ctx.fillStyle = sub ? "#b0b0b5" : ink;
+  ctx.fillText("•••", 968, y + 50);
+  ctx.restore();
+}
+const focusmode: Template = {
+  id: "focusmode",
+  name: "Focus Mode",
+  blurb: "A 2×2 day grid; the last tile blurred under the phone's Focus menu with your own focus on.",
+  overlayLabel: "Blur tint",
+  capacity: 4,
+  decorations: decos([["menu", "Focus menu", true]]),
+  slotRects: () => FM_Q,
+  defaults: (i) => ({
+    headline: t({ text: i.headline || `${WEEKDAYS[i.date.getDay()]} vibes`, font: "serif", size: 30, color: WHITE, x: 308 / W, y: 0.388, width: 0.22 }),
+    caption: t({ text: i.caption || "", font: "serif", size: 21, color: WHITE, x: 600 / W, y: 415 / H, width: 0.4 }),
+    overlay: { strength: 0.12, color: "#000000" },
+    decorations: { menu: true },
+  }),
+  draw(ctx, _p, s, slots) {
+    for (let k = 0; k < 3; k++) slotPhoto(ctx, slots, k, FM_Q[k]!);
+    const q = FM_Q[3]!;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(q.x, q.y, q.w, q.h);
+    ctx.clip();
+    const own = slots.own(3);
+    drawBlurred(ctx, slots.photo(own ? 3 : 0), q, own ? slots.crop(3) : slots.adjust("slot3", slots.crop(0)));
+    ctx.fillStyle = rgba(s.overlay.color, s.overlay.strength);
+    ctx.fillRect(q.x, q.y, q.w, q.h);
+    ctx.restore();
+    if (!on(s, "menu")) return;
+    const moon = (cx: number, cy: number) => {
+      ctx.fillStyle = WHITE;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(58,58,62,1)";
+      ctx.beginPath();
+      ctx.arc(cx + 7, cy - 5, 11, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    const bed = (cx: number, cy: number) => {
+      ctx.fillStyle = WHITE;
+      roundRect(ctx, { x: cx - 16, y: cy - 2, w: 32, h: 10 }, 2);
+      ctx.fill();
+      ctx.fillRect(cx - 16, cy - 12, 4, 26);
+      roundRect(ctx, { x: cx - 10, y: cy - 10, w: 9, h: 7 }, 3);
+      ctx.fill();
+    };
+    const leaf = (cx: number, cy: number) => {
+      ctx.fillStyle = "#34c759";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 15, 8, -Math.PI / 4, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    pill(ctx, 1271, "rgba(58,58,62,0.82)", "Do Not Disturb", null, WHITE, moon);
+    pill(ctx, 1390, "rgba(58,58,62,0.82)", "Sleep", null, WHITE, bed);
+    pill(ctx, 1508, "rgba(255,255,255,0.93)", "Me", "On", "#111111", leaf);
+    ctx.fillStyle = "rgba(40,40,42,0.85)";
+    ctx.beginPath();
+    ctx.arc(808, 1900, 33, 0, Math.PI * 2);
+    ctx.fill();
+    uiText(ctx, "+", 808, 1878, 36, WHITE, 300, "center");
+  },
+  text: { headline: { shadow: true, tracking: 0 }, caption: { shadow: true, tracking: 0 } },
+};
+
 export const PIN2_TEMPLATES: Record<string, Template> = Object.fromEntries(
-  [lyriclily, keyphoto, sidecollage].map((tpl) => [tpl.id, tpl]),
+  [lyriclily, keyphoto, sidecollage, travelgrid, turningsoul, circlecollage, lovelooks, focusmode].map((tpl) => [tpl.id, tpl]),
 );

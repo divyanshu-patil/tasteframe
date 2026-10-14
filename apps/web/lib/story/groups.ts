@@ -17,12 +17,12 @@ export const LAYOUT_GROUPS: { id: string; name: string; ids: TemplateId[] }[] = 
   {
     id: "multi",
     name: "Multi-photo",
-    ids: ["sidecollage", "duo", "splitscreen", "booth", "torncollage", "grid", "mosaic", "polaroids", "triptych", "sepiabooth", "filmslant", "daysplit", "halfword", "stackedcards", "bwstack", "wavecut", "diagonal", "stills", "filmstrip", "photodump", "moodboard"],
+    ids: ["sidecollage", "travelgrid", "lovelooks", "focusmode", "circlecollage", "duo", "splitscreen", "booth", "torncollage", "grid", "mosaic", "polaroids", "triptych", "sepiabooth", "filmslant", "daysplit", "halfword", "stackedcards", "bwstack", "wavecut", "diagonal", "stills", "filmstrip", "photodump", "moodboard"],
   },
   {
     id: "type",
     name: "Type & notes",
-    ids: ["weekday", "verticalday", "scripttitle", "refresh", "bigletters", "navheader", "quotemarks", "notesapp", "notesdark", "handnote", "sticky", "checklist", "calendarcard", "receipt", "stats", "redblock", "badge", "subtitlebar"],
+    ids: ["turningsoul", "weekday", "verticalday", "scripttitle", "refresh", "bigletters", "navheader", "quotemarks", "notesapp", "notesdark", "handnote", "sticky", "checklist", "calendarcard", "receipt", "stats", "redblock", "badge", "subtitlebar"],
   },
   { id: "film", name: "Film & mood", ids: ["cinematic", "vintage", "filmburn", "spotlight", "bluehour", "hearts", "softfocus", "minimal"] },
   {

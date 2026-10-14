@@ -116,6 +116,11 @@ LayoutId = Literal[
     "lyriclily",
     "keyphoto",
     "sidecollage",
+    "travelgrid",
+    "turningsoul",
+    "circlecollage",
+    "lovelooks",
+    "focusmode",
 ]
 FilterId = Literal[
     "none",

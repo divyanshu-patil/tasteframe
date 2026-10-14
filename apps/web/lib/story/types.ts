@@ -106,6 +106,11 @@ export const TEMPLATE_IDS = [
   "lyriclily",
   "keyphoto",
   "sidecollage",
+  "travelgrid",
+  "turningsoul",
+  "circlecollage",
+  "lovelooks",
+  "focusmode",
 ] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 
